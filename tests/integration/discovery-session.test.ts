@@ -129,7 +129,8 @@ describe('discovery sessions', () => {
       discoverySessionId: session.id,
     });
 
-    const redirectPath = new URL(searchBody.items[0]?.checkoutUrl ?? '').pathname;
+    const redirectPath = new URL(searchBody.items[0]?.checkoutUrl ?? '')
+      .pathname;
     const redirect = await app.inject({
       method: 'GET',
       url: redirectPath,
