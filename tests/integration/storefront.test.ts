@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
 import { createServices } from '../../apps/api/src/services.js';
@@ -125,6 +125,13 @@ describeWithDatabase('branded storefront context', () => {
     app = await buildApp(services, env);
   });
 
+  beforeEach(async () => {
+    await database.db
+      .update(merchants)
+      .set({ active: true, isPublic: true })
+      .where(eq(merchants.id, otherId));
+  });
+
   afterAll(async () => {
     await app.close();
     await database.close();
@@ -214,5 +221,70 @@ describeWithDatabase('branded storefront context', () => {
     expect((await app.inject('/v1/storefronts/other-store')).statusCode).toBe(
       404,
     );
+  });
+
+  it('prevents private merchants from creating scoped discovery sessions', async () => {
+    await database.db
+      .update(merchants)
+      .set({ isPublic: false })
+      .where(eq(merchants.id, otherId));
+
+    const sessionResponse = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      payload: { surface: 'web', merchant: 'other-store' },
+    });
+    expect(sessionResponse.statusCode).toBe(404);
+    expect(sessionResponse.json<{ code: string }>().code).toBe(
+      'MERCHANT_NOT_FOUND',
+    );
+
+    const directScopedSearch = await app.inject({
+      method: 'POST',
+      url: `/v1/stores/${otherId}/search`,
+      payload: {
+        query: 'elbise',
+        filters: { inStockOnly: false },
+      },
+    });
+    expect(directScopedSearch.statusCode).toBe(200);
+    expect(directScopedSearch.json<{ items: unknown[] }>().items).toHaveLength(
+      0,
+    );
+  });
+
+  it('keeps private merchant products out of network search', async () => {
+    await database.db
+      .update(merchants)
+      .set({ isPublic: false })
+      .where(eq(merchants.id, otherId));
+
+    const sessionResponse = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      payload: { surface: 'web' },
+    });
+    expect(sessionResponse.statusCode).toBe(201);
+    const networkSession = sessionResponse.json<{
+      id: string;
+      merchantScope: string[];
+    }>();
+    expect(networkSession.merchantScope).toEqual([]);
+
+    const networkSearch = await app.inject({
+      method: 'POST',
+      url: '/v1/search',
+      payload: {
+        query: 'elbise',
+        discoverySessionId: networkSession.id,
+        filters: { inStockOnly: false },
+      },
+    });
+    expect(networkSearch.statusCode).toBe(200);
+    const merchantIds = networkSearch
+      .json<{ items: Array<{ merchantId: string }> }>()
+      .items.map((item) => item.merchantId);
+    expect(merchantIds).toContain(butikId);
+    expect(merchantIds).not.toContain(otherId);
   });
 });
