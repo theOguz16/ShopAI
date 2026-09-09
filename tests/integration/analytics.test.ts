@@ -46,6 +46,7 @@ const connectionB = 'cb000000-0000-4000-8000-000000000002';
 let app: Awaited<ReturnType<typeof buildApp>>;
 let cookie = '';
 let offerId = '';
+let webSearchId = '';
 
 function signed(payload: object) {
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -149,14 +150,16 @@ beforeAll(async () => {
       merchantId: merchantA,
       offerId,
       searchId: randomUUID(),
-      channel: 'web',
+      transport: 'rest',
+      surface: 'web',
       classification: 'human',
     },
     {
       merchantId: merchantA,
       offerId,
       searchId: randomUUID(),
-      channel: 'web',
+      transport: 'rest',
+      surface: 'web',
       classification: 'bot',
     },
   ]);
@@ -164,34 +167,39 @@ beforeAll(async () => {
     {
       merchantId: merchantA,
       searchId: randomUUID(),
-      channel: 'web',
+      transport: 'rest',
+      surface: 'web',
       requestKind: 'initial',
       outcome: 'results',
     },
     {
       merchantId: merchantA,
       searchId: randomUUID(),
-      channel: 'web',
+      transport: 'rest',
+      surface: 'web',
       requestKind: 'initial',
       outcome: 'empty',
     },
     {
       merchantId: merchantA,
-      channel: 'mcp',
+      transport: 'mcp',
+      surface: 'chatgpt',
       requestKind: 'initial',
       outcome: 'error',
     },
     {
       merchantId: merchantA,
       searchId: randomUUID(),
-      channel: 'mcp',
+      transport: 'mcp',
+      surface: 'chatgpt',
       requestKind: 'pagination',
       outcome: 'results',
     },
     {
       merchantId: merchantB,
       searchId: randomUUID(),
-      channel: 'web',
+      transport: 'rest',
+      surface: 'web',
       requestKind: 'initial',
       outcome: 'results',
     },
@@ -204,13 +212,14 @@ afterAll(async () => {
 });
 
 describe('tenant analytics and signed conversions', () => {
-  it('records a scoped public search without persisting the raw query', async () => {
+  it('records a web search as REST/web without persisting the raw query', async () => {
     const response = await app.inject({
       method: 'POST',
       url: `/v1/stores/${merchantA}/search`,
       payload: { query: 'saklanmaması gereken kullanıcı sorgusu' },
     });
     expect(response.statusCode).toBe(200);
+    webSearchId = response.json<{ searchId: string }>().searchId;
 
     const rows = await database.db
       .select()
@@ -220,13 +229,42 @@ describe('tenant analytics and signed conversions', () => {
       expect.arrayContaining([
         expect.objectContaining({
           merchantId: merchantA,
-          channel: 'web',
+          searchId: webSearchId,
+          transport: 'rest',
+          surface: 'web',
           requestKind: 'initial',
           outcome: 'empty',
         }),
       ]),
     );
     expect(JSON.stringify(rows)).not.toContain('saklanmaması gereken');
+  });
+
+  it('records a ChatGPT search as MCP/chatgpt', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { accept: 'application/json, text/event-stream' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: {
+          name: 'search_products',
+          arguments: { query: 'Ürün', merchantIds: [merchantA] },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const searchId = response.json().result.structuredContent.searchId as string;
+    const [row] = await database.db
+      .select({
+        transport: searchEvents.transport,
+        surface: searchEvents.surface,
+      })
+      .from(searchEvents)
+      .where(eq(searchEvents.searchId, searchId));
+    expect(row).toEqual({ transport: 'mcp', surface: 'chatgpt' });
   });
 
   it('lists only the stores assigned to the authenticated user', async () => {
@@ -351,15 +389,15 @@ describe('tenant analytics and signed conversions', () => {
     expect(run?.connectionId).toBe(connection?.id);
     if (run?.filePath) await unlink(run.filePath);
   });
-  it('is idempotent and applies refunds/cancellations to net revenue', async () => {
-    const searchId = randomUUID();
+  it('is idempotent, preserves attribution, and applies refunds/cancellations', async () => {
+    if (!webSearchId) throw new Error('Web search attribution fixture missing.');
     const paid = {
       orderId: 'order-1',
       status: 'paid',
       grossMinor: 10_000,
       refundedMinor: 0,
       currency: 'TRY',
-      searchId,
+      searchId: webSearchId,
       offerId,
       occurredAt: new Date(Date.now() - 2000).toISOString(),
     };
@@ -442,23 +480,40 @@ describe('tenant analytics and signed conversions', () => {
     expect(response.json()).toMatchObject({
       measurement: 'measured',
       metrics: {
-        searchAttempts: 4,
-        successfulSearches: 3,
+        searchAttempts: 5,
+        successfulSearches: 4,
         emptySearches: 2,
         failedSearches: 1,
         paginationRequests: 1,
-        noResultRate: 2 / 3,
-        searchErrorRate: 0.25,
-        searchesByChannel: { web: 3, mcp: 1 },
+        noResultRate: 0.5,
+        searchErrorRate: 0.2,
+        searchesBySurface: { web: 3, chatgpt: 2 },
+        searchesByChannel: { web: 3, chatgpt: 2 },
         humanRedirects: 1,
         botPreviews: 1,
+        redirectsBySurface: { web: 1 },
         attributedSales: 1,
         netRevenueMinor: 6000,
         conversionRate: 1,
         incrementalSales: null,
       },
     });
-    expect((await database.db.select().from(conversionOrders)).length).toBe(3);
+    const orders = await database.db.select().from(conversionOrders);
+    expect(orders).toHaveLength(3);
+    expect(orders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          externalOrderId: 'order-1',
+          transport: 'rest',
+          surface: 'web',
+        }),
+        expect.objectContaining({
+          externalOrderId: 'order-without-shopai-attribution',
+          transport: null,
+          surface: null,
+        }),
+      ]),
+    );
   });
 
   it('rejects invalid signatures and cross-tenant report access', async () => {
