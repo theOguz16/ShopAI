@@ -37,11 +37,7 @@ export class RedirectTokens {
   create(
     input: Pick<
       RedirectClaims,
-      | 'offerId'
-      | 'searchId'
-      | 'discoverySessionId'
-      | 'transport'
-      | 'surface'
+      'offerId' | 'searchId' | 'discoverySessionId' | 'transport' | 'surface'
     >,
     now = Date.now(),
   ) {
@@ -157,10 +153,7 @@ export class RedirectService {
   ) {}
 
   createLink(
-    input: Pick<
-      RedirectClaims,
-      'offerId' | 'searchId' | 'discoverySessionId'
-    > &
+    input: Pick<RedirectClaims, 'offerId' | 'searchId' | 'discoverySessionId'> &
       AttributionContext,
   ) {
     return new URL(
