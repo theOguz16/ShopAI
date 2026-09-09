@@ -30,6 +30,24 @@ ALTER TABLE "search_events" ADD CONSTRAINT "search_events_discovery_session_id_d
 --> statement-breakpoint
 CREATE INDEX "search_events_discovery_session" ON "search_events" USING btree ("discovery_session_id","occurred_at");
 --> statement-breakpoint
+CREATE FUNCTION shopai_discovery_session_for_search(p_search_id uuid, p_merchant_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT discovery_session_id
+  FROM search_events
+  WHERE search_id = p_search_id
+    AND merchant_id = p_merchant_id
+  LIMIT 1
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION shopai_discovery_session_for_search(uuid, uuid) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION shopai_discovery_session_for_search(uuid, uuid) TO shopai_public;
+--> statement-breakpoint
 ALTER TABLE "redirect_clicks" ADD COLUMN "discovery_session_id" uuid;
 --> statement-breakpoint
 ALTER TABLE "redirect_clicks" ADD CONSTRAINT "redirect_clicks_discovery_session_id_discovery_sessions_id_fk" FOREIGN KEY ("discovery_session_id") REFERENCES "public"."discovery_sessions"("id") ON DELETE no action ON UPDATE no action;
