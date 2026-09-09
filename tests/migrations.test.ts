@@ -84,4 +84,26 @@ describe('database migrations', () => {
       'conversion."search_id" = attribution."search_id"',
     );
   });
+
+  it('creates discovery sessions and links search and redirect events', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0014_discovery_sessions.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TABLE "discovery_sessions"');
+    expect(migration).toContain('"merchant_scope" jsonb DEFAULT \'[]\'::jsonb NOT NULL');
+    expect(migration).toContain(
+      'ALTER TABLE "search_events" ADD COLUMN "discovery_session_id" uuid',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "redirect_clicks" ADD COLUMN "discovery_session_id" uuid',
+    );
+    expect(migration).toContain(
+      'REFERENCES "public"."discovery_sessions"("id")',
+    );
+  });
 });
