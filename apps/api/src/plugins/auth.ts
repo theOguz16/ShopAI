@@ -26,6 +26,12 @@ declare module 'fastify' {
 }
 
 const cookieName = 'shopai_session';
+const cookieAttributes = (env: ApiEnv) =>
+  `Path=/; HttpOnly; SameSite=Lax${
+    env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production'
+      ? '; Secure'
+      : ''
+  }`;
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
 const cookie = (request: FastifyRequest) =>
@@ -93,7 +99,7 @@ export function registerAuth(
       });
       reply.header(
         'Set-Cookie',
-        `${cookieName}=${raw}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${env.SESSION_TTL_HOURS * 3600}`,
+        `${cookieName}=${raw}; ${cookieAttributes(env)}; Max-Age=${env.SESSION_TTL_HOURS * 3600}`,
       );
       return { user: { id: user.id, email: user.email } };
     },
@@ -118,7 +124,7 @@ export function registerAuth(
         await db.delete(sessions).where(eq(sessions.tokenHash, hash(raw)));
       reply.header(
         'Set-Cookie',
-        `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+        `${cookieName}=; ${cookieAttributes(env)}; Max-Age=0`,
       );
       return { ok: true };
     },

@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { searchRequestSchema } from '@shopai/contracts';
 import { createDatabase } from '@shopai/db';
 import Fastify from 'fastify';
+import { z } from 'zod';
 import { type ApiEnv, parseApiEnv } from './env.js';
 import { createMcpServer } from './mcp.js';
 import { registerAuth, requireSameOrigin } from './plugins/auth.js';
@@ -14,6 +15,13 @@ import { registerRedirectRoutes } from './routes/redirects.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { createServices, type Services } from './services.js';
+
+const loginRequestSchema = z
+  .object({
+    email: z.string().trim().email().max(254),
+    token: z.string().min(16).max(256),
+  })
+  .strict();
 export async function buildApp(
   services?: Services,
   env: ApiEnv = parseApiEnv(process.env),
@@ -70,12 +78,17 @@ export async function buildApp(
   registerAuth(app, authDatabase?.db, env);
   app.post(
     '/v1/auth/login',
-    { preHandler: requireSameOrigin },
+    {
+      config: {
+        rateLimit: { max: env.LOGIN_RATE_LIMIT_MAX, timeWindow: '1 minute' },
+      },
+      preHandler: requireSameOrigin,
+    },
     async (request, reply) => {
-      const body = request.body as { email?: string; token?: string };
-      if (!body?.email || !body.token)
+      const parsed = loginRequestSchema.safeParse(request.body);
+      if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
-      return app.authApi.login(body.email, body.token, reply);
+      return app.authApi.login(parsed.data.email, parsed.data.token, reply);
     },
   );
   app.post(

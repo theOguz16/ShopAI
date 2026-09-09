@@ -9,6 +9,7 @@ import {
   memberships,
   merchantCredentialOwnerships,
   merchants,
+  sessions,
   users,
 } from '../../packages/db/src/schema.js';
 
@@ -35,6 +36,7 @@ const env = parseApiEnv({
   WIDGET_ORIGIN: 'https://widget.management.test',
   REDIRECT_SIGNING_SECRET: 'management-redirect-secret-000000000000000',
   AUTH_PILOT_CREDENTIALS: JSON.stringify(credentials),
+  LOGIN_RATE_LIMIT_MAX: '30',
   UPLOAD_DIR: '/tmp/shopai-management-uploads',
   LOG_LEVEL: 'silent',
 });
@@ -144,6 +146,91 @@ afterAll(async () => {
 });
 
 describe.sequential('merchant management authorization', () => {
+  it('uses environment-consistent cookies and preserves generic login failures', async () => {
+    const wrongEmail = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: 'unknown@management.test',
+        token: credentials['owner-a@management.test'],
+      },
+    });
+    const wrongToken = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: 'owner-a@management.test',
+        token: 'wrong-management-token',
+      },
+    });
+    expect(wrongEmail.statusCode).toBe(401);
+    expect(wrongToken.statusCode).toBe(401);
+    expect(wrongEmail.json()).toEqual({ code: 'INVALID_CREDENTIALS' });
+    expect(wrongToken.json()).toEqual({ code: 'INVALID_CREDENTIALS' });
+
+    const localLogin = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: 'owner-a@management.test',
+        token: credentials['owner-a@management.test'],
+      },
+    });
+    expect(localLogin.headers['set-cookie']).toContain('shopai_session=');
+    expect(localLogin.headers['set-cookie']).not.toContain('Secure');
+
+    const secureEnv = { ...env, DEPLOY_ENV: 'staging' as const };
+    const secureApp = await buildApp(undefined, secureEnv);
+    const secureLogin = await secureApp.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: 'owner-a@management.test',
+        token: credentials['owner-a@management.test'],
+      },
+    });
+    expect(secureLogin.headers['set-cookie']).toMatch(
+      /HttpOnly; SameSite=Lax; Secure; Max-Age=/,
+    );
+    const secureLogout = await secureApp.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+      headers: {
+        cookie: secureLogin.headers['set-cookie']?.split(';')[0] ?? '',
+      },
+    });
+    expect(secureLogout.headers['set-cookie']).toContain(
+      'HttpOnly; SameSite=Lax; Secure; Max-Age=0',
+    );
+    await secureApp.close();
+  });
+
+  it('denies management access after all user sessions are revoked', async () => {
+    const email = 'viewer-a@management.test';
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/v1/merchants/${merchantA}`,
+          headers: auth(email),
+        })
+      ).statusCode,
+    ).toBe(200);
+    await adminDatabase.db
+      .delete(sessions)
+      .where(eq(sessions.userId, userId(email)));
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/v1/merchants/${merchantA}`,
+          headers: auth(email),
+        })
+      ).statusCode,
+    ).toBe(401);
+    await login(email);
+  });
+
   it('enforces connection roles and tenant boundaries over HTTP', async () => {
     const created = await app.inject({
       method: 'POST',

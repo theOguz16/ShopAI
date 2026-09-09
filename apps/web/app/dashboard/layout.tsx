@@ -17,7 +17,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       .then(async (response) => {
         if (!active) return;
         if (response.status === 401)
-          router.replace(`/login?returnTo=${encodeURIComponent(pathname)}`);
+          router.replace(
+            `/login?reason=session_expired&returnTo=${encodeURIComponent(pathname)}`,
+          );
         else if (response.ok) {
           const body = await response.json();
           if (!active) return;

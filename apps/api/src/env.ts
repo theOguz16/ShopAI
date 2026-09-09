@@ -39,6 +39,7 @@ const baseSchema = z.object({
       return z.NEVER;
     }),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+  LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
   AI_PROVIDER: z.enum(['rules', 'openai']).default('rules'),
   OPENAI_API_KEY: z.string().min(1).optional(),

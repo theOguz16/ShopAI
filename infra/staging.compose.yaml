@@ -14,6 +14,7 @@ x-app: &app
     WIDGET_RESOURCE_DOMAINS: "${STAGING_RESOURCE_DOMAINS:?Asset origin listesi gerekli}"
     REDIRECT_SIGNING_SECRET: "${STAGING_REDIRECT_SIGNING_SECRET:?Secret gerekli}"
     AUTH_PILOT_CREDENTIALS: "${STAGING_AUTH_PILOT_CREDENTIALS:?E-postaya bağlı kimlik secretı gerekli}"
+    LOGIN_RATE_LIMIT_MAX: "${STAGING_LOGIN_RATE_LIMIT_MAX:-5}"
     # Empty means disabled and is normalized to undefined by the API env schema.
     CONVERSION_CALLBACK_SECRET: "${STAGING_CONVERSION_CALLBACK_SECRET:-}"
     UPLOAD_DIR: /var/lib/shopai/uploads

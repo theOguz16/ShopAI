@@ -131,6 +131,39 @@ describe('API and MCP', () => {
       ).statusCode,
     ).toBe(403);
   });
+  it('rejects malformed login bodies without throwing', async () => {
+    const app = await buildApp();
+    apps.push(app);
+    for (const payload of [
+      { email: 42, token: 'x'.repeat(16) },
+      { email: {}, token: 'x'.repeat(16) },
+      { email: 'pilot@shopai.local', token: { value: 'x'.repeat(16) } },
+      { email: `${'a'.repeat(255)}@example.com`, token: 'x'.repeat(16) },
+      { email: 'pilot@shopai.local', token: 'x'.repeat(257) },
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ code: 'INVALID_INPUT' });
+    }
+  });
+  it('applies a stricter rate limit to login than to general API traffic', async () => {
+    const env = parseApiEnv({ LOGIN_RATE_LIMIT_MAX: '2' });
+    const app = await buildApp(undefined, env);
+    apps.push(app);
+    for (const expectedStatus of [400, 400, 429]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        payload: { email: 42, token: 'x'.repeat(16) },
+      });
+      expect(response.statusCode).toBe(expectedStatus);
+    }
+    expect((await app.inject('/health/live')).statusCode).toBe(200);
+  });
   it('accepts the configured staging web origin for auth mutations', async () => {
     const env = parseApiEnv({
       MCP_ALLOWED_ORIGINS: 'https://web.staging.example',
