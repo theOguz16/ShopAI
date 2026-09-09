@@ -22,7 +22,7 @@ export const merchants = pgTable(
     id: id(),
     name: text('name').notNull(),
     slug: text('slug').notNull().unique(),
-    displayName: text('display_name').notNull(),
+    displayName: text('display_name'),
     logoUrl: text('logo_url'),
     coverImageUrl: text('cover_image_url'),
     primaryColor: text('primary_color').notNull().default('#111111'),
