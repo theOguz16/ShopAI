@@ -32,6 +32,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Immutable image etiketli staging compose/deployment workflow'u, local dışı demo-mode startup engeli, migration öncesi backup ve izole CI restore provası.
 - Request/import/job korelasyon alanları, queue-lag ve stale-catalog olayları, secret redaksiyonu ve veri saklama uygulama script'i.
 - Discovery session katmanı; surface/transport, başlangıç merchant scope'u ve search/redirect korelasyonu taşır. İstemciden gelen `anonymousUserId` yalnız analytics correlation içindir; authorization veya güvenilir identity sinyali değildir. Server-issued/signed anonymous identity Shopping Profile çalışmasına bırakılmıştır.
+- Branded storefront context; public merchant kimliği `displayName`, logo, kapak, ana renk ve `isPublic` alanlarıyla `/shop/[slug]` deneyimine taşınır. Storefront açılışı merchant-scoped discovery session başlatır; “Tüm mağazalarda ara” mevcut session'ı genişletmek yerine yeni `merchantScope=[]` session oluşturur. MVP semantiğinde `isPublic=false`, branded storefront dahil tüm consumer discovery yüzeylerinden kapalı olmak demektir; public discovery session oluşturulamaz ve ürünleri network search'te görünmez.
 
 ## Hedef mimariden bilinçli farklar
 

@@ -100,8 +100,20 @@ beforeEach(async () => {
     sql`truncate table ${importRuns}, ${inventory}, ${offers}, ${variants}, ${products}, ${connections}, ${merchants} cascade`,
   );
   await database.db.insert(merchants).values([
-    { id: merchantA, name: 'A', slug: `a-${randomUUID()}`, active: true },
-    { id: merchantB, name: 'B', slug: `b-${randomUUID()}`, active: true },
+    {
+      id: merchantA,
+      name: 'A',
+      slug: `a-${randomUUID()}`,
+      active: true,
+      isPublic: true,
+    },
+    {
+      id: merchantB,
+      name: 'B',
+      slug: `b-${randomUUID()}`,
+      active: true,
+      isPublic: true,
+    },
   ]);
   await database.db.insert(connections).values([
     { id: connectionA, merchantId: merchantA, provider: 'csv' },

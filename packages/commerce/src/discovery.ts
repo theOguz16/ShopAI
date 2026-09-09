@@ -9,7 +9,7 @@ import type {
 export type DiscoverySessionRecord = DiscoverySession;
 
 export interface DiscoverySessionRepository {
-  resolveActiveMerchant(value: string): Promise<{ id: string } | null>;
+  resolvePublicMerchant(value: string): Promise<{ id: string } | null>;
   create(input: {
     surface: Surface;
     transport: Transport;
@@ -94,7 +94,7 @@ export class DiscoverySessions {
   }
 
   private async resolveMerchantScope(merchant: string) {
-    const resolved = await this.repository.resolveActiveMerchant(merchant);
+    const resolved = await this.repository.resolvePublicMerchant(merchant);
     if (!resolved)
       throw Object.assign(new Error('Merchant bulunamadı.'), {
         statusCode: 404,

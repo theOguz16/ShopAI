@@ -12,7 +12,7 @@ export class PostgresDiscoverySessionRepository
 {
   constructor(private readonly db: Database) {}
 
-  async resolveActiveMerchant(value: string) {
+  async resolvePublicMerchant(value: string) {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
       const identity = uuid.test(value)
@@ -21,7 +21,13 @@ export class PostgresDiscoverySessionRepository
       const [row] = await tx
         .select({ id: merchants.id })
         .from(merchants)
-        .where(and(eq(merchants.active, true), identity))
+        .where(
+          and(
+            eq(merchants.active, true),
+            eq(merchants.isPublic, true),
+            identity,
+          ),
+        )
         .limit(1);
       return row ?? null;
     });

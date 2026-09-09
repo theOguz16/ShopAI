@@ -18,6 +18,7 @@ import { registerImportRoutes } from './routes/imports.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
+import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { createServices, type Services } from './services.js';
 
 const loginRequestSchema = z
@@ -107,6 +108,7 @@ export async function buildApp(
     return { user: request.auth };
   });
   await registerMerchantRoutes(app, env);
+  await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
   await registerRedirectRoutes(app, resolvedServices);
@@ -132,14 +134,30 @@ export async function buildApp(
         code: 'INVALID_SURFACE_FOR_TRANSPORT',
         requestId: request.id,
       });
-    const session = await resolvedServices.discoverySessions.create(
-      parsed.data,
-      {
-        transport: 'rest',
-        userId: request.auth?.userId,
-      },
-    );
-    return reply.code(201).send(session);
+    try {
+      const session = await resolvedServices.discoverySessions.create(
+        parsed.data,
+        {
+          transport: 'rest',
+          userId: request.auth?.userId,
+        },
+      );
+      return reply.code(201).send(session);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'statusCode' in error &&
+        error.statusCode === 404 &&
+        'code' in error &&
+        error.code === 'MERCHANT_NOT_FOUND'
+      )
+        return reply.code(404).send({
+          code: 'MERCHANT_NOT_FOUND',
+          requestId: request.id,
+        });
+      throw error;
+    }
   });
   app.post('/v1/search', async (request, reply) => {
     const parsed = searchRequestSchema.safeParse(request.body);

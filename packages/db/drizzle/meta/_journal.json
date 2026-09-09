@@ -99,6 +99,13 @@
       "when": 1788974400000,
       "tag": "0014_discovery_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788984600000,
+      "tag": "0015_branded_storefront_context",
+      "breakpoints": true
     }
   ]
 }

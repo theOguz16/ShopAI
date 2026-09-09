@@ -41,8 +41,20 @@ describeWithDatabase('discovery sessions', () => {
       sql`truncate table ${redirectClicks}, ${searchEvents}, ${discoverySessions}, ${connections}, ${merchants} cascade`,
     );
     await database.db.insert(merchants).values([
-      { id: maviId, name: 'Mavi', slug: 'mavi', active: true },
-      { id: otherId, name: 'Other', slug: 'other', active: true },
+      {
+        id: maviId,
+        name: 'Mavi',
+        slug: 'mavi',
+        active: true,
+        isPublic: true,
+      },
+      {
+        id: otherId,
+        name: 'Other',
+        slug: 'other',
+        active: true,
+        isPublic: true,
+      },
     ]);
     await database.db.insert(connections).values({
       id: connectionId,
