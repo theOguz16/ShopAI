@@ -38,6 +38,6 @@ Her koşunun son üç satırı WordPress sürümü, WooCommerce sürümü ve Sho
 
 | Tarih (Europe/Istanbul) | WordPress | WooCommerce | ShopAI commit | Sonuç |
 | --- | --- | --- | --- | --- |
-| 2026-09-09 | 7.1 | 11.1.0 | `b72cb3b35df9c59ea97613edfe6e0d90331da14a` + T09 çalışma ağacı | Geçti — 3/3 gerçek REST prova testi |
+| 2026-09-09 | 7.1 | 11.1.0 | `6560f47e63a7c2a30a5b7031aec644a83091a198` | Geçti — 3/3 gerçek REST prova testi |
 
 Bu kayıt yalnız teknik entegrasyon provasıdır; “gerçek müşteri kabulü tamamlandı” anlamına gelmez.
