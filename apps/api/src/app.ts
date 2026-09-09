@@ -125,10 +125,13 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
-    const session = await resolvedServices.discoverySessions.create(parsed.data, {
-      transport: 'rest',
-      userId: request.auth?.userId,
-    });
+    const session = await resolvedServices.discoverySessions.create(
+      parsed.data,
+      {
+        transport: 'rest',
+        userId: request.auth?.userId,
+      },
+    );
     return reply.code(201).send(session);
   });
   app.post('/v1/search', async (request, reply) => {
