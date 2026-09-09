@@ -1,13 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-
-export const REDIRECT_CHANNELS = ['web', 'chatgpt', 'mcp'] as const;
-export type RedirectChannel = (typeof REDIRECT_CHANNELS)[number];
+import type { AttributionContext, Surface, Transport } from '@shopai/contracts';
+import { surfaceSchema, transportSchema } from '@shopai/contracts';
 
 export type RedirectClaims = {
-  version: 1;
+  version: 2;
   offerId: string;
   searchId: string;
-  channel: RedirectChannel;
+  transport: Transport;
+  surface: Surface;
   issuedAt: number;
   expiresAt: number;
 };
@@ -34,7 +34,7 @@ export class RedirectTokens {
   }
 
   create(
-    input: Pick<RedirectClaims, 'offerId' | 'searchId' | 'channel'>,
+    input: Pick<RedirectClaims, 'offerId' | 'searchId' | 'transport' | 'surface'>,
     now = Date.now(),
   ) {
     if (!uuid.test(input.offerId) || !uuid.test(input.searchId))
@@ -42,14 +42,17 @@ export class RedirectTokens {
         'INVALID_TOKEN',
         'Geçersiz yönlendirme kimliği.',
       );
-    if (!REDIRECT_CHANNELS.includes(input.channel))
+    if (
+      !transportSchema.safeParse(input.transport).success ||
+      !surfaceSchema.safeParse(input.surface).success
+    )
       throw new RedirectTokenError(
         'INVALID_TOKEN',
-        'Geçersiz yönlendirme kanalı.',
+        'Geçersiz yönlendirme attribution bilgisi.',
       );
     const issuedAt = Math.floor(now / 1000);
     const claims: RedirectClaims = {
-      version: 1,
+      version: 2,
       ...input,
       issuedAt,
       expiresAt: issuedAt + this.ttlSeconds,
@@ -82,12 +85,13 @@ export class RedirectTokens {
       );
     }
     if (
-      claims.version !== 1 ||
+      claims.version !== 2 ||
       typeof claims.offerId !== 'string' ||
       !uuid.test(claims.offerId) ||
       typeof claims.searchId !== 'string' ||
       !uuid.test(claims.searchId) ||
-      !REDIRECT_CHANNELS.includes(claims.channel as RedirectChannel) ||
+      !transportSchema.safeParse(claims.transport).success ||
+      !surfaceSchema.safeParse(claims.surface).success ||
       !Number.isSafeInteger(claims.issuedAt) ||
       !Number.isSafeInteger(claims.expiresAt)
     )
@@ -136,7 +140,9 @@ export class RedirectService {
     private readonly publicOrigin: string,
   ) {}
 
-  createLink(input: Pick<RedirectClaims, 'offerId' | 'searchId' | 'channel'>) {
+  createLink(
+    input: Pick<RedirectClaims, 'offerId' | 'searchId'> & AttributionContext,
+  ) {
     return new URL(
       `/r/${this.tokens.create(input)}`,
       this.publicOrigin,
