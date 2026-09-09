@@ -7,6 +7,8 @@ import {
   SearchProducts,
   demoRecords,
 } from '@shopai/commerce';
+import type { AttributionContext } from '@shopai/contracts';
+import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import {
   DemoQueryParser,
   ModelQueryParser,
@@ -64,7 +66,7 @@ export function createServices(env: ApiEnv) {
   const executeSearch = async (
     input: unknown,
     context: { merchantIds?: string[] } = {},
-    channel: 'web' | 'mcp' = 'web',
+    attribution: AttributionContext = WEB_ATTRIBUTION,
   ) => {
     const requestInput =
       input && typeof input === 'object'
@@ -88,7 +90,7 @@ export function createServices(env: ApiEnv) {
           merchantIds.map((merchantId) => ({
             merchantId,
             searchId: result.searchId,
-            channel,
+            ...attribution,
             requestKind,
             outcome: result.items.length ? 'results' : 'empty',
           })),
@@ -100,7 +102,7 @@ export function createServices(env: ApiEnv) {
         await searchEventRepository.record(
           explicitMerchantIds.map((merchantId) => ({
             merchantId,
-            channel,
+            ...attribution,
             requestKind,
             outcome: 'error',
           })),
