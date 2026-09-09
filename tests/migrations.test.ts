@@ -58,4 +58,30 @@ describe('database migrations', () => {
       'CREATE OR REPLACE FUNCTION shopai_bootstrap_merchant',
     );
   });
+
+  it('backfills legacy channels into separate transport and surface columns', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0013_surface_transport.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain(
+      "CASE WHEN \"channel\" = 'mcp' THEN 'mcp' ELSE 'rest' END",
+    );
+    expect(migration).toContain(
+      "CASE WHEN \"channel\" = 'mcp' THEN 'chatgpt' ELSE 'web' END",
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "search_events" ALTER COLUMN "transport" SET NOT NULL',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "search_events" ALTER COLUMN "surface" SET NOT NULL',
+    );
+    expect(migration).toContain(
+      'conversion."search_id" = attribution."search_id"',
+    );
+  });
 });

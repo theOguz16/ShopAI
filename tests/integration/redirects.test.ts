@@ -21,7 +21,8 @@ describe('signed redirects', () => {
     const input = {
       offerId: demoRecords[0]?.offerId ?? randomUUID(),
       searchId: randomUUID(),
-      channel: 'web' as const,
+      transport: 'rest' as const,
+      surface: 'web' as const,
     };
     const token = tokens.create(input, 1_000_000);
     expect(() => tokens.verify(`${token.slice(0, -1)}x`, 1_001_000)).toThrow(
@@ -37,7 +38,8 @@ describe('signed redirects', () => {
       expect.objectContaining({
         offerId: input.offerId,
         searchId: input.searchId,
-        channel: 'web',
+        transport: 'rest',
+        surface: 'web',
       }),
     );
     expect(payload).not.toHaveProperty('url');
@@ -55,7 +57,8 @@ describe('signed redirects', () => {
         {
           offerId: demoRecords[0]?.offerId ?? randomUUID(),
           searchId: randomUUID(),
-          channel: 'web',
+          transport: 'rest',
+          surface: 'web',
         },
         1_000_000,
       );
@@ -104,7 +107,10 @@ describe('signed redirects', () => {
       expect(opened.statusCode).toBe(302);
       expect(opened.headers.location).toBe('https://example.com/products/1');
       expect(repository.clicks).toHaveLength(1);
-      expect(repository.clicks[0]).toMatchObject({ classification: 'human' });
+      expect(repository.clicks[0]).toMatchObject({
+        classification: 'human',
+        claims: { transport: 'rest', surface: 'web' },
+      });
       expect(repository.clicks[0]).not.toHaveProperty('sale');
     } finally {
       await app.close();
@@ -133,14 +139,18 @@ describe('signed redirects', () => {
     const link = service.createLink({
       offerId,
       searchId: randomUUID(),
-      channel: 'chatgpt',
+      transport: 'mcp',
+      surface: 'chatgpt',
     });
     const opened = await service.open(
       new URL(link).pathname.slice('/r/'.length),
       'Slackbot-LinkExpanding 1.0',
     );
     expect(opened?.classification).toBe('bot');
-    expect(repository.clicks[0]?.classification).toBe('bot');
+    expect(repository.clicks[0]).toMatchObject({
+      classification: 'bot',
+      claims: { transport: 'mcp', surface: 'chatgpt' },
+    });
 
     const inactiveRepository = new MemoryRedirectRepository(
       new Map([

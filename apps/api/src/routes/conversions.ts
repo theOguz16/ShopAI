@@ -1,5 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { connections, conversionOrders, setTenantContext } from '@shopai/db';
+import {
+  connections,
+  conversionOrders,
+  searchEvents,
+  setTenantContext,
+} from '@shopai/db';
 import { and, eq, lte, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -86,6 +91,23 @@ export async function registerConversionRoutes(
             ),
           );
         if (!connection) return null;
+        let attribution: { transport: string; surface: string } | undefined;
+        if (event.searchId) {
+          const [row] = await tx
+            .select({
+              transport: searchEvents.transport,
+              surface: searchEvents.surface,
+            })
+            .from(searchEvents)
+            .where(
+              and(
+                eq(searchEvents.merchantId, merchantId),
+                eq(searchEvents.searchId, event.searchId),
+              ),
+            )
+            .limit(1);
+          attribution = row;
+        }
         const values = {
           merchantId,
           connectionId,
@@ -99,6 +121,8 @@ export async function registerConversionRoutes(
               : event.refundedMinor,
           searchId: event.searchId ?? null,
           offerId: event.offerId ?? null,
+          transport: attribution?.transport ?? null,
+          surface: attribution?.surface ?? null,
           occurredAt: new Date(event.occurredAt),
         };
         const [order] = await tx
@@ -113,6 +137,8 @@ export async function registerConversionRoutes(
               ...values,
               searchId: sql`coalesce(${values.searchId}, ${conversionOrders.searchId})`,
               offerId: sql`coalesce(${values.offerId}, ${conversionOrders.offerId})`,
+              transport: sql`coalesce(${values.transport}, ${conversionOrders.transport})`,
+              surface: sql`coalesce(${values.surface}, ${conversionOrders.surface})`,
             },
             setWhere: lte(conversionOrders.occurredAt, values.occurredAt),
           })

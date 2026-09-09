@@ -64,14 +64,14 @@ export async function registerAnalyticsRoutes(
           })
           .from(redirectClicks)
           .where(range);
-        const byChannel = await tx
+        const bySurface = await tx
           .select({
-            channel: redirectClicks.channel,
+            surface: redirectClicks.surface,
             count: sql<number>`count(*)::int`,
           })
           .from(redirectClicks)
           .where(and(range, eq(redirectClicks.classification, 'human')))
-          .groupBy(redirectClicks.channel);
+          .groupBy(redirectClicks.surface);
         const searchRange = and(
           eq(searchEvents.merchantId, merchantId),
           gte(searchEvents.occurredAt, from),
@@ -87,14 +87,14 @@ export async function registerAnalyticsRoutes(
           })
           .from(searchEvents)
           .where(searchRange);
-        const searchesByChannel = await tx
+        const searchesBySurface = await tx
           .select({
-            channel: searchEvents.channel,
+            surface: searchEvents.surface,
             count: sql<number>`count(*)::int`,
           })
           .from(searchEvents)
           .where(and(searchRange, eq(searchEvents.requestKind, 'initial')))
-          .groupBy(searchEvents.channel);
+          .groupBy(searchEvents.surface);
         const attributedOrder = and(
           isNotNull(conversionOrders.searchId),
           isNotNull(conversionOrders.offerId),
@@ -134,6 +134,12 @@ export async function registerAnalyticsRoutes(
           measured && humanClicks > 0
             ? (sales?.count ?? 0) / humanClicks
             : null;
+        const searchSurfaceCounts = Object.fromEntries(
+          searchesBySurface.map((row) => [row.surface, row.count]),
+        );
+        const redirectSurfaceCounts = Object.fromEntries(
+          bySurface.map((row) => [row.surface, row.count]),
+        );
         return {
           range: {
             from: from.toISOString(),
@@ -155,15 +161,13 @@ export async function registerAnalyticsRoutes(
               (searches?.attempts ?? 0) > 0
                 ? (searches?.failed ?? 0) / (searches?.attempts ?? 0)
                 : null,
-            searchesByChannel: Object.fromEntries(
-              searchesByChannel.map((row) => [row.channel, row.count]),
-            ),
+            searchesBySurface: searchSurfaceCounts,
+            searchesByChannel: searchSurfaceCounts,
             productInteractions: humanClicks,
             humanRedirects: humanClicks,
             botPreviews: clicks?.bots ?? 0,
-            redirectsByChannel: Object.fromEntries(
-              byChannel.map((row) => [row.channel, row.count]),
-            ),
+            redirectsBySurface: redirectSurfaceCounts,
+            redirectsByChannel: redirectSurfaceCounts,
             attributedSales,
             netRevenueMinor: measured ? Number(sales?.netMinor ?? 0) : null,
             conversionRate,
@@ -177,8 +181,10 @@ export async function registerAnalyticsRoutes(
             noResultRate:
               'Boş sonuçlanan başarılı ilk aramalar / başarılı ilk aramalar.',
             searchErrorRate: 'Hatalı ilk aramalar / tüm ilk arama denemeleri.',
+            surfaceScope:
+              'web, chatgpt, gemini ve brand_widget kullanıcı yüzeyleridir; REST, MCP ve UCP transport olarak ayrı tutulur. Ham sorgu metni kaydedilmez.',
             channelScope:
-              'web mağaza sayfasını ve web aramasını; mcp ChatGPT içindeki tool çağrılarını kapsar. Ham sorgu metni kaydedilmez.',
+              'Geriye dönük API uyumluluğu için tutulan alias; değerleri artık surface kırılımını temsil eder.',
             productInteractions:
               'İnsan olarak sınıflandırılmış ürün yönlendirmesi.',
             conversionRate:

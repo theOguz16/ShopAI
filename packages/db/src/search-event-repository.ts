@@ -1,3 +1,4 @@
+import type { Surface, Transport } from '@shopai/contracts';
 import { sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { searchEvents } from './schema.js';
@@ -5,7 +6,8 @@ import { searchEvents } from './schema.js';
 export type SearchEventInput = {
   merchantId: string;
   searchId?: string;
-  channel: 'web' | 'mcp';
+  transport: Transport;
+  surface: Surface;
   requestKind: 'initial' | 'pagination';
   outcome: 'results' | 'empty' | 'error';
 };
