@@ -91,9 +91,7 @@ export async function registerConversionRoutes(
             ),
           );
         if (!connection) return null;
-        let attribution:
-          | { transport: string; surface: string }
-          | undefined;
+        let attribution: { transport: string; surface: string } | undefined;
         if (event.searchId) {
           const [row] = await tx
             .select({
