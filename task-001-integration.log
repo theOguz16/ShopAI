@@ -1,0 +1,180 @@
+
+> shopai@0.1.0 test:integration /home/runner/work/ShopAI/ShopAI
+> pnpm build:packages && vitest run --config vitest.integration.config.ts
+
+
+> shopai@0.1.0 build:packages /home/runner/work/ShopAI/ShopAI
+> turbo run build --filter=./packages/*
+
+
+   • Packages in scope: @shopai/ai, @shopai/commerce, @shopai/config, @shopai/connectors, @shopai/contracts, @shopai/db, @shopai/ui
+   • Running build in 7 packages
+   • Remote caching disabled
+
+::group::@shopai/contracts:build
+cache hit, replaying logs bc53b5717554ed87
+
+> @shopai/contracts@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/contracts
+> tsc -p tsconfig.json
+
+::endgroup::
+::group::@shopai/commerce:build
+cache hit, replaying logs 0c793cff6bd7137e
+
+> @shopai/commerce@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/commerce
+> tsc -p tsconfig.json
+
+::endgroup::
+::group::@shopai/ui:build
+cache hit, replaying logs 4d6f7be0ece2c47b
+
+> @shopai/ui@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/ui
+> tsc -p tsconfig.json
+
+::endgroup::
+::group::@shopai/db:build
+cache hit, replaying logs cee0b9a988f20f2b
+
+> @shopai/db@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/db
+> tsc -p tsconfig.json
+
+::endgroup::
+::group::@shopai/connectors:build
+cache hit, replaying logs 1dd088ade563ddcf
+
+> @shopai/connectors@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/connectors
+> tsc -p tsconfig.json
+
+::endgroup::
+::group::@shopai/ai:build
+cache hit, replaying logs 9ac3e517123fdfc7
+
+> @shopai/ai@0.1.0 build /home/runner/work/ShopAI/ShopAI/packages/ai
+> tsc -p tsconfig.json
+
+::endgroup::
+
+ Tasks:    6 successful, 6 total
+Cached:    6 cached, 6 total
+  Time:    15ms >>> FULL TURBO
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90m/home/runner/work/ShopAI/ShopAI[39m
+
+[90mstdout[2m | tests/integration/database.test.ts[2m > [22m[2mCSV queue and demo seed[2m > [22m[2mpublishes only known synthetic products when seed is rerun
+[22m[39mYerel sentetik katalog hazır.
+
+[90mstdout[2m | tests/integration/database.test.ts[2m > [22m[2mCSV queue and demo seed[2m > [22m[2mpublishes only known synthetic products when seed is rerun
+[22m[39mYerel sentetik katalog hazır.
+
+ [32m✓[39m tests/integration/database.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1373[2mms[22m[39m
+{"level":30,"time":1788967136282,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-1","req":{"method":"POST","url":"/v1/auth/login","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136301,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-1","res":{"statusCode":200},"responseTime":18.25696499999981,"msg":"request completed"}
+{"level":30,"time":1788967136311,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-2","req":{"method":"POST","url":"/v1/stores/ca000000-0000-4000-8000-000000000001/search","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136354,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-2","res":{"statusCode":200},"responseTime":43.72339799999986,"msg":"request completed"}
+{"level":30,"time":1788967136358,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-3","req":{"method":"POST","url":"/mcp","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136391,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-3","res":{"statusCode":200},"responseTime":32.485005,"msg":"request completed"}
+{"level":30,"time":1788967136393,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-4","req":{"method":"GET","url":"/v1/merchants","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136400,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-4","res":{"statusCode":200},"responseTime":6.492087999999967,"msg":"request completed"}
+{"level":30,"time":1788967136402,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-5","req":{"method":"GET","url":"/v1/merchants/f0000000-0000-4000-8000-000000000001/products","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136406,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-5","res":{"statusCode":403},"responseTime":4.079541999999947,"msg":"request completed"}
+{"level":30,"time":1788967136407,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-6","req":{"method":"POST","url":"/v1/auth/login","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136407,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-6","res":{"statusCode":401},"responseTime":0.7660009999999602,"msg":"request completed"}
+{"level":30,"time":1788967136409,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-7","req":{"method":"POST","url":"/v1/auth/login","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136412,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-7","res":{"statusCode":200},"responseTime":2.758102000000008,"msg":"request completed"}
+{"level":30,"time":1788967136412,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-8","req":{"method":"POST","url":"/v1/setup/merchant","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136419,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-8","res":{"statusCode":201},"responseTime":6.835189000000128,"msg":"request completed"}
+{"level":30,"time":1788967136420,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-9","req":{"method":"POST","url":"/v1/setup/merchant","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136428,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-9","res":{"statusCode":409},"responseTime":7.6580750000000535,"msg":"request completed"}
+{"level":30,"time":1788967136431,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-a","req":{"method":"POST","url":"/v1/merchants/cc000000-0000-4000-8000-000000000001/imports","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136443,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-a","event":"import_accepted","requestId":"req-a","importRunId":"c2def316-a7e8-4fe6-bf35-ec394abad283","merchantId":"cc000000-0000-4000-8000-000000000001","connectionId":"d245baf1-8afc-4c39-9469-ba2548a76043","msg":"Import accepted"}
+{"level":30,"time":1788967136444,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-a","res":{"statusCode":202},"responseTime":12.385804000000007,"msg":"request completed"}
+{"level":30,"time":1788967136447,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-b","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136456,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-b","res":{"statusCode":202},"responseTime":9.298561000000063,"msg":"request completed"}
+{"level":30,"time":1788967136457,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-c","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136462,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-c","res":{"statusCode":202},"responseTime":5.181379000000106,"msg":"request completed"}
+{"level":30,"time":1788967136462,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-d","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136467,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-d","res":{"statusCode":202},"responseTime":4.405612999999903,"msg":"request completed"}
+{"level":30,"time":1788967136467,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-e","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136472,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-e","res":{"statusCode":202},"responseTime":4.427258999999822,"msg":"request completed"}
+{"level":30,"time":1788967136472,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-f","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136476,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-f","res":{"statusCode":202},"responseTime":3.6063759999999547,"msg":"request completed"}
+{"level":30,"time":1788967136476,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-g","req":{"method":"GET","url":"/v1/merchants/ca000000-0000-4000-8000-000000000001/analytics?timezone=Europe%2FIstanbul","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136503,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-g","res":{"statusCode":200},"responseTime":26.754752999999937,"msg":"request completed"}
+{"level":30,"time":1788967136516,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-h","req":{"method":"POST","url":"/v1/conversions/ca000000-0000-4000-8000-000000000001/ca000000-0000-4000-8000-000000000002","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136517,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-h","res":{"statusCode":401},"responseTime":0.5724129999998695,"msg":"request completed"}
+{"level":30,"time":1788967136517,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-i","req":{"method":"GET","url":"/v1/merchants/cb000000-0000-4000-8000-000000000001/analytics","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136521,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-i","res":{"statusCode":403},"responseTime":3.345441999999821,"msg":"request completed"}
+{"level":30,"time":1788967136521,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-j","req":{"method":"GET","url":"/v1/merchants/ca000000-0000-4000-8000-000000000001","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136526,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-j","res":{"statusCode":200},"responseTime":4.858132000000069,"msg":"request completed"}
+{"level":30,"time":1788967136526,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-k","req":{"method":"GET","url":"/v1/merchants/cb000000-0000-4000-8000-000000000001","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136529,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-k","res":{"statusCode":403},"responseTime":2.6675760000000537,"msg":"request completed"}
+{"level":30,"time":1788967136529,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-l","req":{"method":"GET","url":"/v1/merchants/ca000000-0000-4000-8000-000000000001/connections","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136535,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-l","res":{"statusCode":200},"responseTime":5.563618000000133,"msg":"request completed"}
+{"level":30,"time":1788967136535,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-m","req":{"method":"GET","url":"/v1/merchants/cb000000-0000-4000-8000-000000000001/connections","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788967136538,"pid":3520,"hostname":"runnervmlun5p","reqId":"req-m","res":{"statusCode":403},"responseTime":2.5973919999999,"msg":"request completed"}
+ [31m❯[39m tests/integration/analytics.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 440[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mrecords a web search as REST/web without persisting the raw query[32m 48[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mrecords a ChatGPT search as MCP/chatgpt[32m 35[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mlists only the stores assigned to the authenticated user[32m 8[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mrejects a client-supplied merchant id without membership[32m 5[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mdoes not accept another user email with a valid pilot code[32m 2[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mbootstraps merchant ownership atomically and only once[32m 22[2mms[22m[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mlets a new CSV-only merchant upload without a pre-created connection[32m 16[2mms[22m[39m
+[31m   [31m×[31m tenant analytics and signed conversions[2m > [22mis idempotent, preserves attribution, and applies refunds/cancellations[39m[32m 70[2mms[22m[39m
+[31m     → expected { range: { …(4) }, …(3) } to match object { measurement: 'measured', …(1) }
+(19 matching properties omitted from actual)[39m
+   [32m✓[39m tenant analytics and signed conversions[2m > [22mrejects invalid signatures and cross-tenant report access[32m 23[2mms[22m[39m
+ [32m✓[39m tests/integration/merchant-management.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 349[2mms[22m[39m
+ [32m✓[39m tests/integration/tenant-isolation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 109[2mms[22m[39m
+ [32m✓[39m tests/integration/postgres-redis.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/integration/analytics.test.ts[2m > [22mtenant analytics and signed conversions[2m > [22mis idempotent, preserves attribution, and applies refunds/cancellations
+[31m[1mAssertionError[22m: expected { range: { …(4) }, …(3) } to match object { measurement: 'measured', …(1) }
+(19 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[33m@@ -2,16 +2,16 @@[39m
+[2m    "measurement": "measured",[22m
+[2m    "metrics": {[22m
+[2m      "attributedSales": 1,[22m
+[2m      "botPreviews": 1,[22m
+[2m      "conversionRate": 1,[22m
+[32m-     "emptySearches": 2,[39m
+[31m+     "emptySearches": 3,[39m
+[2m      "failedSearches": 1,[22m
+[2m      "humanRedirects": 1,[22m
+[2m      "incrementalSales": null,[22m
+[2m      "netRevenueMinor": 6000,[22m
+[32m-     "noResultRate": 0.5,[39m
+[31m+     "noResultRate": 0.75,[39m
+[2m      "paginationRequests": 1,[22m
+[2m      "redirectsBySurface": {[22m
+[2m        "web": 1,[22m
+[2m      },[22m
+[2m      "searchAttempts": 5,[22m
+
+[36m [2m❯[22m tests/integration/analytics.test.ts:[2m482:29[22m[39m
+    [90m480| [39m    })[33m;[39m
+    [90m481| [39m    [34mexpect[39m(response[33m.[39mstatusCode)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m482| [39m    [34mexpect[39m(response[33m.[39m[34mjson[39m())[33m.[39m[34mtoMatchObject[39m({
+    [90m   | [39m                            [31m^[39m
+    [90m483| [39m      measurement[33m:[39m [32m'measured'[39m[33m,[39m
+    [90m484| [39m      metrics[33m:[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m36 passed[39m[22m[90m (37)[39m
+[2m   Start at [22m 15:18:52
+[2m   Duration [22m 6.71s[2m (transform 373ms, setup 0ms, collect 3.46s, tests 2.30s, environment 1ms, prepare 379ms)[22m
+
+
+::error file=/home/runner/work/ShopAI/ShopAI/tests/integration/analytics.test.ts,title=tests/integration/analytics.test.ts > tenant analytics and signed conversions > is idempotent%2C preserves attribution%2C and applies refunds/cancellations,line=482,column=29::AssertionError: expected { range: { …(4) }, …(3) } to match object { measurement: 'measured', …(1) }%0A(19 matching properties omitted from actual)%0A%0A- Expected%0A+ Received%0A%0A@@ -2,16 +2,16 @@%0A    "measurement": "measured",%0A    "metrics": {%0A      "attributedSales": 1,%0A      "botPreviews": 1,%0A      "conversionRate": 1,%0A-     "emptySearches": 2,%0A+     "emptySearches": 3,%0A      "failedSearches": 1,%0A      "humanRedirects": 1,%0A      "incrementalSales": null,%0A      "netRevenueMinor": 6000,%0A-     "noResultRate": 0.5,%0A+     "noResultRate": 0.75,%0A      "paginationRequests": 1,%0A      "redirectsBySurface": {%0A        "web": 1,%0A      },%0A      "searchAttempts": 5,%0A%0A ❯ tests/integration/analytics.test.ts:482:29%0A%0A
+ ELIFECYCLE  Command failed with exit code 1.
+exit_code=1
