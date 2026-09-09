@@ -2,7 +2,11 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: ['shopping-local.spec.ts', 'merchant-onboarding-local.spec.ts'],
+  testMatch: [
+    'shopping-local.spec.ts',
+    'merchant-onboarding-local.spec.ts',
+    'storefront-local.spec.ts',
+  ],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   retries: 0,

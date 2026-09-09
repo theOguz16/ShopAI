@@ -140,6 +140,20 @@ export const searchResponseSchema = z.object({
   mode: z.enum(['demo', 'postgres']),
 });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
+export const storeSlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+export const publicStoreSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1).max(160),
+    slug: storeSlugSchema,
+  })
+  .strict();
+export type PublicStore = z.infer<typeof publicStoreSchema>;
 export const sourceRowSchema = z.object({
   externalId: z.string().trim().min(1).max(160),
   productKey: z.string().trim().min(1).max(160),

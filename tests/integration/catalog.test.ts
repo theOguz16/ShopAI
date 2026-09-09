@@ -115,6 +115,37 @@ describe('search invariants', () => {
     );
     expect(result.items).toEqual([]);
   });
+  it('keeps store results inside one merchant and excludes drafts', async () => {
+    const otherMerchant = '90000000-0000-4000-8000-000000000001';
+    const records = demoRecords.map((record, index) =>
+      index === 0
+        ? { ...record, merchantId: otherMerchant, merchantName: 'Other Store' }
+        : index === 1
+          ? { ...record, published: false }
+          : record,
+    );
+    const service = new SearchProducts(
+      new MemoryCatalogRepository(records),
+      new DemoQueryParser(),
+      'demo',
+    );
+    const scoped = await service.execute(
+      { filters: { inStockOnly: false } },
+      { merchantIds: [DEMO_MERCHANT_ID] },
+    );
+    expect(scoped.items.length).toBeGreaterThan(0);
+    expect(
+      scoped.items.every((item) => item.merchantId === DEMO_MERCHANT_ID),
+    ).toBe(true);
+    expect(
+      scoped.items.some((item) => item.offerId === records[1]?.offerId),
+    ).toBe(false);
+    const wideningAttempt = await service.execute(
+      { merchantIds: [otherMerchant], filters: { inStockOnly: false } },
+      { merchantIds: [DEMO_MERCHANT_ID] },
+    );
+    expect(wideningAttempt.items).toEqual([]);
+  });
 });
 describe('CSV boundary', () => {
   const fixture = readFileSync(

@@ -20,6 +20,8 @@ if (!databaseUrl)
 const merchantA = 'da000000-0000-4000-8000-000000000001';
 const merchantB = 'db000000-0000-4000-8000-000000000001';
 const connectionB = 'db000000-0000-4000-8000-000000000002';
+const merchantASlug = `management-a-${randomUUID()}`;
+const merchantBSlug = `management-b-${randomUUID()}`;
 const credentialsA = 'secret://MANAGEMENT_WOO_A';
 const credentialsB = 'secret://MANAGEMENT_WOO_B';
 const credentials = {
@@ -82,13 +84,13 @@ beforeAll(async () => {
     {
       id: merchantA,
       name: 'Management A',
-      slug: `management-a-${randomUUID()}`,
+      slug: merchantASlug,
       active: true,
     },
     {
       id: merchantB,
       name: 'Management B',
-      slug: `management-b-${randomUUID()}`,
+      slug: merchantBSlug,
       active: true,
     },
   ]);
@@ -146,6 +148,15 @@ afterAll(async () => {
 });
 
 describe.sequential('merchant management authorization', () => {
+  it('resolves only public store identity without authentication', async () => {
+    const response = await app.inject(`/v1/stores/${merchantASlug}`);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      store: { id: merchantA, name: 'Management A', slug: merchantASlug },
+    });
+    expect(JSON.stringify(response.json())).not.toMatch(/secret|role|member/iu);
+    expect((await app.inject('/v1/stores/not-found')).statusCode).toBe(404);
+  });
   it('uses environment-consistent cookies and preserves generic login failures', async () => {
     const wrongEmail = await app.inject({
       method: 'POST',

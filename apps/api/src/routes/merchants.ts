@@ -7,7 +7,8 @@ import {
   merchants,
   withTenant,
 } from '@shopai/db';
-import { and, desc, eq } from 'drizzle-orm';
+import { publicStoreSchema, storeSlugSchema } from '@shopai/contracts';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
 import { requireRole, requireSameOrigin } from '../plugins/auth.js';
@@ -25,6 +26,31 @@ export async function registerMerchantRoutes(
   app: FastifyInstance,
   env: ApiEnv,
 ) {
+  app.get('/v1/stores/:slug', async (request, reply) => {
+    const parsedSlug = storeSlugSchema.safeParse(
+      (request.params as { slug?: string }).slug,
+    );
+    if (!parsedSlug.success)
+      return reply.code(404).send({ code: 'STORE_NOT_FOUND' });
+    const db = app.authApi.db;
+    if (!db) return reply.code(503).send({ code: 'STORE_LOOKUP_UNAVAILABLE' });
+    const store = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local role shopai_public`);
+      const [row] = await tx
+        .select({
+          id: merchants.id,
+          name: merchants.name,
+          slug: merchants.slug,
+        })
+        .from(merchants)
+        .where(eq(merchants.slug, parsedSlug.data))
+        .limit(1);
+      return row;
+    });
+    return store
+      ? { store: publicStoreSchema.parse(store) }
+      : reply.code(404).send({ code: 'STORE_NOT_FOUND' });
+  });
   app.get('/v1/merchants', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ code: 'UNAUTHENTICATED' });
     if (!app.authApi.db)

@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { activeMerchant, merchantId } = useActiveMerchant();
   const [summary, setSummary] = useState<Summary>();
   const [error, setError] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setError('');
@@ -105,12 +106,25 @@ export default function Dashboard() {
       action: 'Taslakları aç',
     },
     view: {
-      href: '/',
+      href: `/stores/${activeMerchant.slug}`,
       title: 'Mağazan hazır',
       text: 'Yayımlanan ürünlerinin alışveriş deneyiminde nasıl göründüğünü kontrol et.',
       action: 'Mağazanı görüntüle',
     },
   }[current];
+
+  async function copyStoreLink() {
+    try {
+      await navigator.clipboard.writeText(
+        new URL(`/stores/${activeMerchant.slug}`, window.location.origin).href,
+      );
+      setCopyMessage('Mağaza bağlantısı kopyalandı.');
+    } catch {
+      setCopyMessage(
+        'Bağlantı kopyalanamadı. Mağazayı açıp adres çubuğundan kopyalayabilirsin.',
+      );
+    }
+  }
 
   return (
     <main className="dashboard-shell">
@@ -166,6 +180,23 @@ export default function Dashboard() {
           <strong>{summary?.published ?? '—'}</strong>
           <span>yayında</span>
         </div>
+      </section>
+      <section className="store-share">
+        <div>
+          <h2>Müşterilerinle paylaş</h2>
+          <p>
+            Bu bağlantı oturum açmadan yalnızca yayımlanmış ürünlerini gösterir.
+          </p>
+        </div>
+        <div>
+          <a className="secondary-link" href={`/stores/${activeMerchant.slug}`}>
+            Mağazanı görüntüle
+          </a>
+          <button type="button" onClick={() => void copyStoreLink()}>
+            Bağlantıyı kopyala
+          </button>
+        </div>
+        {copyMessage ? <p role="status">{copyMessage}</p> : null}
       </section>
     </main>
   );
