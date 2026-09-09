@@ -95,7 +95,9 @@ describe('database migrations', () => {
     );
 
     expect(migration).toContain('CREATE TABLE "discovery_sessions"');
-    expect(migration).toContain('"merchant_scope" jsonb DEFAULT \'[]\'::jsonb NOT NULL');
+    expect(migration).toContain(
+      '"merchant_scope" jsonb DEFAULT \'[]\'::jsonb NOT NULL',
+    );
     expect(migration).toContain(
       'ALTER TABLE "search_events" ADD COLUMN "discovery_session_id" uuid',
     );
