@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
+  CHATGPT_ATTRIBUTION,
   searchFiltersSchema,
   searchRequestSchema,
   searchResponseSchema,
@@ -121,7 +122,11 @@ export function createMcpServer(
       },
     },
     async (input) => {
-      const result = await services.executeSearch(input, {}, 'mcp');
+      const result = await services.executeSearch(
+        input,
+        {},
+        CHATGPT_ATTRIBUTION,
+      );
       const linkedResult = {
         ...result,
         items: result.items.map((item) => ({
@@ -129,7 +134,7 @@ export function createMcpServer(
           checkoutUrl: services.redirects.createLink({
             offerId: item.offerId,
             searchId: result.searchId,
-            channel: 'chatgpt',
+            ...CHATGPT_ATTRIBUTION,
           }),
         })),
       };
