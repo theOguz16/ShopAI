@@ -134,7 +134,6 @@ export function createMcpServer(
           checkoutUrl: services.redirects.createLink({
             offerId: item.offerId,
             searchId: result.searchId,
-            discoverySessionId: input.discoverySessionId,
             ...CHATGPT_ATTRIBUTION,
           }),
         })),
