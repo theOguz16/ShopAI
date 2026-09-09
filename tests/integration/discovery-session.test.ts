@@ -10,6 +10,7 @@ import {
   connections,
   discoverySessions,
   merchants,
+  products,
   redirectClicks,
   searchEvents,
 } from '../../packages/db/src/schema.js';
@@ -68,6 +69,10 @@ beforeAll(async () => {
       },
     ],
   });
+  await database.db
+    .update(products)
+    .set({ published: true })
+    .where(eq(products.merchantId, maviId));
   app = await buildApp(services, env);
 });
 
