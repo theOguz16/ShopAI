@@ -92,6 +92,13 @@
       "when": 1788966000000,
       "tag": "0013_surface_transport",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788974400000,
+      "tag": "0014_discovery_sessions",
+      "breakpoints": true
     }
   ]
 }
