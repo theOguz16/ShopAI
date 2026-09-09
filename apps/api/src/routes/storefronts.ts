@@ -21,7 +21,7 @@ export async function registerStorefrontRoutes(app: FastifyInstance) {
         .select({
           id: merchants.id,
           slug: merchants.slug,
-          displayName: merchants.displayName,
+          displayName: sql<string>`coalesce(${merchants.displayName}, ${merchants.name})`,
           logoUrl: merchants.logoUrl,
           coverImageUrl: merchants.coverImageUrl,
           primaryColor: merchants.primaryColor,
