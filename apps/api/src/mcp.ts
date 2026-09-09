@@ -122,7 +122,11 @@ export function createMcpServer(
       },
     },
     async (input) => {
-      const result = await services.executeSearch(input, {}, CHATGPT_ATTRIBUTION);
+      const result = await services.executeSearch(
+        input,
+        {},
+        CHATGPT_ATTRIBUTION,
+      );
       const linkedResult = {
         ...result,
         items: result.items.map((item) => ({

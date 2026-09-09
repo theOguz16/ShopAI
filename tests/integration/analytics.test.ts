@@ -256,7 +256,8 @@ describe('tenant analytics and signed conversions', () => {
       },
     });
     expect(response.statusCode).toBe(200);
-    const searchId = response.json().result.structuredContent.searchId as string;
+    const searchId = response.json().result.structuredContent
+      .searchId as string;
     const [row] = await database.db
       .select({
         transport: searchEvents.transport,
@@ -390,7 +391,8 @@ describe('tenant analytics and signed conversions', () => {
     if (run?.filePath) await unlink(run.filePath);
   });
   it('is idempotent, preserves attribution, and applies refunds/cancellations', async () => {
-    if (!webSearchId) throw new Error('Web search attribution fixture missing.');
+    if (!webSearchId)
+      throw new Error('Web search attribution fixture missing.');
     const paid = {
       orderId: 'order-1',
       status: 'paid',

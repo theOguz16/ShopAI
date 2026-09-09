@@ -265,7 +265,10 @@ export const searchEvents = pgTable(
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
   (t) => [
-    check('search_event_transport', sql`${t.transport} in ('rest','mcp','ucp')`),
+    check(
+      'search_event_transport',
+      sql`${t.transport} in ('rest','mcp','ucp')`,
+    ),
     check(
       'search_event_surface',
       sql`${t.surface} in ('web','chatgpt','gemini','brand_widget')`,

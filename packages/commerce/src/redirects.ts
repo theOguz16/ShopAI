@@ -34,7 +34,10 @@ export class RedirectTokens {
   }
 
   create(
-    input: Pick<RedirectClaims, 'offerId' | 'searchId' | 'transport' | 'surface'>,
+    input: Pick<
+      RedirectClaims,
+      'offerId' | 'searchId' | 'transport' | 'surface'
+    >,
     now = Date.now(),
   ) {
     if (!uuid.test(input.offerId) || !uuid.test(input.searchId))

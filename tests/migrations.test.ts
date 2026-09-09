@@ -69,10 +69,10 @@ describe('database migrations', () => {
     );
 
     expect(migration).toContain(
-      'CASE WHEN "channel" = \'mcp\' THEN \'mcp\' ELSE \'rest\' END',
+      "CASE WHEN \"channel\" = 'mcp' THEN 'mcp' ELSE 'rest' END",
     );
     expect(migration).toContain(
-      'CASE WHEN "channel" = \'mcp\' THEN \'chatgpt\' ELSE \'web\' END',
+      "CASE WHEN \"channel\" = 'mcp' THEN 'chatgpt' ELSE 'web' END",
     );
     expect(migration).toContain(
       'ALTER TABLE "search_events" ALTER COLUMN "transport" SET NOT NULL',
