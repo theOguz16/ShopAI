@@ -26,6 +26,8 @@ const loginRequestSchema = z
     token: z.string().min(16).max(256),
   })
   .strict();
+const restDiscoverySurfaces = new Set(['web', 'brand_widget']);
+
 export async function buildApp(
   services?: Services,
   env: ApiEnv = parseApiEnv(process.env),
@@ -125,6 +127,11 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
+    if (!restDiscoverySurfaces.has(parsed.data.surface))
+      return reply.code(400).send({
+        code: 'INVALID_SURFACE_FOR_TRANSPORT',
+        requestId: request.id,
+      });
     const session = await resolvedServices.discoverySessions.create(
       parsed.data,
       {
@@ -152,7 +159,6 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          discoverySessionId: parsed.data.discoverySessionId,
           ...WEB_ATTRIBUTION,
         }),
       })),
@@ -185,7 +191,6 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          discoverySessionId: parsed.data.discoverySessionId,
           ...WEB_ATTRIBUTION,
         }),
       })),
