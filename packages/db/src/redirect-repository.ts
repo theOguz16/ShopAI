@@ -48,6 +48,7 @@ export class PostgresRedirectRepository implements RedirectRepository {
       await tx.execute(sql`set local role shopai_public`);
       await tx.insert(redirectClicks).values({
         searchId: input.claims.searchId,
+        discoverySessionId: input.claims.discoverySessionId,
         offerId: input.claims.offerId,
         merchantId: input.merchantId,
         transport: input.claims.transport,
