@@ -7,6 +7,7 @@ export default defineConfig({
       'tests/integration/database.test.ts',
       'tests/integration/tenant-isolation.test.ts',
       'tests/integration/analytics.test.ts',
+      'tests/integration/discovery-session.test.ts',
       'tests/integration/merchant-management.test.ts',
     ],
     fileParallelism: false,
