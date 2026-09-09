@@ -6,7 +6,6 @@ import {
   offers,
   products,
   redirectClicks,
-  searchEvents,
   variants,
 } from './schema.js';
 
@@ -47,19 +46,14 @@ export class PostgresRedirectRepository implements RedirectRepository {
   async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
-      const [searchEvent] = await tx
-        .select({ discoverySessionId: searchEvents.discoverySessionId })
-        .from(searchEvents)
-        .where(
-          and(
-            eq(searchEvents.searchId, input.claims.searchId),
-            eq(searchEvents.merchantId, input.merchantId),
-          ),
-        )
-        .limit(1);
+      const [attribution] = await tx.select({
+        discoverySessionId: sql<
+          string | null
+        >`shopai_discovery_session_for_search(${input.claims.searchId}, ${input.merchantId})`,
+      });
       await tx.insert(redirectClicks).values({
         searchId: input.claims.searchId,
-        discoverySessionId: searchEvent?.discoverySessionId ?? null,
+        discoverySessionId: attribution?.discoverySessionId ?? null,
         offerId: input.claims.offerId,
         merchantId: input.merchantId,
         transport: input.claims.transport,
