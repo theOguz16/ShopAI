@@ -1,19 +1,19 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { searchRequestSchema } from '@shopai/contracts';
+import { searchRequestSchema, WEB_ATTRIBUTION } from '@shopai/contracts';
 import { createDatabase } from '@shopai/db';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { type ApiEnv, parseApiEnv } from './env.js';
 import { createMcpServer } from './mcp.js';
 import { registerAuth, requireSameOrigin } from './plugins/auth.js';
+import { registerAnalyticsRoutes } from './routes/analytics.js';
+import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
-import { registerAnalyticsRoutes } from './routes/analytics.js';
-import { registerConversionRoutes } from './routes/conversions.js';
 import { createServices, type Services } from './services.js';
 
 const loginRequestSchema = z
@@ -124,7 +124,7 @@ export async function buildApp(
     const result = await resolvedServices.executeSearch(
       request.body,
       {},
-      'web',
+      WEB_ATTRIBUTION,
     );
     return {
       ...result,
@@ -133,7 +133,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          channel: 'web',
+          ...WEB_ATTRIBUTION,
         }),
       })),
     };
@@ -156,7 +156,7 @@ export async function buildApp(
     const result = await resolvedServices.executeSearch(
       request.body,
       { merchantIds: [merchantId] },
-      'web',
+      WEB_ATTRIBUTION,
     );
     return {
       ...result,
@@ -165,7 +165,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          channel: 'web',
+          ...WEB_ATTRIBUTION,
         }),
       })),
     };
