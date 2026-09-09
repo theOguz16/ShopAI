@@ -59,7 +59,11 @@ function withoutQueryHint(query: string, kind: 'category' | 'budget') {
   if (kind === 'budget')
     return query
       .replace(
-        /\b\d+(?:[.,]\d+)?\s*(?:tl|₺)(?:\s*(?:altında|altı|geçmesin))?/giu,
+        /\b\d+(?:[.,]\d+)?\s*(?:(?:tl|₺|lira)\s*)?(?:ile|-|–)\s*\d+(?:[.,]\d+)?\s*(?:tl|₺|lira)?\s*(?:arası|arasında)?/giu,
+        '',
+      )
+      .replace(
+        /\b\d+(?:[.,]\d+)?\s*(?:tl|₺|lira)(?:\s*(?:altında|altı|geçmesin))?/giu,
         '',
       )
       .replace(/\s{2,}/gu, ' ')
@@ -343,6 +347,21 @@ export default function Home() {
                   En fazla{' '}
                   {(applied.maxPriceMinor / 100).toLocaleString('tr-TR')} ₺{' '}
                   <span aria-hidden="true">×</span>
+                </button>
+              </li>
+            ) : null}
+            {applied.minPriceMinor !== undefined ? (
+              <li>
+                <button
+                  type="button"
+                  aria-label="Alt bütçe filtresini kaldır"
+                  onClick={() => {
+                    const nextQuery = withoutQueryHint(query, 'budget');
+                    applyFilters(filters, nextQuery);
+                  }}
+                >
+                  En az {(applied.minPriceMinor / 100).toLocaleString('tr-TR')}{' '}
+                  ₺ <span aria-hidden="true">×</span>
                 </button>
               </li>
             ) : null}

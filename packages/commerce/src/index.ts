@@ -83,17 +83,54 @@ export const normalizeTurkish = (value: string) =>
     .trim();
 
 export const normalize = normalizeTurkish;
-export const normalizeColor = (value: string) => {
+function editDistance(left: string, right: string) {
+  let previousPrevious: number[] | undefined;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= right.length; j += 1) {
+      let distance = Math.min(
+        (previous[j] ?? j) + 1,
+        (current[j - 1] ?? i) + 1,
+        (previous[j - 1] ?? i - 1) + (left[i - 1] === right[j - 1] ? 0 : 1),
+      );
+      if (
+        i > 1 &&
+        j > 1 &&
+        left[i - 1] === right[j - 2] &&
+        left[i - 2] === right[j - 1]
+      )
+        distance = Math.min(
+          distance,
+          (previousPrevious?.[j - 2] ?? Number.POSITIVE_INFINITY) + 1,
+        );
+      current[j] = distance;
+    }
+    previousPrevious = previous;
+    previous = current;
+  }
+  return previous[right.length] ?? left.length;
+}
+function aliasValue(aliases: Readonly<Record<string, string>>, value: string) {
   const normalized = normalizeTurkish(value);
-  return COLOR_ALIASES[normalized] ?? normalized;
+  const exact = aliases[normalized];
+  if (exact) return exact;
+  if (normalized.length < 4) return normalized;
+  const candidates = Object.entries(aliases).filter(
+    ([alias]) => editDistance(normalized, normalizeTurkish(alias)) === 1,
+  );
+  const values = [...new Set(candidates.map(([, canonical]) => canonical))];
+  return values.length === 1 ? (values[0] ?? normalized) : normalized;
+}
+export const normalizeColor = (value: string) => {
+  return aliasValue(COLOR_ALIASES, value);
 };
 export const normalizeSize = (value: string) => {
   const normalized = normalizeTurkish(value);
   return SIZE_ALIASES[normalized] ?? value.trim().toUpperCase();
 };
 export const normalizeCategory = (value: string) => {
-  const normalized = normalizeTurkish(value);
-  return CATEGORY_ALIASES[normalized] ?? normalized;
+  return aliasValue(CATEGORY_ALIASES, value);
 };
 
 const QUERY_STOP_WORDS = new Set([
@@ -109,6 +146,13 @@ const QUERY_STOP_WORDS = new Set([
   'alti',
   'gecmesin',
   'ust',
+  'ile',
+  'arasi',
+  'arasinda',
+  'stokta',
+  'stoklu',
+  'hemen',
+  'teslim',
   'sinir',
   'olmayan',
   'olmasin',
@@ -267,6 +311,12 @@ export class SearchProducts {
       filters,
       merchantIds: scopedMerchantIds,
     });
+    if (
+      parsed.filters.minPriceMinor !== undefined &&
+      parsed.filters.maxPriceMinor !== undefined &&
+      parsed.filters.minPriceMinor > parsed.filters.maxPriceMinor
+    )
+      throw new Error('Alt fiyat üst fiyattan büyük olamaz.');
     const page = await this.repository.search({
       ...parsed,
       textTerms: extractSearchTerms(parsed.query, parsed.filters),
@@ -355,6 +405,7 @@ export class MemoryCatalogRepository implements CatalogRepository {
       .filter(
         (r) =>
           r.currency === f.currency &&
+          (f.minPriceMinor === undefined || r.priceMinor >= f.minPriceMinor) &&
           (f.maxPriceMinor === undefined || r.priceMinor <= f.maxPriceMinor),
       )
       .filter((r) => !f.inStockOnly || r.stockStatus === 'in_stock')

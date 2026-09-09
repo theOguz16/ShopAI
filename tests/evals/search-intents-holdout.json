@@ -1,0 +1,56 @@
+[
+  {
+    "id": "holdout-typo-01",
+    "class": "typo",
+    "query": "kırmıız ceket",
+    "expected": { "category": "jacket", "colors": ["red"] }
+  },
+  {
+    "id": "holdout-typo-02",
+    "class": "typo",
+    "query": "mvai pantolon",
+    "expected": { "category": "trousers", "colors": ["blue"] }
+  },
+  {
+    "id": "holdout-negative-01",
+    "class": "negative-color",
+    "query": "yeşil hariç tişört",
+    "expected": {
+      "category": "tshirt",
+      "colors": [],
+      "excludedColors": ["green"]
+    }
+  },
+  {
+    "id": "holdout-size-01",
+    "class": "size-notation",
+    "query": "bedenim small tişört",
+    "expected": { "category": "tshirt", "sizes": ["S"] }
+  },
+  {
+    "id": "holdout-size-02",
+    "class": "size-notation",
+    "query": "large-beden ceket",
+    "expected": { "category": "jacket", "sizes": ["L"] }
+  },
+  {
+    "id": "holdout-range-01",
+    "class": "budget-range",
+    "query": "650–950 TL arası tişört",
+    "expected": {
+      "category": "tshirt",
+      "minPriceMinor": 65000,
+      "maxPriceMinor": 95000
+    }
+  },
+  {
+    "id": "holdout-range-02",
+    "class": "budget-range",
+    "query": "700 ile 1.100 lira arasında gömlek",
+    "expected": {
+      "category": "shirt",
+      "minPriceMinor": 70000,
+      "maxPriceMinor": 110000
+    }
+  }
+]

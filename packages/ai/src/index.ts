@@ -1,6 +1,8 @@
 import {
   CATEGORY_ALIASES,
   COLOR_ALIASES,
+  normalizeCategory,
+  normalizeColor,
   normalizeTurkish,
   type QueryParser,
   SIZE_ALIASES,
@@ -15,11 +17,13 @@ export class DemoQueryParser implements QueryParser {
     const text = normalizeTurkish(query);
     const filters: Partial<SearchRequest['filters']> = {};
     const warnings: string[] = [];
-    const category = Object.entries(CATEGORY_ALIASES).find(([alias]) =>
-      text.split(' ').includes(normalizeTurkish(alias)),
-    );
-    if (category) filters.category = category[1];
     const words = text.split(' ');
+    const category = words
+      .map((word) => [word, normalizeCategory(word)] as const)
+      .find(([, normalized]) =>
+        Object.values(CATEGORY_ALIASES).includes(normalized),
+      );
+    if (category?.[1]) filters.category = category[1];
     const negatedColors = [
       ...new Set(
         Object.entries(COLOR_ALIASES)
@@ -43,13 +47,15 @@ export class DemoQueryParser implements QueryParser {
     const matched = [
       ...new Set(
         Object.entries(COLOR_ALIASES)
-          .filter(([alias]) => words.includes(normalizeTurkish(alias)))
+          .filter(([, value]) =>
+            words.some((word) => normalizeColor(word) === value),
+          )
           .map(([, value]) => value),
       ),
     ].filter((color) => !negatedColors.includes(color));
     if (matched.length) filters.colors = matched;
     const size = text.match(
-      /(?:^|\s)(xs|s|small|kucuk|m|medium|orta|l|large|buyuk|xl|xxl)\s*beden(?:\s|$)/u,
+      /(?:^|\s)(?:beden(?:im)?\s*)?(xs|s|small|kucuk|m|medium|orta|l|large|buyuk|xl|xxl)(?:[-\s]*beden)?(?:\s|$)/u,
     );
     if (size?.[1]) filters.sizes = [SIZE_ALIASES[size[1]] ?? size[1]];
     const price =
@@ -63,6 +69,15 @@ export class DemoQueryParser implements QueryParser {
       filters.maxPriceMinor = Math.round(
         Number(price[1].replaceAll('.', '').replace(',', '.')) * 100,
       );
+    const range = original.match(
+      /(\d+(?:[.]\d{3})*(?:,\d{1,2})?)\s*(?:tl|₺|lira)?\s*(?:ile|-|–)\s*(\d+(?:[.]\d{3})*(?:,\d{1,2})?)\s*(?:tl|₺|lira)?\s*(?:arası|arasında)?/iu,
+    );
+    if (range?.[1] && range[2]) {
+      const toMinor = (value: string) =>
+        Math.round(Number(value.replaceAll('.', '').replace(',', '.')) * 100);
+      filters.minPriceMinor = toMinor(range[1]);
+      filters.maxPriceMinor = toMinor(range[2]);
+    }
     if (/(stok önemli değil|stok fark etmez)/iu.test(original))
       filters.inStockOnly = false;
     else if (/(stokta|stoklu|hemen teslim)/iu.test(original))
@@ -82,7 +97,7 @@ export class DemoQueryParser implements QueryParser {
       telemetry: {
         provider: 'rules',
         model: 'deterministic-v2',
-        promptVersion: 'search-intent-v1',
+        promptVersion: 'search-intent-v2',
         latencyMs: performance.now() - startedAt,
         estimatedCostUsd: 0,
         inputTokens: 0,

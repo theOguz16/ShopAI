@@ -10,18 +10,38 @@ import {
   MemoryCatalogRepository,
   SearchProducts,
   demoRecords,
+  normalizeCategory,
+  normalizeColor,
+  normalizeSize,
 } from '../../packages/commerce/src/index.js';
 
 type Evaluation = {
   id: string;
+  class?: string;
   query: string;
   expected: Record<string, unknown>;
   warning?: string;
 };
 
+type UserTask = {
+  id: string;
+  class: string;
+  query: string;
+  expectedOfferIds: string[];
+};
+
 const evaluations = JSON.parse(
   readFileSync(new URL('./search-intents.json', import.meta.url), 'utf8'),
 ) as Evaluation[];
+const holdoutEvaluations = JSON.parse(
+  readFileSync(
+    new URL('./search-intents-holdout.json', import.meta.url),
+    'utf8',
+  ),
+) as Evaluation[];
+const userTasks = JSON.parse(
+  readFileSync(new URL('./search-user-tasks.json', import.meta.url), 'utf8'),
+) as UserTask[];
 
 const completeIntent = {
   category: null,
@@ -30,6 +50,7 @@ const completeIntent = {
   sizes: [],
   excludedSizes: [],
   excludedCategories: [],
+  minPriceMinor: null,
   maxPriceMinor: null,
   inStockOnly: null,
   ambiguous: false,
@@ -80,6 +101,88 @@ describe('Turkish search intent quality', () => {
     };
     console.info('SEARCH_QUALITY_REPORT', JSON.stringify(report));
     expect(report.hardViolations).toBe(0);
+  });
+
+  it('keeps the locked holdout at zero hard-filter violations', async () => {
+    const parser = new DemoQueryParser();
+    const violations: string[] = [];
+    for (const evaluation of holdoutEvaluations) {
+      const result = await parser.parse(evaluation.query);
+      for (const [key, expected] of Object.entries(evaluation.expected))
+        if (
+          JSON.stringify(result.filters[key as keyof typeof result.filters]) !==
+          JSON.stringify(expected)
+        )
+          violations.push(`${evaluation.id}:${key}`);
+    }
+    console.info(
+      'SEARCH_HOLDOUT_REPORT',
+      JSON.stringify({
+        queryCount: holdoutEvaluations.length,
+        hardViolations: violations.length,
+        violationIds: violations,
+      }),
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it('measures result relevance separately from hard-filter safety', async () => {
+    const search = new SearchProducts(
+      new MemoryCatalogRepository(demoRecords),
+      new DemoQueryParser(),
+      'demo',
+    );
+    const failedTasks: string[] = [];
+    const hardFilterViolations: string[] = [];
+    for (const task of userTasks) {
+      const result = await search.execute({
+        query: task.query,
+        filters: { inStockOnly: true },
+      });
+      const actualIds = result.items.map((item) => item.offerId);
+      const taskPassed =
+        task.expectedOfferIds.length === 0
+          ? actualIds.length === 0
+          : task.expectedOfferIds.every((id) => actualIds.includes(id));
+      if (!taskPassed) failedTasks.push(task.id);
+      for (const item of result.items) {
+        const filters = result.appliedFilters;
+        if (
+          (filters.category &&
+            normalizeCategory(item.category) !==
+              normalizeCategory(filters.category)) ||
+          (filters.colors.length > 0 &&
+            !filters.colors.some(
+              (color) => normalizeColor(color) === normalizeColor(item.color),
+            )) ||
+          filters.excludedColors.some(
+            (color) => normalizeColor(color) === normalizeColor(item.color),
+          ) ||
+          (filters.sizes.length > 0 &&
+            !filters.sizes.some(
+              (size) => normalizeSize(size) === normalizeSize(item.size),
+            )) ||
+          (filters.minPriceMinor !== undefined &&
+            item.priceMinor < filters.minPriceMinor) ||
+          (filters.maxPriceMinor !== undefined &&
+            item.priceMinor > filters.maxPriceMinor) ||
+          (filters.inStockOnly && item.stockStatus !== 'in_stock')
+        )
+          hardFilterViolations.push(`${task.id}:${item.offerId}`);
+      }
+    }
+    console.info(
+      'SEARCH_TASK_REPORT',
+      JSON.stringify({
+        taskCount: userTasks.length,
+        successfulTasks: userTasks.length - failedTasks.length,
+        successRate: (userTasks.length - failedTasks.length) / userTasks.length,
+        failedTasks,
+        hardFilterViolations: hardFilterViolations.length,
+      }),
+    );
+    expect(hardFilterViolations).toEqual([]);
+    expect(failedTasks).toEqual([]);
   });
 });
 

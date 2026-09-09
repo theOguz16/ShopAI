@@ -70,6 +70,21 @@ describe('search invariants', () => {
       create().execute({ filters: { maxPriceMinor: -1 } }),
     ).rejects.toThrow();
     await expect(create().execute({ limit: 1000 })).rejects.toThrow();
+    await expect(
+      create().execute({
+        filters: { minPriceMinor: 100_000, maxPriceMinor: 50_000 },
+      }),
+    ).rejects.toThrow('Alt fiyat');
+  });
+  it('keeps every result inside both ends of a budget range', async () => {
+    const result = await create().execute({
+      query: '800 ile 1.000 TL arası tişört',
+    });
+    expect(result.appliedFilters).toMatchObject({
+      minPriceMinor: 80_000,
+      maxPriceMinor: 100_000,
+    });
+    expect(result.items.map((item) => item.priceMinor)).toEqual([89_900]);
   });
   it('paginates deterministically and returns facets plus a search id', async () => {
     const first = await create().execute({

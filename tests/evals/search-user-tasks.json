@@ -1,0 +1,32 @@
+[
+  {
+    "id": "task-01",
+    "class": "exact-combination",
+    "query": "stokta siyah M beden 900 TL altında tişört",
+    "expectedOfferIds": ["40000000-0000-4000-8000-000000000001"]
+  },
+  {
+    "id": "task-02",
+    "class": "negative-color",
+    "query": "siyah olmayan M beden tişört",
+    "expectedOfferIds": ["40000000-0000-4000-8000-000000000003"]
+  },
+  {
+    "id": "task-03",
+    "class": "typo",
+    "query": "siayh M beden tişort",
+    "expectedOfferIds": ["40000000-0000-4000-8000-000000000001"]
+  },
+  {
+    "id": "task-04",
+    "class": "budget-range",
+    "query": "800 ile 1.000 TL arası siyah M beden tişört",
+    "expectedOfferIds": ["40000000-0000-4000-8000-000000000001"]
+  },
+  {
+    "id": "task-05",
+    "class": "no-match",
+    "query": "mor elbise",
+    "expectedOfferIds": []
+  }
+]

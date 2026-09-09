@@ -1,5 +1,18 @@
 # Arama değerlendirmeleri
 
-`search-intents.json`, Türkçe alışveriş niyetleri için 53 etiketli sorgudan oluşan deterministik kalite setidir. `search-quality.test.ts` her temel kontrolde bu veri setini çalıştırır; prompt sürümü, sağlayıcı/model adı, sorgu sayısı, sert ihlal sayısı, ortalama gecikme ve tahmini maliyeti `SEARCH_QUALITY_REPORT` olarak yazar.
+Değerlendirme üç ayrı ölçümden oluşur:
 
-Mevcut varsayılan sağlayıcı `rules` ve model etiketi `deterministic-v2`'dir; bu nedenle sonuç canlı bir LLM kalite veya maliyet ölçümü değildir. Model adaptörü testleri şemalı çıktı, timeout, maliyet tavanı, klasik parser fallback'i, olumsuz koşullar ve açık UI filtrelerinin önceliğini kapsar. Veri seti veya beklenen sonuç değişirse değişiklik ayrı incelemeli commit'te yapılmalı; başarısız sorgular silinerek baseline iyileştirilmemelidir.
+- `search-intents.json`: geliştirme regresyonu; 62 etiketli parser sorgusu.
+- `search-intents-holdout.json`: kural/prompt geliştirilirken değiştirilmeyen 7 sorguluk kilitli değerlendirme bölümü. Başarısız örnek silinmez; yeni gözlem ayrı satır olarak eklenir.
+- `search-user-tasks.json`: sentetik katalog üzerinde 5 sonuç görevi. Parser alanı doğruluğundan bağımsız olarak beklenen ürünün bulunmasını veya gerçekten sonuç olmamasını ölçer.
+
+`search-quality.test.ts` üç ayrı rapor üretir. `hardViolations`, etiketli sert filtrenin yanlış/eksik çıkarılmasıdır. Sonuç görevlerindeki `hardFilterViolations`, dönen bir ürünün uygulanan kategori, renk, beden, fiyat aralığı veya stok koşulunu ihlal etmesidir. `successRate` ise beklenen ürünün sonuçlarda bulunmasıdır; “sonuç yok” görevinde yalnız boş sonuç başarıdır. Böylece alaka başarısı sert filtre güvenliğiyle karıştırılmaz.
+
+Varsayılan sağlayıcı `rules`, model etiketi `deterministic-v2`'dir. Bu koşu canlı LLM kalite veya maliyet ölçümü değildir. Sahte model adaptörü testleri şemalı çıktı, timeout, maliyet tavanı, fallback, olumsuz koşul ve açık UI filtresi önceliğini kapsar. Gerçek model karşılaştırması yapılırsa aynı üç veri dosyası ve aynı commit kullanılmalı; model adı, prompt sürümü, maliyet ve fallback sayısı ayrıca kaydedilmelidir.
+
+Çalıştırma:
+
+```bash
+pnpm build:packages
+pnpm exec vitest run tests/evals/search-quality.test.ts
+```

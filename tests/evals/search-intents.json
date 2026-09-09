@@ -349,5 +349,62 @@
     "query": "dar olmayan ceket",
     "expected": { "category": "jacket" },
     "warning": "Renk dışındaki"
+  },
+  {
+    "id": "typo-01",
+    "query": "siayh tişört",
+    "expected": { "category": "tshirt", "colors": ["black"] }
+  },
+  {
+    "id": "typo-02",
+    "query": "beyz gömlek",
+    "expected": { "category": "shirt", "colors": ["white"] }
+  },
+  {
+    "id": "typo-03",
+    "query": "lacvert ceket",
+    "expected": { "category": "jacket", "colors": ["navy"] }
+  },
+  {
+    "id": "typo-04",
+    "query": "siyah tişort",
+    "expected": { "category": "tshirt", "colors": ["black"] }
+  },
+  {
+    "id": "negative-09",
+    "query": "mavi olmasın gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": [],
+      "excludedColors": ["blue"]
+    }
+  },
+  {
+    "id": "size-11",
+    "query": "bedenim XL tişört",
+    "expected": { "category": "tshirt", "sizes": ["XL"] }
+  },
+  {
+    "id": "size-12",
+    "query": "M-beden gömlek",
+    "expected": { "category": "shirt", "sizes": ["M"] }
+  },
+  {
+    "id": "range-01",
+    "query": "500 ile 900 TL arası tişört",
+    "expected": {
+      "category": "tshirt",
+      "minPriceMinor": 50000,
+      "maxPriceMinor": 90000
+    }
+  },
+  {
+    "id": "range-02",
+    "query": "1.000-1.500 lira arası ceket",
+    "expected": {
+      "category": "jacket",
+      "minPriceMinor": 100000,
+      "maxPriceMinor": 150000
+    }
   }
 ]

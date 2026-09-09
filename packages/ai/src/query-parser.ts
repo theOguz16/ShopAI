@@ -11,7 +11,7 @@ import {
   type QueryParser,
 } from '@shopai/commerce';
 
-export const SEARCH_INTENT_PROMPT_VERSION = 'search-intent-v1';
+export const SEARCH_INTENT_PROMPT_VERSION = 'search-intent-v2';
 
 const intentJsonSchema = {
   type: 'object',
@@ -23,6 +23,7 @@ const intentJsonSchema = {
     'sizes',
     'excludedSizes',
     'excludedCategories',
+    'minPriceMinor',
     'maxPriceMinor',
     'inStockOnly',
     'ambiguous',
@@ -39,6 +40,7 @@ const intentJsonSchema = {
       items: { type: 'string' },
       maxItems: 20,
     },
+    minPriceMinor: { type: ['integer', 'null'], minimum: 0 },
     maxPriceMinor: { type: ['integer', 'null'], minimum: 0 },
     inStockOnly: { type: ['boolean', 'null'] },
     ambiguous: { type: 'boolean' },
@@ -47,7 +49,7 @@ const intentJsonSchema = {
 } as const;
 
 const instructions = `Türkçe alışveriş sorgusunu yalnız açıkça belirtilen katalog filtrelerine dönüştür.
-Fiyatı kuruş cinsinden maxPriceMinor alanına yaz. Renk olumsuzsa colors yerine excludedColors kullan.
+Alt fiyatı minPriceMinor, üst fiyatı maxPriceMinor alanına kuruş cinsinden yaz. Renk olumsuzsa colors yerine excludedColors kullan.
 Kullanıcının söylemediği fiyat, stok, marka, kategori veya ürün özelliğini ASLA üretme.
 Öznel ya da desteklenmeyen istekleri unsupported listesine yaz ve ambiguous=true yap.
 Çıktıda yalnız verilen JSON şemasını kullan.`;
@@ -183,6 +185,8 @@ function intentFilters(intent: ModelSearchIntent) {
     filters.category = normalizeCategory(intent.category);
   if (intent.maxPriceMinor !== null)
     filters.maxPriceMinor = intent.maxPriceMinor;
+  if (intent.minPriceMinor !== null)
+    filters.minPriceMinor = intent.minPriceMinor;
   if (intent.inStockOnly !== null) filters.inStockOnly = intent.inStockOnly;
   return filters;
 }

@@ -77,6 +77,8 @@ export class PostgresCatalogRepository implements CatalogRepository {
       predicates.push(
         notInArray(v.color, f.excludedColors.map(normalizeColor)),
       );
+    if (f.minPriceMinor !== undefined)
+      predicates.push(gte(o.priceMinor, f.minPriceMinor));
     if (f.maxPriceMinor !== undefined)
       predicates.push(lte(o.priceMinor, f.maxPriceMinor));
     if (f.inStockOnly) {

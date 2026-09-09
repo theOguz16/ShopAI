@@ -29,6 +29,7 @@ export const searchFiltersSchema = z
     excludedSizes: z.array(z.string().min(1).max(20)).max(20).default([]),
     excludedColors: z.array(z.string().min(1).max(40)).max(20).default([]),
     excludedCategories: z.array(z.string().min(1).max(80)).max(20).default([]),
+    minPriceMinor: moneySchema.optional(),
     maxPriceMinor: moneySchema.optional(),
     currency: currencySchema.default('TRY'),
     inStockOnly: z.boolean().default(true),
@@ -121,12 +122,20 @@ export const modelSearchIntentSchema = z
     sizes: z.array(z.string().min(1).max(20)).max(20),
     excludedSizes: z.array(z.string().min(1).max(20)).max(20),
     excludedCategories: z.array(z.string().min(1).max(80)).max(20),
+    minPriceMinor: moneySchema.nullable(),
     maxPriceMinor: moneySchema.nullable(),
     inStockOnly: z.boolean().nullable(),
     ambiguous: z.boolean(),
     unsupported: z.array(z.string().min(1).max(160)).max(10),
   })
-  .strict();
+  .strict()
+  .refine(
+    (intent) =>
+      intent.minPriceMinor === null ||
+      intent.maxPriceMinor === null ||
+      intent.minPriceMinor <= intent.maxPriceMinor,
+    { message: 'Alt fiyat üst fiyattan büyük olamaz.' },
+  );
 export type ModelSearchIntent = z.infer<typeof modelSearchIntentSchema>;
 export const searchResponseSchema = z.object({
   schemaVersion: z.literal(1),
