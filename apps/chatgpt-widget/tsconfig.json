@@ -1,0 +1,11 @@
+{
+  "extends": "@shopai/config/tsconfig/base",
+  "compilerOptions": {
+    "lib": ["DOM", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["src"]
+}

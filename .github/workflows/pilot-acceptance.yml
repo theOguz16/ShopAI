@@ -1,0 +1,48 @@
+name: Pilot acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      pilot_code:
+        description: Non-personal pilot code, for example P01
+        required: true
+        type: string
+concurrency:
+  group: shopai-pilot-${{ inputs.pilot_code }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: pilot
+    env:
+      PILOT_WEB_URL: ${{ vars.PILOT_WEB_URL }}
+      PILOT_API_URL: ${{ vars.PILOT_API_URL }}
+      PILOT_MERCHANT_ID: ${{ secrets.PILOT_MERCHANT_ID }}
+      PILOT_MERCHANT_EMAIL: ${{ secrets.PILOT_MERCHANT_EMAIL }}
+      PILOT_LOGIN_TOKEN: ${{ secrets.PILOT_LOGIN_TOKEN }}
+      PILOT_EXPECTED_PRODUCT_TITLE: ${{ vars.PILOT_EXPECTED_PRODUCT_TITLE }}
+      PILOT_EXPECTED_EXTERNAL_ID: ${{ vars.PILOT_EXPECTED_EXTERNAL_ID }}
+      PILOT_EXPECTED_SIZE: ${{ vars.PILOT_EXPECTED_SIZE }}
+      PILOT_EXPECTED_COLOR: ${{ vars.PILOT_EXPECTED_COLOR }}
+      PILOT_EXPECTED_PRICE_MINOR: ${{ vars.PILOT_EXPECTED_PRICE_MINOR }}
+      PILOT_EXPECTED_CHECKOUT_URL: ${{ vars.PILOT_EXPECTED_CHECKOUT_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:pilot
+      - name: Record acceptance identity
+        if: always()
+        run: echo "pilot=${{ inputs.pilot_code }} commit=${{ github.sha }} run=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pilot-${{ inputs.pilot_code }}-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

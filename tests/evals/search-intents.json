@@ -1,0 +1,353 @@
+[
+  {
+    "id": "color-01",
+    "query": "siyah tişört",
+    "expected": { "category": "tshirt", "colors": ["black"] }
+  },
+  {
+    "id": "color-02",
+    "query": "beyaz tişört",
+    "expected": { "category": "tshirt", "colors": ["white"] }
+  },
+  {
+    "id": "color-03",
+    "query": "lacivert tişört",
+    "expected": { "category": "tshirt", "colors": ["navy"] }
+  },
+  {
+    "id": "color-04",
+    "query": "mavi gömlek",
+    "expected": { "category": "shirt", "colors": ["blue"] }
+  },
+  {
+    "id": "color-05",
+    "query": "kırmızı ceket",
+    "expected": { "category": "jacket", "colors": ["red"] }
+  },
+  {
+    "id": "color-06",
+    "query": "yeşil pantolon",
+    "expected": { "category": "trousers", "colors": ["green"] }
+  },
+  {
+    "id": "color-07",
+    "query": "black tshirt",
+    "expected": { "category": "tshirt", "colors": ["black"] }
+  },
+  {
+    "id": "color-08",
+    "query": "white shirt",
+    "expected": { "category": "shirt", "colors": ["white"] }
+  },
+  {
+    "id": "color-09",
+    "query": "navy jacket",
+    "expected": { "category": "jacket", "colors": ["navy"] }
+  },
+  {
+    "id": "color-10",
+    "query": "blue trousers",
+    "expected": { "category": "trousers", "colors": ["blue"] }
+  },
+  {
+    "id": "negative-01",
+    "query": "siyah olmayan tişört",
+    "expected": {
+      "category": "tshirt",
+      "colors": [],
+      "excludedColors": ["black"]
+    }
+  },
+  {
+    "id": "negative-02",
+    "query": "beyaz olmasın gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": [],
+      "excludedColors": ["white"]
+    }
+  },
+  {
+    "id": "negative-03",
+    "query": "lacivert değil ceket",
+    "expected": {
+      "category": "jacket",
+      "colors": [],
+      "excludedColors": ["navy"]
+    }
+  },
+  {
+    "id": "negative-04",
+    "query": "mavi hariç pantolon",
+    "expected": {
+      "category": "trousers",
+      "colors": [],
+      "excludedColors": ["blue"]
+    }
+  },
+  {
+    "id": "negative-05",
+    "query": "kırmızı istemiyorum tişört",
+    "expected": {
+      "category": "tshirt",
+      "colors": [],
+      "excludedColors": ["red"]
+    }
+  },
+  {
+    "id": "negative-06",
+    "query": "yeşil olmayan gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": [],
+      "excludedColors": ["green"]
+    }
+  },
+  {
+    "id": "negative-07",
+    "query": "kara olmasın ceket",
+    "expected": {
+      "category": "jacket",
+      "colors": [],
+      "excludedColors": ["black"]
+    }
+  },
+  {
+    "id": "negative-08",
+    "query": "black değil tshirt",
+    "expected": {
+      "category": "tshirt",
+      "colors": [],
+      "excludedColors": ["black"]
+    }
+  },
+  {
+    "id": "size-01",
+    "query": "XS beden tişört",
+    "expected": { "category": "tshirt", "sizes": ["XS"] }
+  },
+  {
+    "id": "size-02",
+    "query": "S beden gömlek",
+    "expected": { "category": "shirt", "sizes": ["S"] }
+  },
+  {
+    "id": "size-03",
+    "query": "M beden ceket",
+    "expected": { "category": "jacket", "sizes": ["M"] }
+  },
+  {
+    "id": "size-04",
+    "query": "L beden pantolon",
+    "expected": { "category": "trousers", "sizes": ["L"] }
+  },
+  {
+    "id": "size-05",
+    "query": "XL beden tişört",
+    "expected": { "category": "tshirt", "sizes": ["XL"] }
+  },
+  {
+    "id": "size-06",
+    "query": "XXL beden gömlek",
+    "expected": { "category": "shirt", "sizes": ["XXL"] }
+  },
+  {
+    "id": "size-07",
+    "query": "small beden tişört",
+    "expected": { "category": "tshirt", "sizes": ["S"] }
+  },
+  {
+    "id": "size-08",
+    "query": "medium beden gömlek",
+    "expected": { "category": "shirt", "sizes": ["M"] }
+  },
+  {
+    "id": "size-09",
+    "query": "large beden ceket",
+    "expected": { "category": "jacket", "sizes": ["L"] }
+  },
+  {
+    "id": "size-10",
+    "query": "orta beden pantolon",
+    "expected": { "category": "trousers", "sizes": ["M"] }
+  },
+  {
+    "id": "budget-01",
+    "query": "1500 TL altında tişört",
+    "expected": { "category": "tshirt", "maxPriceMinor": 150000 }
+  },
+  {
+    "id": "budget-02",
+    "query": "1.500 TL altında gömlek",
+    "expected": { "category": "shirt", "maxPriceMinor": 150000 }
+  },
+  {
+    "id": "budget-03",
+    "query": "999,90 TL altında ceket",
+    "expected": { "category": "jacket", "maxPriceMinor": 99990 }
+  },
+  {
+    "id": "budget-04",
+    "query": "2000 lira geçmesin pantolon",
+    "expected": { "category": "trousers", "maxPriceMinor": 200000 }
+  },
+  {
+    "id": "budget-05",
+    "query": "750 ₺ altı tişört",
+    "expected": { "category": "tshirt", "maxPriceMinor": 75000 }
+  },
+  {
+    "id": "budget-06",
+    "query": "en fazla 1200 TL gömlek",
+    "expected": { "category": "shirt", "maxPriceMinor": 120000 }
+  },
+  {
+    "id": "budget-07",
+    "query": "bütçem 850 TL ceket",
+    "expected": { "category": "jacket", "maxPriceMinor": 85000 }
+  },
+  {
+    "id": "budget-08",
+    "query": "bütçe 1.250 lira pantolon",
+    "expected": { "category": "trousers", "maxPriceMinor": 125000 }
+  },
+  {
+    "id": "stock-01",
+    "query": "stokta siyah tişört",
+    "expected": {
+      "category": "tshirt",
+      "colors": ["black"],
+      "inStockOnly": true
+    }
+  },
+  {
+    "id": "stock-02",
+    "query": "stoklu beyaz gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": ["white"],
+      "inStockOnly": true
+    }
+  },
+  {
+    "id": "stock-03",
+    "query": "hemen teslim lacivert ceket",
+    "expected": {
+      "category": "jacket",
+      "colors": ["navy"],
+      "inStockOnly": true
+    }
+  },
+  {
+    "id": "stock-04",
+    "query": "stok önemli değil pantolon",
+    "expected": { "category": "trousers", "inStockOnly": false }
+  },
+  {
+    "id": "stock-05",
+    "query": "stok fark etmez tişört",
+    "expected": { "category": "tshirt", "inStockOnly": false }
+  },
+  {
+    "id": "combo-01",
+    "query": "siyah olmayan M beden 1.500 TL altında tişört",
+    "expected": {
+      "category": "tshirt",
+      "excludedColors": ["black"],
+      "sizes": ["M"],
+      "maxPriceMinor": 150000
+    }
+  },
+  {
+    "id": "combo-02",
+    "query": "beyaz S beden stokta gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": ["white"],
+      "sizes": ["S"],
+      "inStockOnly": true
+    }
+  },
+  {
+    "id": "combo-03",
+    "query": "lacivert değil XL beden ceket",
+    "expected": {
+      "category": "jacket",
+      "excludedColors": ["navy"],
+      "sizes": ["XL"]
+    }
+  },
+  {
+    "id": "combo-04",
+    "query": "yeşil L beden 900 TL altında pantolon",
+    "expected": {
+      "category": "trousers",
+      "colors": ["green"],
+      "sizes": ["L"],
+      "maxPriceMinor": 90000
+    }
+  },
+  {
+    "id": "combo-05",
+    "query": "kırmızı olmasın orta beden tişört",
+    "expected": {
+      "category": "tshirt",
+      "excludedColors": ["red"],
+      "sizes": ["M"]
+    }
+  },
+  {
+    "id": "combo-06",
+    "query": "mavi medium beden en fazla 1100 TL gömlek",
+    "expected": {
+      "category": "shirt",
+      "colors": ["blue"],
+      "sizes": ["M"],
+      "maxPriceMinor": 110000
+    }
+  },
+  {
+    "id": "combo-07",
+    "query": "kara olmayan small beden stoklu ceket",
+    "expected": {
+      "category": "jacket",
+      "excludedColors": ["black"],
+      "sizes": ["S"],
+      "inStockOnly": true
+    }
+  },
+  {
+    "id": "combo-08",
+    "query": "white large beden stok fark etmez tshirt",
+    "expected": {
+      "category": "tshirt",
+      "colors": ["white"],
+      "sizes": ["L"],
+      "inStockOnly": false
+    }
+  },
+  {
+    "id": "unsupported-01",
+    "query": "çok şık bir tişört",
+    "expected": { "category": "tshirt" },
+    "warning": "Öznel"
+  },
+  {
+    "id": "unsupported-02",
+    "query": "en kaliteli gömlek",
+    "expected": { "category": "shirt" },
+    "warning": "Öznel"
+  },
+  {
+    "id": "unsupported-03",
+    "query": "rahat bir pantolon",
+    "expected": { "category": "trousers" },
+    "warning": "Öznel"
+  },
+  {
+    "id": "unsupported-04",
+    "query": "dar olmayan ceket",
+    "expected": { "category": "jacket" },
+    "warning": "Renk dışındaki"
+  }
+]

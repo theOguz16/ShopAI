@@ -1,0 +1,45 @@
+{
+  "name": "shopai",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22.14 <23",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "turbo watch dev --filter=@shopai/api --filter=@shopai/web",
+    "dev:widget": "turbo watch dev --filter=@shopai/chatgpt-widget",
+    "dev:worker": "turbo watch dev --filter=@shopai/worker",
+    "build:packages": "turbo run build --filter=./packages/*",
+    "build": "turbo run build",
+    "typecheck": "pnpm build:packages && turbo run typecheck",
+    "lint": "biome lint . && node scripts/check-boundaries.mjs",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "pnpm build:packages && vitest run",
+    "test:integration": "pnpm build:packages && vitest run --config vitest.integration.config.ts",
+    "test:e2e:pilot": "playwright test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "db:generate": "pnpm --filter @shopai/db db:generate",
+    "db:migrate": "pnpm build:packages && pnpm --filter @shopai/db db:migrate",
+    "db:seed": "pnpm build:packages && pnpm --filter @shopai/db db:seed",
+    "infra:up": "docker compose -f infra/compose.yaml up -d",
+    "infra:down": "docker compose -f infra/compose.yaml down",
+    "import:csv": "pnpm build:packages && pnpm --filter @shopai/worker import:csv"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.0",
+    "@playwright/test": "1.51.1",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "bullmq": "^5.0.0",
+    "drizzle-orm": "0.45.2",
+    "tsx": "^4.0.0",
+    "turbo": "^2.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

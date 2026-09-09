@@ -1,0 +1,73 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record tested commit
+        run: |
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          echo "Tested commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: shopai
+          POSTGRES_PASSWORD: shopai_test
+          POSTGRES_DB: shopai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shopai -d shopai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CATALOG_MODE: postgres
+      DATABASE_URL: postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_test
+      REDIS_URL: redis://127.0.0.1:6379
+      MCP_PUBLIC_ORIGIN: https://api.staging.shopai.example
+      WIDGET_ORIGIN: https://widget.staging.shopai.example
+      MCP_ALLOWED_ORIGINS: https://chatgpt.com,https://chat.openai.com
+      WIDGET_RESOURCE_DOMAINS: https://widget.staging.shopai.example,https://images.staging.shopai.example
+      REDIRECT_SIGNING_SECRET: ci-only-redirect-signing-key-000000000000000000
+      CONVERSION_CALLBACK_SECRET: ci-only-conversion-callback-secret-000000000000000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record tested commit
+        run: |
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          echo "Tested commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm test:integration
+      - name: Exercise backup and restore into an isolated test database
+        run: |
+          mkdir -p /tmp/shopai-backups
+          BACKUP_DIR=/tmp/shopai-backups infra/backup.sh > /tmp/shopai-backup-path
+          PGPASSWORD=shopai_test createdb --host=127.0.0.1 --username=shopai shopai_restore_test
+          DATABASE_URL=postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_restore_test BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh

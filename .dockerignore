@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+playwright-report
+test-results
+private
+*.dump
+*.sql.gz

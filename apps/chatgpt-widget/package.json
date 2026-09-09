@@ -1,0 +1,21 @@
+{
+  "name": "@shopai/chatgpt-widget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite --host 127.0.0.1 --port 3001"
+  },
+  "dependencies": {
+    "@shopai/contracts": "workspace:*",
+    "@shopai/ui": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@shopai/config": "workspace:*",
+    "vite": "6.4.3"
+  }
+}

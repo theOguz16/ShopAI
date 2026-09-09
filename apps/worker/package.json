@@ -1,0 +1,24 @@
+{
+  "name": "@shopai/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx --env-file-if-exists=../../.env watch src/main.ts",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "import:csv": "tsx --env-file-if-exists=../../.env src/enqueue.ts"
+  },
+  "dependencies": {
+    "@shopai/commerce": "workspace:*",
+    "@shopai/contracts": "workspace:*",
+    "@shopai/connectors": "workspace:*",
+    "@shopai/db": "workspace:*",
+    "bullmq": "^5.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@shopai/config": "workspace:*"
+  }
+}

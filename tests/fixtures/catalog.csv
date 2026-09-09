@@ -1,0 +1,4 @@
+external_id,product_key,title,description,category,size,color,price_minor,currency,available,checkout_url
+tee-black-m,tee-black,Minimal Siyah Tişört,Sentetik örnek,tshirt,M,black,89900,TRY,true,https://example.com/products/black
+tee-black-l,tee-black,Minimal Siyah Tişört,Sentetik örnek,tshirt,L,black,89900,TRY,false,https://example.com/products/black
+tee-white-m,tee-white,Günlük Beyaz Tişört,Sentetik örnek,tshirt,M,white,69900,TRY,true,https://example.com/products/white

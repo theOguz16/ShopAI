@@ -1,0 +1,23 @@
+{
+  "name": "@shopai/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@shopai/contracts": "workspace:*",
+    "@shopai/commerce": "workspace:*"
+  },
+  "devDependencies": {
+    "@shopai/config": "workspace:*"
+  }
+}
