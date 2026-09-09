@@ -9,7 +9,14 @@ import {
 } from '@shopai/contracts';
 import { ProductCard } from '@shopai/ui';
 import { useParams } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -183,13 +190,17 @@ export default function BrandedStorefrontPage() {
   return (
     <main
       className="store-shell"
-      style={{ '--store-primary': storefront.primaryColor } as React.CSSProperties}
+      style={{ '--store-primary': storefront.primaryColor } as CSSProperties}
     >
       <header className="store-header">
         <a className="brand" href="/">
           ShopAI<span>●</span>
         </a>
-        <p>{scope === 'storefront' ? `${storefront.displayName} mağazası` : 'ShopAI ağı'}</p>
+        <p>
+          {scope === 'storefront'
+            ? `${storefront.displayName} mağazası`
+            : 'ShopAI ağı'}
+        </p>
       </header>
 
       <section className="store-intro">
@@ -265,7 +276,9 @@ export default function BrandedStorefrontPage() {
           disabled={searching || scope === 'network'}
           style={{ marginTop: 12 }}
         >
-          {scope === 'network' ? 'Tüm mağazalarda aranıyor' : 'Tüm mağazalarda ara'}
+          {scope === 'network'
+            ? 'Tüm mağazalarda aranıyor'
+            : 'Tüm mağazalarda ara'}
         </button>
       </section>
 
@@ -278,7 +291,9 @@ export default function BrandedStorefrontPage() {
       {result && !result.items.length ? (
         <section className="store-empty">
           <h2>Bu koşullarda ürün bulunamadı.</h2>
-          <p>Arama metnini veya beden seçimini değiştirip yeniden deneyebilirsin.</p>
+          <p>
+            Arama metnini veya beden seçimini değiştirip yeniden deneyebilirsin.
+          </p>
         </section>
       ) : null}
 
