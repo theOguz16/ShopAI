@@ -61,10 +61,13 @@ export class DiscoverySessions {
       session.surface !== attribution.surface ||
       session.transport !== attribution.transport
     )
-      throw Object.assign(new Error('Discovery session attribution uyuşmuyor.'), {
-        statusCode: 400,
-        code: 'DISCOVERY_SESSION_ATTRIBUTION_MISMATCH',
-      });
+      throw Object.assign(
+        new Error('Discovery session attribution uyuşmuyor.'),
+        {
+          statusCode: 400,
+          code: 'DISCOVERY_SESSION_ATTRIBUTION_MISMATCH',
+        },
+      );
   }
 
   applyMerchantScope(
@@ -78,10 +81,13 @@ export class DiscoverySessions {
         (merchantId) => !session.merchantScope.includes(merchantId),
       );
       if (outsideScope)
-        throw Object.assign(new Error('Discovery session merchant scope dışı.'), {
-          statusCode: 403,
-          code: 'DISCOVERY_SESSION_SCOPE_MISMATCH',
-        });
+        throw Object.assign(
+          new Error('Discovery session merchant scope dışı.'),
+          {
+            statusCode: 403,
+            code: 'DISCOVERY_SESSION_SCOPE_MISMATCH',
+          },
+        );
       return context;
     }
     return { ...context, merchantIds: session.merchantScope };
