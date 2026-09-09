@@ -79,3 +79,22 @@ Pilot tamamlandığında mağaza bazında aşağıdaki tablo gerçek sayılarla 
 - Tarih: atanmadı
 - Gerekli girdiler: en az bir tamamlanmış pilot checklist'i, E2E run URL'si, gerçek ChatGPT ekran kaydı, olay mutabakatı, maliyet özeti ve mağaza ücretli devam yanıtı
 - İmzalı karar: bekliyor
+# Pilot ölçüm tanımları
+
+Mağaza raporu ilk sayfa arama denemelerini, sonuç bulunamayan başarılı
+aramaları ve teknik olarak başarısız aramaları ayrı gösterir. Boş sonuç oranı
+`boş başarılı arama / başarılı ilk arama`; hata oranı `hatalı ilk arama / tüm
+ilk arama denemeleri` olarak hesaplanır. Sonraki sayfa istekleri bu paydalara
+katılmaz ve ayrıca raporlanır. Sabit bir işlem kimliği bulunmadığından web veya
+MCP/ChatGPT istemcisinin tekrar gönderdiği çağrı yeni deneme sayılır.
+
+`web` kanalı web araması ve mağazaya özel paylaşım sayfasını; `mcp` kanalı
+ChatGPT hostunun `search_products` tool çağrılarını kapsar. Mağazaya
+atanamayan global boş aramalar mağaza raporuna yazılmaz. Raporlama için ham
+kullanıcı sorgusu saklanmaz; yalnız mağaza, kanal, ilk sayfa/sayfalama, sonuç
+durumu, arama kimliği ve zaman tutulur.
+
+Bot önizlemeleri insan yönlendirmesi veya dönüşüm paydasına girmez. İmzalı
+satış callback'i yapılandırılmamışsa satış, gelir ve dönüşüm ölçülmüyor olarak
+kalır. Kontrol grubu olmadığı sürece ek satış veya yeni müşteri iddiası
+yapılmaz.

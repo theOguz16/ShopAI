@@ -121,7 +121,7 @@ export function createMcpServer(
       },
     },
     async (input) => {
-      const result = await services.search.execute(input);
+      const result = await services.executeSearch(input, {}, 'mcp');
       const linkedResult = {
         ...result,
         items: result.items.map((item) => ({

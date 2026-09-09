@@ -2,6 +2,7 @@ import {
   connections,
   conversionOrders,
   redirectClicks,
+  searchEvents,
   setTenantContext,
 } from '@shopai/db';
 import { and, eq, gte, isNotNull, lt, ne, sql } from 'drizzle-orm';
@@ -71,6 +72,29 @@ export async function registerAnalyticsRoutes(
           .from(redirectClicks)
           .where(and(range, eq(redirectClicks.classification, 'human')))
           .groupBy(redirectClicks.channel);
+        const searchRange = and(
+          eq(searchEvents.merchantId, merchantId),
+          gte(searchEvents.occurredAt, from),
+          lt(searchEvents.occurredAt, to),
+        );
+        const [searches] = await tx
+          .select({
+            attempts: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial')::int`,
+            successful: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} <> 'error')::int`,
+            empty: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} = 'empty')::int`,
+            failed: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} = 'error')::int`,
+            pagination: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'pagination')::int`,
+          })
+          .from(searchEvents)
+          .where(searchRange);
+        const searchesByChannel = await tx
+          .select({
+            channel: searchEvents.channel,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(searchEvents)
+          .where(and(searchRange, eq(searchEvents.requestKind, 'initial')))
+          .groupBy(searchEvents.channel);
         const attributedOrder = and(
           isNotNull(conversionOrders.searchId),
           isNotNull(conversionOrders.offerId),
@@ -118,6 +142,22 @@ export async function registerAnalyticsRoutes(
             semantics: '[from,to)',
           },
           metrics: {
+            searchAttempts: searches?.attempts ?? 0,
+            successfulSearches: searches?.successful ?? 0,
+            emptySearches: searches?.empty ?? 0,
+            failedSearches: searches?.failed ?? 0,
+            paginationRequests: searches?.pagination ?? 0,
+            noResultRate:
+              (searches?.successful ?? 0) > 0
+                ? (searches?.empty ?? 0) / (searches?.successful ?? 0)
+                : null,
+            searchErrorRate:
+              (searches?.attempts ?? 0) > 0
+                ? (searches?.failed ?? 0) / (searches?.attempts ?? 0)
+                : null,
+            searchesByChannel: Object.fromEntries(
+              searchesByChannel.map((row) => [row.channel, row.count]),
+            ),
             productInteractions: humanClicks,
             humanRedirects: humanClicks,
             botPreviews: clicks?.bots ?? 0,
@@ -132,6 +172,13 @@ export async function registerAnalyticsRoutes(
           },
           measurement: measured ? 'measured' : 'not_configured',
           definitions: {
+            searchAttempts:
+              'İlk sayfa arama çağrılarıdır. Sayfalama ayrı sayılır; ayırt edilemeyen istemci veya tool tekrarları yeni deneme sayılır.',
+            noResultRate:
+              'Boş sonuçlanan başarılı ilk aramalar / başarılı ilk aramalar.',
+            searchErrorRate: 'Hatalı ilk aramalar / tüm ilk arama denemeleri.',
+            channelScope:
+              'web mağaza sayfasını ve web aramasını; mcp ChatGPT içindeki tool çağrılarını kapsar. Ham sorgu metni kaydedilmez.',
             productInteractions:
               'İnsan olarak sınıflandırılmış ürün yönlendirmesi.',
             conversionRate:

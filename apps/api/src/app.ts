@@ -121,7 +121,11 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
-    const result = await resolvedServices.search.execute(request.body);
+    const result = await resolvedServices.executeSearch(
+      request.body,
+      {},
+      'web',
+    );
     return {
       ...result,
       items: result.items.map((item) => ({
@@ -149,9 +153,11 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
-    const result = await resolvedServices.search.execute(request.body, {
-      merchantIds: [merchantId],
-    });
+    const result = await resolvedServices.executeSearch(
+      request.body,
+      { merchantIds: [merchantId] },
+      'web',
+    );
     return {
       ...result,
       items: result.items.map((item) => ({

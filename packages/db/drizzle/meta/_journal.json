@@ -78,6 +78,13 @@
       "when": 1788892942156,
       "tag": "0011_wild_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788954622192,
+      "tag": "0012_absurd_kat_farrell",
+      "breakpoints": true
     }
   ]
 }

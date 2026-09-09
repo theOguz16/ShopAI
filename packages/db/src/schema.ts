@@ -240,6 +240,36 @@ export const redirectClicks = pgTable(
     ),
   ],
 );
+export const searchEvents = pgTable(
+  'search_events',
+  {
+    id: id(),
+    searchId: uuid('search_id'),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id),
+    channel: text('channel').notNull(),
+    requestKind: text('request_kind').notNull(),
+    outcome: text('outcome').notNull(),
+    occurredAt: at('occurred_at').notNull().defaultNow(),
+  },
+  (t) => [
+    check('search_event_channel', sql`${t.channel} in ('web','mcp')`),
+    check(
+      'search_event_request_kind',
+      sql`${t.requestKind} in ('initial','pagination')`,
+    ),
+    check(
+      'search_event_outcome',
+      sql`${t.outcome} in ('results','empty','error')`,
+    ),
+    index('search_events_reporting').on(
+      t.merchantId,
+      t.occurredAt,
+      t.requestKind,
+    ),
+  ],
+);
 export const conversionOrders = pgTable(
   'conversion_orders',
   {

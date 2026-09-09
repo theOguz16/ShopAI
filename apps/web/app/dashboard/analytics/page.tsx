@@ -9,6 +9,14 @@ type Report = {
   range: { from: string; to: string; timezone: string };
   measurement: 'measured' | 'not_configured';
   metrics: {
+    searchAttempts: number;
+    successfulSearches: number;
+    emptySearches: number;
+    failedSearches: number;
+    paginationRequests: number;
+    noResultRate: number | null;
+    searchErrorRate: number | null;
+    searchesByChannel: Record<string, number>;
     humanRedirects: number;
     botPreviews: number;
     attributedSales: number | null;
@@ -65,6 +73,26 @@ export default function AnalyticsPage() {
         {report.range.timezone})
       </p>
       <dl>
+        <dt>Arama denemesi</dt>
+        <dd>{report.metrics.searchAttempts}</dd>
+        <dt>Sonuç bulunamayan arama</dt>
+        <dd>
+          {report.metrics.emptySearches}
+          {report.metrics.noResultRate === null
+            ? ''
+            : ` (%${(report.metrics.noResultRate * 100).toFixed(1)})`}
+        </dd>
+        <dt>Arama hatası</dt>
+        <dd>
+          {report.metrics.failedSearches}
+          {report.metrics.searchErrorRate === null
+            ? ''
+            : ` (%${(report.metrics.searchErrorRate * 100).toFixed(1)})`}
+        </dd>
+        <dt>Web araması</dt>
+        <dd>{report.metrics.searchesByChannel.web ?? 0}</dd>
+        <dt>ChatGPT araması</dt>
+        <dd>{report.metrics.searchesByChannel.mcp ?? 0}</dd>
         <dt>Ürün etkileşimi / insan yönlendirmesi</dt>
         <dd>{report.metrics.humanRedirects}</dd>
         <dt>Bot önizlemesi</dt>
@@ -93,6 +121,11 @@ export default function AnalyticsPage() {
       <p>
         Atfedilen satış, ek satış anlamına gelmez. Oranın paydası insan
         yönlendirmeleridir.
+      </p>
+      <p>
+        Sonraki sayfa istekleri ({report.metrics.paginationRequests}) arama
+        oranlarına katılmaz. Sistem tarafından ayırt edilemeyen tekrarlar yeni
+        arama denemesi sayılır. Arama metinleri rapor için saklanmaz.
       </p>
     </main>
   );

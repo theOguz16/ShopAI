@@ -16,6 +16,7 @@ import {
   createDatabase,
   PostgresCatalogRepository,
   PostgresRedirectRepository,
+  PostgresSearchEventRepository,
 } from '@shopai/db';
 import type { ApiEnv } from './env.js';
 export function createServices(env: ApiEnv) {
@@ -56,8 +57,61 @@ export function createServices(env: ApiEnv) {
           ]),
         ),
       );
+  const search = new SearchProducts(repository, parser, env.CATALOG_MODE);
+  const searchEventRepository = database
+    ? new PostgresSearchEventRepository(database.db)
+    : undefined;
+  const executeSearch = async (
+    input: unknown,
+    context: { merchantIds?: string[] } = {},
+    channel: 'web' | 'mcp' = 'web',
+  ) => {
+    const requestInput =
+      input && typeof input === 'object'
+        ? (input as { cursor?: unknown; merchantIds?: unknown })
+        : {};
+    const requestKind = requestInput.cursor ? 'pagination' : 'initial';
+    const explicitMerchantIds = context.merchantIds?.length
+      ? context.merchantIds
+      : Array.isArray(requestInput.merchantIds)
+        ? requestInput.merchantIds.filter(
+            (value): value is string => typeof value === 'string',
+          )
+        : [];
+    try {
+      const result = await search.execute(input, context);
+      const merchantIds = explicitMerchantIds.length
+        ? explicitMerchantIds
+        : [...new Set(result.items.map((item) => item.merchantId))];
+      if (searchEventRepository && merchantIds.length) {
+        await searchEventRepository.record(
+          merchantIds.map((merchantId) => ({
+            merchantId,
+            searchId: result.searchId,
+            channel,
+            requestKind,
+            outcome: result.items.length ? 'results' : 'empty',
+          })),
+        );
+      }
+      return result;
+    } catch (error) {
+      if (searchEventRepository && explicitMerchantIds.length) {
+        await searchEventRepository.record(
+          explicitMerchantIds.map((merchantId) => ({
+            merchantId,
+            channel,
+            requestKind,
+            outcome: 'error',
+          })),
+        );
+      }
+      throw error;
+    }
+  };
   return {
-    search: new SearchProducts(repository, parser, env.CATALOG_MODE),
+    search,
+    executeSearch,
     repository,
     redirects: new RedirectService(
       new RedirectTokens(

@@ -15,6 +15,7 @@ import {
   merchants,
   offers,
   redirectClicks,
+  searchEvents,
   users,
 } from '../../packages/db/src/schema.js';
 
@@ -61,7 +62,7 @@ function signed(payload: object) {
 
 beforeAll(async () => {
   await database.db.execute(
-    sql`truncate table ${conversionOrders}, ${redirectClicks}, ${offers}, ${connections}, ${memberships}, ${users}, ${merchants} cascade`,
+    sql`truncate table ${conversionOrders}, ${redirectClicks}, ${searchEvents}, ${offers}, ${connections}, ${memberships}, ${users}, ${merchants} cascade`,
   );
   await database.db.insert(merchants).values([
     {
@@ -143,13 +144,58 @@ beforeAll(async () => {
     { userId: user.id, merchantId: merchantA, role: 'owner' },
     { userId: user.id, merchantId: merchantCsv, role: 'owner' },
   ]);
-  await database.db.insert(redirectClicks).values({
-    merchantId: merchantA,
-    offerId,
-    searchId: randomUUID(),
-    channel: 'web',
-    classification: 'human',
-  });
+  await database.db.insert(redirectClicks).values([
+    {
+      merchantId: merchantA,
+      offerId,
+      searchId: randomUUID(),
+      channel: 'web',
+      classification: 'human',
+    },
+    {
+      merchantId: merchantA,
+      offerId,
+      searchId: randomUUID(),
+      channel: 'web',
+      classification: 'bot',
+    },
+  ]);
+  await database.db.insert(searchEvents).values([
+    {
+      merchantId: merchantA,
+      searchId: randomUUID(),
+      channel: 'web',
+      requestKind: 'initial',
+      outcome: 'results',
+    },
+    {
+      merchantId: merchantA,
+      searchId: randomUUID(),
+      channel: 'web',
+      requestKind: 'initial',
+      outcome: 'empty',
+    },
+    {
+      merchantId: merchantA,
+      channel: 'mcp',
+      requestKind: 'initial',
+      outcome: 'error',
+    },
+    {
+      merchantId: merchantA,
+      searchId: randomUUID(),
+      channel: 'mcp',
+      requestKind: 'pagination',
+      outcome: 'results',
+    },
+    {
+      merchantId: merchantB,
+      searchId: randomUUID(),
+      channel: 'web',
+      requestKind: 'initial',
+      outcome: 'results',
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -158,6 +204,31 @@ afterAll(async () => {
 });
 
 describe('tenant analytics and signed conversions', () => {
+  it('records a scoped public search without persisting the raw query', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/stores/${merchantA}/search`,
+      payload: { query: 'saklanmaması gereken kullanıcı sorgusu' },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const rows = await database.db
+      .select()
+      .from(searchEvents)
+      .where(eq(searchEvents.merchantId, merchantA));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          merchantId: merchantA,
+          channel: 'web',
+          requestKind: 'initial',
+          outcome: 'empty',
+        }),
+      ]),
+    );
+    expect(JSON.stringify(rows)).not.toContain('saklanmaması gereken');
+  });
+
   it('lists only the stores assigned to the authenticated user', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -371,7 +442,16 @@ describe('tenant analytics and signed conversions', () => {
     expect(response.json()).toMatchObject({
       measurement: 'measured',
       metrics: {
+        searchAttempts: 4,
+        successfulSearches: 3,
+        emptySearches: 2,
+        failedSearches: 1,
+        paginationRequests: 1,
+        noResultRate: 2 / 3,
+        searchErrorRate: 0.25,
+        searchesByChannel: { web: 3, mcp: 1 },
         humanRedirects: 1,
+        botPreviews: 1,
         attributedSales: 1,
         netRevenueMinor: 6000,
         conversionRate: 1,

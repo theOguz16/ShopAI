@@ -10,7 +10,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Next.js demo arama ekranı ve ortak React ürün kartı.
 - Vite widget, yerel önizleme ve süreli MCP Apps/ChatGPT host köprüsü.
 - CSV parser, BullMQ enqueue/worker, scoped/idempotent DB import transaction.
-- 14 tablo, tenant ilişkileri için composite foreign key'ler, sıralı SQL migration'lar ve yerel demo seed.
+- 15 tablo, tenant ilişkileri için composite foreign key'ler, sıralı SQL migration'lar ve yerel demo seed.
 - CSV, fiyat/beden/stok eşleşmesi, taslak görünürlüğü, girdi doğrulama ve MCP testleri.
 - Özel CSV dosya yükleme + outbox/worker import akışı; satır hatası, retry ve tenant kapsamı.
 - Ürün yönetim API'si: varyant/fiyat/stok ayrıntısı, owner/editor yayın yetkisi, toplu yayın ve yayın değişikliği audit alanları.
@@ -18,7 +18,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Başlık/açıklama serbest metin araması, merkezi Türkçe/renk/beden normalizasyonu, kategori/beden/renk facet'leri ve kararlı cursor pagination.
 - Arama yanıtlarında `searchId`; güncel stok, stok yok, bilinmiyor ve eski veri durumlarının ayrı sözleşmesi.
 - Ölçümlü doğal dil parser sınırı: şemalı model çıktısı, timeout/maliyet tavanı, klasik parser fallback'i, olumsuz renk koşulları ve UI filtresi önceliği.
-- 53 etiketli Türkçe sorguluk deterministik kalite seti; CI çıktısında prompt/model sürümü, sert ihlal, gecikme ve tahmini maliyet raporu.
+- 62 etiketli Türkçe sorguluk deterministik kalite seti ve 7 sorguluk kilitli holdout; CI çıktısında prompt/model sürümü, sert ihlal, gecikme ve tahmini maliyet raporu.
 - MCP Apps `ui://` ürün kaynağı, standart `ui/*` host köprüsü, ChatGPT uyumluluk metadata'sı, sürümlü widget asset'i ve UI olmadan kullanılabilen metin sonucu.
 - Süreli HMAC yönlendirme token'ı, sunucu kaynaklı HTTPS offer hedefi, pasif/yayından kaldırılmış ürün kontrolü ve insan/bot ayrımlı tıklama kaydı. Link üretimi ve satış olayı tıklama tablosuna yazılmaz.
 - WooCommerce pilot connector'ı: HTTPS bağlantı doğrulama, sayfalama, `modified_after` artımlı senkron, sınırlı 429/5xx retry, reauthorization durumu ve secret referansı çözümü.
@@ -27,7 +27,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Secret referansı sahipliği merchant+provider+reference kapsamında tutulur; API ve worker başka mağazanın veya sahipliksiz referansın kullanılmasına izin vermez.
 - Dashboard mağazayı build-time ortam değişkeninden almaz. Oturum üyeliklerini listeler, mağazasız kullanıcıyı kuruluma yönlendirir, tek mağazayı otomatik seçer ve çoklu üyelikte seçim sunar.
 - Bağlantı ve üyelik yönetiminin owner/editor/viewer kuralları ile çapraz-tenant reddi HTTP entegrasyon testleriyle kapsanır; eşzamanlı setup tek mağaza/üyelik üretir.
-- Tenant kapsamlı mağaza raporu: insan yönlendirmesi, bot önizlemesi, kanal dağılımı, atfedilen satış, net tutar ve açık dönüşüm paydası. Kontrol grubu olmadığı için ek satış bilinçli olarak ölçülmüyor.
+- Tenant kapsamlı mağaza raporu: Web/MCP araması, boş sonuç, hata, sayfalama, insan yönlendirmesi, bot önizlemesi, kanal dağılımı, atfedilen satış, net tutar ve açık paydalar. Ham sorgu saklanmıyor; kontrol grubu olmadığı için ek satış bilinçli olarak ölçülmüyor.
 - Mağazaya türetilmiş anahtarla imzalanan satış callback'i; sipariş bazında idempotent paid/refunded/cancelled snapshot'ları ve eski olay koruması.
 - Immutable image etiketli staging compose/deployment workflow'u, local dışı demo-mode startup engeli, migration öncesi backup ve izole CI restore provası.
 - Request/import/job korelasyon alanları, queue-lag ve stale-catalog olayları, secret redaksiyonu ve veri saklama uygulama script'i.
@@ -51,8 +51,8 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 9 Eylül 2026 tarihli ilk izlenebilir baseline doğrulamasının commit/tag ve temiz-checkout ayrıntıları `docs/release-baseline.md` içindedir:
 
 - Format, lint, paket sınırları, TypeScript ve production build temiz.
-- 59 temel test geçti.
-- 32 PostgreSQL/Redis entegrasyon testi geçti; tenant yönetim senaryoları bu pakete dahildir.
+- 70 temel test geçti; 3 gerçek WooCommerce prova testi ortam bilgileri olmadığı için bilinçli olarak atlandı.
+- 36 PostgreSQL/Redis entegrasyon testi geçti; tenant yönetimi ve kontrollü analitik olay dizisi bu pakete dahildir.
 - Migration zinciri temiz bir veritabanına başarıyla uygulandı.
 
 Bu otomatik kanıtlar gerçek WooCommerce mağaza kabulü, TLS staging yayını, gerçek ChatGPT host oturumu veya canlı rollback kanıtı yerine geçmez.
