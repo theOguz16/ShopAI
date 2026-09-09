@@ -1,4 +1,5 @@
 import type { DiscoverySessionRepository } from '@shopai/commerce/discovery';
+import { discoverySessionSchema } from '@shopai/contracts';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { discoverySessions, merchants } from './schema.js';
@@ -34,11 +35,11 @@ export class PostgresDiscoverySessionRepository
         .values(input)
         .returning();
       if (!row) throw new Error('Discovery session oluşturulamadı.');
-      return {
+      return discoverySessionSchema.parse({
         ...row,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
-      };
+      });
     });
   }
 
@@ -51,11 +52,11 @@ export class PostgresDiscoverySessionRepository
         .where(eq(discoverySessions.id, id))
         .limit(1);
       return row
-        ? {
+        ? discoverySessionSchema.parse({
             ...row,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
-          }
+          })
         : null;
     });
   }
