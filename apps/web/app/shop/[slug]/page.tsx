@@ -36,22 +36,19 @@ export default function BrandedStorefrontPage() {
   const [error, setError] = useState('');
   const requestSequence = useRef(0);
 
-  const createDiscoverySession = useCallback(
-    async (merchant?: string) => {
-      const response = await fetch(`${api}/discovery-session`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          surface: 'web',
-          ...(merchant ? { merchant } : {}),
-          ...(document.referrer ? { referrer: document.referrer } : {}),
-        }),
-      });
-      if (!response.ok) throw new Error('discovery_session_failed');
-      return discoverySessionSchema.parse(await response.json());
-    },
-    [],
-  );
+  const createDiscoverySession = useCallback(async (merchant?: string) => {
+    const response = await fetch(`${api}/discovery-session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        surface: 'web',
+        ...(merchant ? { merchant } : {}),
+        ...(document.referrer ? { referrer: document.referrer } : {}),
+      }),
+    });
+    if (!response.ok) throw new Error('discovery_session_failed');
+    return discoverySessionSchema.parse(await response.json());
+  }, []);
 
   const runSearch = useCallback(
     async (
