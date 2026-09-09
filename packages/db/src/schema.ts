@@ -216,7 +216,8 @@ export const redirectClicks = pgTable(
     searchId: uuid('search_id').notNull(),
     offerId: uuid('offer_id').notNull(),
     merchantId: uuid('merchant_id').notNull(),
-    channel: text('channel').notNull(),
+    transport: text('transport').notNull(),
+    surface: text('surface').notNull(),
     classification: text('classification').notNull(),
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
@@ -226,8 +227,12 @@ export const redirectClicks = pgTable(
       foreignColumns: [offers.merchantId, offers.id],
     }),
     check(
-      'redirect_click_channel',
-      sql`${t.channel} in ('web','chatgpt','mcp')`,
+      'redirect_click_transport',
+      sql`${t.transport} in ('rest','mcp','ucp')`,
+    ),
+    check(
+      'redirect_click_surface',
+      sql`${t.surface} in ('web','chatgpt','gemini','brand_widget')`,
     ),
     check(
       'redirect_click_classification',
@@ -237,6 +242,11 @@ export const redirectClicks = pgTable(
       t.merchantId,
       t.occurredAt,
       t.classification,
+    ),
+    index('redirect_clicks_surface_reporting').on(
+      t.merchantId,
+      t.surface,
+      t.occurredAt,
     ),
   ],
 );
@@ -248,13 +258,18 @@ export const searchEvents = pgTable(
     merchantId: uuid('merchant_id')
       .notNull()
       .references(() => merchants.id),
-    channel: text('channel').notNull(),
+    transport: text('transport').notNull(),
+    surface: text('surface').notNull(),
     requestKind: text('request_kind').notNull(),
     outcome: text('outcome').notNull(),
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
   (t) => [
-    check('search_event_channel', sql`${t.channel} in ('web','mcp')`),
+    check('search_event_transport', sql`${t.transport} in ('rest','mcp','ucp')`),
+    check(
+      'search_event_surface',
+      sql`${t.surface} in ('web','chatgpt','gemini','brand_widget')`,
+    ),
     check(
       'search_event_request_kind',
       sql`${t.requestKind} in ('initial','pagination')`,
@@ -267,6 +282,11 @@ export const searchEvents = pgTable(
       t.merchantId,
       t.occurredAt,
       t.requestKind,
+    ),
+    index('search_events_surface_reporting').on(
+      t.merchantId,
+      t.surface,
+      t.occurredAt,
     ),
   ],
 );
@@ -287,6 +307,8 @@ export const conversionOrders = pgTable(
       .default(0),
     searchId: uuid('search_id'),
     offerId: uuid('offer_id'),
+    transport: text('transport'),
+    surface: text('surface'),
     occurredAt: at('occurred_at').notNull(),
     receivedAt: at('received_at').notNull().defaultNow(),
   },
@@ -307,10 +329,23 @@ export const conversionOrders = pgTable(
     ),
     check('conversion_order_currency', sql`${t.currency} = 'TRY'`),
     check(
+      'conversion_order_transport',
+      sql`${t.transport} in ('rest','mcp','ucp')`,
+    ),
+    check(
+      'conversion_order_surface',
+      sql`${t.surface} in ('web','chatgpt','gemini','brand_widget')`,
+    ),
+    check(
       'conversion_order_amounts',
       sql`${t.grossMinor} >= 0 and ${t.refundedMinor} >= 0 and ${t.refundedMinor} <= ${t.grossMinor}`,
     ),
     index('conversion_orders_reporting').on(t.merchantId, t.occurredAt),
+    index('conversion_orders_surface_reporting').on(
+      t.merchantId,
+      t.surface,
+      t.occurredAt,
+    ),
   ],
 );
 export const importRuns = pgTable(
