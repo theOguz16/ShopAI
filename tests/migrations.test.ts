@@ -108,4 +108,27 @@ describe('database migrations', () => {
       'REFERENCES "public"."discovery_sessions"("id")',
     );
   });
+
+  it('adds branded storefront identity without publishing merchants by default', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0015_branded_storefront_context.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('ADD COLUMN "display_name" text');
+    expect(migration).toContain('ADD COLUMN "logo_url" text');
+    expect(migration).toContain('ADD COLUMN "cover_image_url" text');
+    expect(migration).toContain(
+      'ADD COLUMN "primary_color" text DEFAULT \'#111111\' NOT NULL',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "is_public" boolean DEFAULT false NOT NULL',
+    );
+    expect(migration).toContain(
+      'UPDATE "merchants" SET "display_name" = "name"',
+    );
+  });
 });
