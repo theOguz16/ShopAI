@@ -1,4 +1,7 @@
-import { publicStorefrontSchema, storefrontSlugSchema } from '@shopai/contracts';
+import {
+  publicStorefrontSchema,
+  storefrontSlugSchema,
+} from '@shopai/contracts';
 import { merchants } from '@shopai/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
