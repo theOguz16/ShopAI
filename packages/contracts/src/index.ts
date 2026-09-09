@@ -44,6 +44,7 @@ export const searchRequestSchema = z
   })
   .strict();
 export type SearchRequest = z.infer<typeof searchRequestSchema>;
+export type SearchFilters = z.infer<typeof searchFiltersSchema>;
 export const stockStatusSchema = z.enum([
   'in_stock',
   'out_of_stock',

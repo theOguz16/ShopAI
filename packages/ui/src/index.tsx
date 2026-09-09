@@ -1,42 +1,36 @@
 import type { CatalogItem } from '@shopai/contracts';
 import { useState } from 'react';
 
+const colorLabels: Record<string, string> = {
+  black: 'Siyah',
+  white: 'Beyaz',
+  navy: 'Lacivert',
+  blue: 'Mavi',
+  red: 'Kırmızı',
+  green: 'Yeşil',
+};
 function ProductImage({ item }: { item: CatalogItem }) {
   const [failed, setFailed] = useState(false);
   if (failed || !item.imageUrl)
     return (
       <div
+        className="product-image-placeholder"
         role="img"
         aria-label={`${item.title} görseli yok`}
-        style={{
-          height: 130,
-          borderRadius: 10,
-          display: 'grid',
-          placeItems: 'center',
-          background: '#edf1ed',
-          fontSize: 54,
-        }}
       >
         ♧
       </div>
     );
   return (
     <img
+      className="product-image"
       src={item.imageUrl}
       alt={item.imageAlt ?? item.title}
       loading="lazy"
       onError={() => setFailed(true)}
-      style={{
-        height: 130,
-        width: '100%',
-        objectFit: 'cover',
-        borderRadius: 10,
-        background: '#edf1ed',
-      }}
     />
   );
 }
-
 export function ProductCard({
   item,
   demo = false,
@@ -44,49 +38,50 @@ export function ProductCard({
   item: CatalogItem;
   demo?: boolean;
 }) {
+  const stockText = demo
+    ? 'Sentetik stok bilgisi'
+    : item.stockStatus === 'in_stock'
+      ? 'Güncel kayıtta stokta'
+      : item.stockStatus === 'out_of_stock'
+        ? 'Güncel kayıtta stok yok'
+        : item.stockStatus === 'stale'
+          ? 'Stok verisi eski; güncel stok bilinmiyor'
+          : 'Stok bilinmiyor';
   return (
-    <article
-      style={{
-        border: '1px solid #d9dfda',
-        borderRadius: 16,
-        padding: 20,
-        background: 'white',
-      }}
-    >
+    <li className="product-card">
       <ProductImage item={item} />
-      <p style={{ color: '#536259', fontSize: 13 }}>{item.merchantName}</p>
-      <h2 style={{ fontSize: 19 }}>{item.title}</h2>
-      <p>
-        {item.size} beden · {item.color}
-      </p>
-      <strong>
-        {new Intl.NumberFormat('tr-TR', {
-          style: 'currency',
-          currency: item.currency,
-        }).format(item.priceMinor / 100)}
-      </strong>
-      <p>
-        {demo
-          ? 'Sentetik stok bilgisi'
-          : item.stockStatus === 'in_stock'
-            ? 'Güncel kayıtta stokta'
-            : item.stockStatus === 'out_of_stock'
-              ? 'Güncel kayıtta stok yok'
-              : item.stockStatus === 'stale'
-                ? 'Stok verisi eski; güncel stok bilinmiyor'
-                : 'Stok bilinmiyor'}
-      </p>
-      <p style={{ fontSize: 12 }}>
-        Fiyat kaynağı: {item.priceSource} · stok kaynağı: {item.stockSource}
-        <br />
-        Güncellik:{' '}
-        {new Date(item.observedAt).toLocaleDateString('tr-TR', {
-          timeZone: 'Europe/Istanbul',
-        })}
-      </p>
-      <a href={item.checkoutUrl} target="_blank" rel="noopener noreferrer">
-        {demo ? 'Örnek ürün bağlantısı ↗' : 'Mağazada kontrol et ↗'}
-      </a>
-    </article>
+      <div className="product-card-body">
+        {demo ? <span className="demo-badge">Demo ürün</span> : null}
+        <p className="product-merchant">{item.merchantName}</p>
+        <h3>{item.title}</h3>
+        <p className="product-meta">
+          {item.size} beden · {colorLabels[item.color] ?? item.color}
+        </p>
+        <strong className="product-price">
+          {new Intl.NumberFormat('tr-TR', {
+            style: 'currency',
+            currency: item.currency,
+          }).format(item.priceMinor / 100)}
+        </strong>
+        <p
+          className={`stock ${item.stockStatus === 'in_stock' ? 'in-stock' : 'unavailable'}`}
+        >
+          {stockText}
+        </p>
+        <p className="product-freshness">
+          {demo
+            ? 'Bu bilgi yalnız deneyim testi içindir.'
+            : `Son kontrol: ${new Date(item.observedAt).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })}`}
+        </p>
+        <a
+          className="product-link"
+          href={item.checkoutUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {demo ? 'Örnek sayfayı incele ↗' : 'Mağazada kontrol et ↗'}
+        </a>
+      </div>
+    </li>
   );
 }

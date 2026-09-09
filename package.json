@@ -20,6 +20,7 @@
     "test": "pnpm build:packages && vitest run",
     "test:integration": "pnpm build:packages && vitest run --config vitest.integration.config.ts",
     "test:e2e:pilot": "playwright test",
+    "test:e2e:shopping": "playwright test --config playwright.shopping.config.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @shopai/db db:generate",
     "db:migrate": "pnpm build:packages && pnpm --filter @shopai/db db:migrate",
