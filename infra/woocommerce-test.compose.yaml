@@ -1,0 +1,76 @@
+name: shopai-woocommerce-rehearsal
+
+services:
+  db:
+    image: mariadb:11.4.13
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: rehearsal_db_only
+      MARIADB_ROOT_PASSWORD: rehearsal_root_only
+    volumes:
+      - woo-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: rehearsal_db_only
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'https://localhost:18443');
+        define('WP_SITEURL', 'https://localhost:18443');
+        if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+          $$_SERVER['HTTPS'] = 'on';
+        }
+    volumes:
+      - woo-files:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/wp-login.php >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  wpcli:
+    image: wordpress:cli-2.12.0-php8.3
+    user: "33:33"
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: rehearsal_db_only
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - woo-files:/var/www/html
+    working_dir: /var/www/html
+
+  tls:
+    image: caddy:2.10.0-alpine
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18443:443"
+    volumes:
+      - ./woocommerce-test.Caddyfile:/etc/caddy/Caddyfile:ro
+      - woo-caddy-data:/data
+      - woo-caddy-config:/config
+
+volumes:
+  woo-db:
+  woo-files:
+  woo-caddy-data:
+  woo-caddy-config:
