@@ -47,11 +47,12 @@ export class PostgresCatalogRepository implements CatalogRepository {
     matchNone,
     tenantId,
   }: ResolvedSearchRequest & { tenantId?: string }) {
-    // Public search deliberately has no tenant scope; PostgreSQL app_public RLS
-    // exposes only published catalog rows. Management callers must pass a tenant.
+    // Consumer discovery deliberately has no tenant scope; the public DB role
+    // and is_public gate expose only explicitly public, published catalog rows.
     if (tenantId !== undefined) requireTenantId(tenantId);
     const predicates = [
       eq(m.active, true),
+      eq(m.isPublic, true),
       eq(p.published, true),
       eq(o.active, true),
       eq(o.currency, f.currency),
