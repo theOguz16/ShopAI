@@ -16,72 +16,73 @@ import {
 } from '../../packages/db/src/schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl)
-  throw new Error('discovery-session.test için DATABASE_URL gerekli.');
+const describeWithDatabase = databaseUrl ? describe : describe.skip;
 
-const env = parseApiEnv({
-  CATALOG_MODE: 'postgres',
-  DATABASE_URL: databaseUrl,
-  MCP_PUBLIC_ORIGIN: 'https://api.test.example',
-  WIDGET_ORIGIN: 'https://widget.test.example',
-  REDIRECT_SIGNING_SECRET: 'discovery-session-redirect-secret-00000000000',
-  UPLOAD_DIR: '/tmp/shopai-discovery-session-uploads',
-});
-const database = createDatabase(databaseUrl);
-const services = createServices(env);
-const maviId = 'da000000-0000-4000-8000-000000000001';
-const otherId = 'db000000-0000-4000-8000-000000000001';
-const connectionId = 'da000000-0000-4000-8000-000000000002';
-let app: Awaited<ReturnType<typeof buildApp>>;
+describeWithDatabase('discovery sessions', () => {
+  if (!databaseUrl) return;
 
-beforeAll(async () => {
-  await database.db.execute(
-    sql`truncate table ${redirectClicks}, ${searchEvents}, ${discoverySessions}, ${connections}, ${merchants} cascade`,
-  );
-  await database.db.insert(merchants).values([
-    { id: maviId, name: 'Mavi', slug: 'mavi', active: true },
-    { id: otherId, name: 'Other', slug: 'other', active: true },
-  ]);
-  await database.db.insert(connections).values({
-    id: connectionId,
-    merchantId: maviId,
-    provider: 'csv',
+  const env = parseApiEnv({
+    CATALOG_MODE: 'postgres',
+    DATABASE_URL: databaseUrl,
+    MCP_PUBLIC_ORIGIN: 'https://api.test.example',
+    WIDGET_ORIGIN: 'https://widget.test.example',
+    REDIRECT_SIGNING_SECRET: 'discovery-session-redirect-secret-00000000000',
+    UPLOAD_DIR: '/tmp/shopai-discovery-session-uploads',
   });
-  await importCatalog(database.db, {
-    schemaVersion: 1,
-    runId: randomUUID(),
-    merchantId: maviId,
-    connectionId,
-    observedAt: new Date().toISOString(),
-    rows: [
-      {
-        externalId: 'mavi-offer',
-        productKey: 'mavi-product',
-        title: 'Mavi Ürün',
-        description: 'Instagram discovery ürünü',
-        category: 'test',
-        size: 'M',
-        color: 'Mavi',
-        priceMinor: 10_000,
-        currency: 'TRY',
-        available: true,
-        checkoutUrl: 'https://merchant.example/mavi-product',
-      },
-    ],
+  const database = createDatabase(databaseUrl);
+  const services = createServices(env);
+  const maviId = 'da000000-0000-4000-8000-000000000001';
+  const otherId = 'db000000-0000-4000-8000-000000000001';
+  const connectionId = 'da000000-0000-4000-8000-000000000002';
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeAll(async () => {
+    await database.db.execute(
+      sql`truncate table ${redirectClicks}, ${searchEvents}, ${discoverySessions}, ${connections}, ${merchants} cascade`,
+    );
+    await database.db.insert(merchants).values([
+      { id: maviId, name: 'Mavi', slug: 'mavi', active: true },
+      { id: otherId, name: 'Other', slug: 'other', active: true },
+    ]);
+    await database.db.insert(connections).values({
+      id: connectionId,
+      merchantId: maviId,
+      provider: 'csv',
+    });
+    await importCatalog(database.db, {
+      schemaVersion: 1,
+      runId: randomUUID(),
+      merchantId: maviId,
+      connectionId,
+      observedAt: new Date().toISOString(),
+      rows: [
+        {
+          externalId: 'mavi-offer',
+          productKey: 'mavi-product',
+          title: 'Mavi Ürün',
+          description: 'Instagram discovery ürünü',
+          category: 'test',
+          size: 'M',
+          color: 'Mavi',
+          priceMinor: 10_000,
+          currency: 'TRY',
+          available: true,
+          checkoutUrl: 'https://merchant.example/mavi-product',
+        },
+      ],
+    });
+    await database.db
+      .update(products)
+      .set({ published: true })
+      .where(eq(products.merchantId, maviId));
+    app = await buildApp(services, env);
   });
-  await database.db
-    .update(products)
-    .set({ published: true })
-    .where(eq(products.merchantId, maviId));
-  app = await buildApp(services, env);
-});
 
-afterAll(async () => {
-  await app.close();
-  await database.close();
-});
+  afterAll(async () => {
+    await app.close();
+    await database.close();
+  });
 
-describe('discovery sessions', () => {
   it('links a scoped web discovery session to search and redirect events', async () => {
     const created = await app.inject({
       method: 'POST',
