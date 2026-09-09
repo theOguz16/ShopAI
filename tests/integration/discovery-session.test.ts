@@ -83,7 +83,7 @@ describeWithDatabase('discovery sessions', () => {
     await database.close();
   });
 
-  it('links a scoped web discovery session to search and redirect events', async () => {
+  it('resolves redirect discovery attribution server-side without exposing session id in the token', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/discovery-session',
@@ -137,6 +137,19 @@ describeWithDatabase('discovery sessions', () => {
 
     const redirectPath = new URL(searchBody.items[0]?.checkoutUrl ?? '')
       .pathname;
+    const token = redirectPath.slice('/r/'.length);
+    const payloadPart = token.split('.')[0] ?? '';
+    const tokenPayload = JSON.parse(
+      Buffer.from(payloadPart, 'base64url').toString('utf8'),
+    );
+    expect(tokenPayload).toMatchObject({
+      searchId: searchBody.searchId,
+      transport: 'rest',
+      surface: 'web',
+    });
+    expect(tokenPayload).not.toHaveProperty('discoverySessionId');
+    expect(JSON.stringify(tokenPayload)).not.toContain(session.id);
+
     const redirect = await app.inject({
       method: 'GET',
       url: redirectPath,
@@ -175,6 +188,34 @@ describeWithDatabase('discovery sessions', () => {
       surface: 'web',
       transport: 'rest',
       merchantScope: [],
+    });
+  });
+
+  it.each(['chatgpt', 'gemini'])(
+    'rejects %s on the REST discovery-session endpoint',
+    async (surface) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/discovery-session',
+        payload: { surface },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: 'INVALID_SURFACE_FOR_TRANSPORT',
+      });
+    },
+  );
+
+  it('accepts brand_widget on the REST discovery-session endpoint', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      payload: { surface: 'brand_widget' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      surface: 'brand_widget',
+      transport: 'rest',
     });
   });
 });
