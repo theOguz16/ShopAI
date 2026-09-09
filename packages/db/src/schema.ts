@@ -16,12 +16,26 @@ import {
 const id = () => uuid('id').primaryKey().defaultRandom();
 const at = (name: string) =>
   timestamp(name, { withTimezone: true, mode: 'date' });
-export const merchants = pgTable('merchants', {
-  id: id(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  active: boolean('active').notNull().default(false),
-});
+export const merchants = pgTable(
+  'merchants',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    logoUrl: text('logo_url'),
+    coverImageUrl: text('cover_image_url'),
+    primaryColor: text('primary_color').notNull().default('#111111'),
+    isPublic: boolean('is_public').notNull().default(false),
+    active: boolean('active').notNull().default(false),
+  },
+  (t) => [
+    check(
+      'merchant_primary_color',
+      sql`${t.primaryColor} ~ '^#[0-9A-Fa-f]{6}$'`,
+    ),
+  ],
+);
 export const users = pgTable('users', {
   id: id(),
   email: text('email').notNull().unique(),
