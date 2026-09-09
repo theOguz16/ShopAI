@@ -6,6 +6,7 @@ export type RedirectClaims = {
   version: 2;
   offerId: string;
   searchId: string;
+  discoverySessionId?: string;
   transport: Transport;
   surface: Surface;
   issuedAt: number;
@@ -36,7 +37,11 @@ export class RedirectTokens {
   create(
     input: Pick<
       RedirectClaims,
-      'offerId' | 'searchId' | 'transport' | 'surface'
+      | 'offerId'
+      | 'searchId'
+      | 'discoverySessionId'
+      | 'transport'
+      | 'surface'
     >,
     now = Date.now(),
   ) {
@@ -44,6 +49,11 @@ export class RedirectTokens {
       throw new RedirectTokenError(
         'INVALID_TOKEN',
         'Geçersiz yönlendirme kimliği.',
+      );
+    if (input.discoverySessionId && !uuid.test(input.discoverySessionId))
+      throw new RedirectTokenError(
+        'INVALID_TOKEN',
+        'Geçersiz discovery session kimliği.',
       );
     if (
       !transportSchema.safeParse(input.transport).success ||
@@ -93,6 +103,9 @@ export class RedirectTokens {
       !uuid.test(claims.offerId) ||
       typeof claims.searchId !== 'string' ||
       !uuid.test(claims.searchId) ||
+      (claims.discoverySessionId !== undefined &&
+        (typeof claims.discoverySessionId !== 'string' ||
+          !uuid.test(claims.discoverySessionId))) ||
       !transportSchema.safeParse(claims.transport).success ||
       !surfaceSchema.safeParse(claims.surface).success ||
       !Number.isSafeInteger(claims.issuedAt) ||
@@ -144,7 +157,11 @@ export class RedirectService {
   ) {}
 
   createLink(
-    input: Pick<RedirectClaims, 'offerId' | 'searchId'> & AttributionContext,
+    input: Pick<
+      RedirectClaims,
+      'offerId' | 'searchId' | 'discoverySessionId'
+    > &
+      AttributionContext,
   ) {
     return new URL(
       `/r/${this.tokens.create(input)}`,
