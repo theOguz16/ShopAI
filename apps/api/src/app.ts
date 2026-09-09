@@ -18,6 +18,7 @@ import { registerImportRoutes } from './routes/imports.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
+import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { createServices, type Services } from './services.js';
 
 const loginRequestSchema = z
@@ -107,6 +108,7 @@ export async function buildApp(
     return { user: request.auth };
   });
   await registerMerchantRoutes(app, env);
+  await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
   await registerRedirectRoutes(app, resolvedServices);
