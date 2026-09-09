@@ -1,4 +1,4 @@
-import type { RedirectChannel, RedirectRepository } from '@shopai/commerce';
+import type { RedirectRepository } from '@shopai/commerce';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import {
@@ -50,7 +50,8 @@ export class PostgresRedirectRepository implements RedirectRepository {
         searchId: input.claims.searchId,
         offerId: input.claims.offerId,
         merchantId: input.merchantId,
-        channel: input.claims.channel satisfies RedirectChannel,
+        transport: input.claims.transport,
+        surface: input.claims.surface,
         classification: input.classification,
       });
     });
