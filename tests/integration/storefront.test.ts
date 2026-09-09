@@ -211,6 +211,8 @@ describeWithDatabase('branded storefront context', () => {
       .update(merchants)
       .set({ isPublic: false })
       .where(eq(merchants.id, otherId));
-    expect((await app.inject('/v1/storefronts/other-store')).statusCode).toBe(404);
+    expect((await app.inject('/v1/storefronts/other-store')).statusCode).toBe(
+      404,
+    );
   });
 });
