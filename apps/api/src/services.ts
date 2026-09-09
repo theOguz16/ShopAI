@@ -189,7 +189,7 @@ class MemoryDiscoverySessionRepository implements DiscoverySessionRepository {
     this.merchantIds = new Set(records.map((record) => record.merchantId));
   }
 
-  async resolveActiveMerchant(value: string) {
+  async resolvePublicMerchant(value: string) {
     return this.merchantIds.has(value) ? { id: value } : null;
   }
 
