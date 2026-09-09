@@ -1,7 +1,11 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { searchRequestSchema, WEB_ATTRIBUTION } from '@shopai/contracts';
+import {
+  discoverySessionCreateRequestSchema,
+  searchRequestSchema,
+  WEB_ATTRIBUTION,
+} from '@shopai/contracts';
 import { createDatabase } from '@shopai/db';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -115,6 +119,18 @@ export async function buildApp(
       return reply.code(503).send({ status: 'unavailable' });
     }
   });
+  app.post('/discovery-session', async (request, reply) => {
+    const parsed = discoverySessionCreateRequestSchema.safeParse(request.body);
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ code: 'INVALID_INPUT', requestId: request.id });
+    const session = await resolvedServices.discoverySessions.create(parsed.data, {
+      transport: 'rest',
+      userId: request.auth?.userId,
+    });
+    return reply.code(201).send(session);
+  });
   app.post('/v1/search', async (request, reply) => {
     const parsed = searchRequestSchema.safeParse(request.body);
     if (!parsed.success)
@@ -133,6 +149,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
+          discoverySessionId: parsed.data.discoverySessionId,
           ...WEB_ATTRIBUTION,
         }),
       })),
@@ -165,6 +182,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
+          discoverySessionId: parsed.data.discoverySessionId,
           ...WEB_ATTRIBUTION,
         }),
       })),
