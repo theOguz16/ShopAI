@@ -1,4 +1,5 @@
 export * from './attribution.js';
+export * from './discovery.js';
 
 import { z } from 'zod';
 
@@ -42,6 +43,7 @@ export const searchRequestSchema = z
     query: z.string().trim().max(500).default(''),
     filters: searchFiltersSchema.default({}),
     merchantIds: z.array(z.string().uuid()).max(20).default([]),
+    discoverySessionId: z.string().uuid().optional(),
     limit: z.number().int().min(1).max(50).default(12),
     cursor: z.string().trim().min(1).max(500).optional().nullable(),
   })

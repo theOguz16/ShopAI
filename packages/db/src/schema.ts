@@ -36,6 +36,43 @@ export const sessions = pgTable('sessions', {
   expiresAt: at('expires_at').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
 });
+export const discoverySessions = pgTable(
+  'discovery_sessions',
+  {
+    id: id(),
+    surface: text('surface').notNull(),
+    transport: text('transport').notNull(),
+    merchantScope: jsonb('merchant_scope')
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    referrer: text('referrer'),
+    campaign: text('campaign'),
+    anonymousUserId: uuid('anonymous_user_id').notNull(),
+    userId: uuid('user_id').references(() => users.id),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      'discovery_session_transport',
+      sql`${t.transport} in ('rest','mcp','ucp')`,
+    ),
+    check(
+      'discovery_session_surface',
+      sql`${t.surface} in ('web','chatgpt','gemini','brand_widget')`,
+    ),
+    check(
+      'discovery_session_merchant_scope_array',
+      sql`jsonb_typeof(${t.merchantScope}) = 'array'`,
+    ),
+    index('discovery_sessions_surface_created').on(t.surface, t.createdAt),
+    index('discovery_sessions_anonymous_user').on(
+      t.anonymousUserId,
+      t.createdAt,
+    ),
+  ],
+);
 export const memberships = pgTable(
   'memberships',
   {
@@ -214,6 +251,9 @@ export const redirectClicks = pgTable(
   {
     id: id(),
     searchId: uuid('search_id').notNull(),
+    discoverySessionId: uuid('discovery_session_id').references(
+      () => discoverySessions.id,
+    ),
     offerId: uuid('offer_id').notNull(),
     merchantId: uuid('merchant_id').notNull(),
     transport: text('transport').notNull(),
@@ -248,6 +288,10 @@ export const redirectClicks = pgTable(
       t.surface,
       t.occurredAt,
     ),
+    index('redirect_clicks_discovery_session').on(
+      t.discoverySessionId,
+      t.occurredAt,
+    ),
   ],
 );
 export const searchEvents = pgTable(
@@ -255,6 +299,9 @@ export const searchEvents = pgTable(
   {
     id: id(),
     searchId: uuid('search_id'),
+    discoverySessionId: uuid('discovery_session_id').references(
+      () => discoverySessions.id,
+    ),
     merchantId: uuid('merchant_id')
       .notNull()
       .references(() => merchants.id),
@@ -289,6 +336,10 @@ export const searchEvents = pgTable(
     index('search_events_surface_reporting').on(
       t.merchantId,
       t.surface,
+      t.occurredAt,
+    ),
+    index('search_events_discovery_session').on(
+      t.discoverySessionId,
       t.occurredAt,
     ),
   ],

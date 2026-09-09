@@ -6,6 +6,7 @@ import { searchEvents } from './schema.js';
 export type SearchEventInput = {
   merchantId: string;
   searchId?: string;
+  discoverySessionId?: string;
   transport: Transport;
   surface: Surface;
   requestKind: 'initial' | 'pagination';

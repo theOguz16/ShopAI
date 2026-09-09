@@ -7,7 +7,11 @@ import {
   SearchProducts,
   demoRecords,
 } from '@shopai/commerce';
-import type { AttributionContext } from '@shopai/contracts';
+import {
+  DiscoverySessions,
+  type DiscoverySessionRepository,
+} from '@shopai/commerce/discovery';
+import type { AttributionContext, DiscoverySession } from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import {
   DemoQueryParser,
@@ -17,6 +21,7 @@ import {
 import {
   createDatabase,
   PostgresCatalogRepository,
+  PostgresDiscoverySessionRepository,
   PostgresRedirectRepository,
   PostgresSearchEventRepository,
 } from '@shopai/db';
@@ -59,6 +64,10 @@ export function createServices(env: ApiEnv) {
           ]),
         ),
       );
+  const discoverySessionRepository: DiscoverySessionRepository = database
+    ? new PostgresDiscoverySessionRepository(database.db)
+    : new MemoryDiscoverySessionRepository(demoRecords);
+  const discoverySessions = new DiscoverySessions(discoverySessionRepository);
   const search = new SearchProducts(repository, parser, env.CATALOG_MODE);
   const searchEventRepository = database
     ? new PostgresSearchEventRepository(database.db)
@@ -70,18 +79,32 @@ export function createServices(env: ApiEnv) {
   ) => {
     const requestInput =
       input && typeof input === 'object'
-        ? (input as { cursor?: unknown; merchantIds?: unknown })
+        ? (input as {
+            cursor?: unknown;
+            merchantIds?: unknown;
+            discoverySessionId?: unknown;
+          })
         : {};
     const requestKind = requestInput.cursor ? 'pagination' : 'initial';
-    const explicitMerchantIds = context.merchantIds?.length
-      ? context.merchantIds
+    let scopedContext = context;
+    let discoverySessionId: string | undefined;
+    if (typeof requestInput.discoverySessionId === 'string') {
+      const session = await discoverySessions.require(
+        requestInput.discoverySessionId,
+      );
+      discoverySessions.assertAttribution(session, attribution);
+      scopedContext = discoverySessions.applyMerchantScope(session, context);
+      discoverySessionId = session.id;
+    }
+    const explicitMerchantIds = scopedContext.merchantIds?.length
+      ? scopedContext.merchantIds
       : Array.isArray(requestInput.merchantIds)
         ? requestInput.merchantIds.filter(
             (value): value is string => typeof value === 'string',
           )
         : [];
     try {
-      const result = await search.execute(input, context);
+      const result = await search.execute(input, scopedContext);
       const merchantIds = explicitMerchantIds.length
         ? explicitMerchantIds
         : [...new Set(result.items.map((item) => item.merchantId))];
@@ -90,6 +113,7 @@ export function createServices(env: ApiEnv) {
           merchantIds.map((merchantId) => ({
             merchantId,
             searchId: result.searchId,
+            discoverySessionId,
             ...attribution,
             requestKind,
             outcome: result.items.length ? 'results' : 'empty',
@@ -102,6 +126,7 @@ export function createServices(env: ApiEnv) {
         await searchEventRepository.record(
           explicitMerchantIds.map((merchantId) => ({
             merchantId,
+            discoverySessionId,
             ...attribution,
             requestKind,
             outcome: 'error',
@@ -114,6 +139,7 @@ export function createServices(env: ApiEnv) {
   return {
     search,
     executeSearch,
+    discoverySessions,
     repository,
     redirects: new RedirectService(
       new RedirectTokens(
@@ -152,5 +178,34 @@ export class MemoryRedirectRepository implements RedirectRepository {
 
   async recordClick(input: (typeof this.clicks)[number]) {
     this.clicks.push(input);
+  }
+}
+
+class MemoryDiscoverySessionRepository implements DiscoverySessionRepository {
+  private readonly sessions = new Map<string, DiscoverySession>();
+  private readonly merchantIds: Set<string>;
+
+  constructor(records: readonly { merchantId: string }[]) {
+    this.merchantIds = new Set(records.map((record) => record.merchantId));
+  }
+
+  async resolveActiveMerchant(value: string) {
+    return this.merchantIds.has(value) ? { id: value } : null;
+  }
+
+  async create(input: Parameters<DiscoverySessionRepository['create']>[0]) {
+    const now = new Date().toISOString();
+    const session: DiscoverySession = {
+      id: crypto.randomUUID(),
+      ...input,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  async findById(id: string) {
+    return this.sessions.get(id) ?? null;
   }
 }

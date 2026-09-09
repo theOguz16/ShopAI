@@ -46,8 +46,20 @@ export class PostgresRedirectRepository implements RedirectRepository {
   async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
+      const attributionResult = await tx.execute(
+        sql`
+          select shopai_discovery_session_for_search(
+            ${input.claims.searchId},
+            ${input.merchantId}
+          ) as "discoverySessionId"
+        `,
+      );
+      const attribution = attributionResult.rows[0] as
+        | { discoverySessionId: string | null }
+        | undefined;
       await tx.insert(redirectClicks).values({
         searchId: input.claims.searchId,
+        discoverySessionId: attribution?.discoverySessionId ?? null,
         offerId: input.claims.offerId,
         merchantId: input.merchantId,
         transport: input.claims.transport,

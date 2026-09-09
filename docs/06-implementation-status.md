@@ -31,6 +31,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Mağazaya türetilmiş anahtarla imzalanan satış callback'i; sipariş bazında idempotent paid/refunded/cancelled snapshot'ları ve eski olay koruması.
 - Immutable image etiketli staging compose/deployment workflow'u, local dışı demo-mode startup engeli, migration öncesi backup ve izole CI restore provası.
 - Request/import/job korelasyon alanları, queue-lag ve stale-catalog olayları, secret redaksiyonu ve veri saklama uygulama script'i.
+- Discovery session katmanı; surface/transport, başlangıç merchant scope'u ve search/redirect korelasyonu taşır. İstemciden gelen `anonymousUserId` yalnız analytics correlation içindir; authorization veya güvenilir identity sinyali değildir. Server-issued/signed anonymous identity Shopping Profile çalışmasına bırakılmıştır.
 
 ## Hedef mimariden bilinçli farklar
 

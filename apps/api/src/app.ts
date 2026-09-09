@@ -1,7 +1,11 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { searchRequestSchema, WEB_ATTRIBUTION } from '@shopai/contracts';
+import {
+  discoverySessionCreateRequestSchema,
+  searchRequestSchema,
+  WEB_ATTRIBUTION,
+} from '@shopai/contracts';
 import { createDatabase } from '@shopai/db';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -22,6 +26,8 @@ const loginRequestSchema = z
     token: z.string().min(16).max(256),
   })
   .strict();
+const restDiscoverySurfaces = new Set(['web', 'brand_widget']);
+
 export async function buildApp(
   services?: Services,
   env: ApiEnv = parseApiEnv(process.env),
@@ -114,6 +120,26 @@ export async function buildApp(
     } catch {
       return reply.code(503).send({ status: 'unavailable' });
     }
+  });
+  app.post('/discovery-session', async (request, reply) => {
+    const parsed = discoverySessionCreateRequestSchema.safeParse(request.body);
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ code: 'INVALID_INPUT', requestId: request.id });
+    if (!restDiscoverySurfaces.has(parsed.data.surface))
+      return reply.code(400).send({
+        code: 'INVALID_SURFACE_FOR_TRANSPORT',
+        requestId: request.id,
+      });
+    const session = await resolvedServices.discoverySessions.create(
+      parsed.data,
+      {
+        transport: 'rest',
+        userId: request.auth?.userId,
+      },
+    );
+    return reply.code(201).send(session);
   });
   app.post('/v1/search', async (request, reply) => {
     const parsed = searchRequestSchema.safeParse(request.body);
