@@ -1,29 +1,172 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { useActiveMerchant } from './merchant-context';
+import { OnboardingSteps } from './onboarding-steps';
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
+type Summary = {
+  connections: number;
+  imports: number;
+  products: number;
+  published: number;
+};
 
 export default function Dashboard() {
-  const { activeMerchant } = useActiveMerchant();
+  const { activeMerchant, merchantId } = useActiveMerchant();
+  const [summary, setSummary] = useState<Summary>();
+  const [error, setError] = useState('');
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      setError('');
+      try {
+        const responses = await Promise.all([
+          fetch(`${api}/v1/merchants/${merchantId}/connections`, {
+            credentials: 'include',
+            signal,
+          }),
+          fetch(`${api}/v1/merchants/${merchantId}/imports`, {
+            credentials: 'include',
+            signal,
+          }),
+          fetch(`${api}/v1/merchants/${merchantId}/products`, {
+            credentials: 'include',
+            signal,
+          }),
+        ]);
+        if (!responses.every((item) => item.ok))
+          throw new Error('summary_failed');
+        const [connections, imports, products] = await Promise.all(
+          responses.map((item) => item.json()),
+        );
+        if (!signal?.aborted)
+          setSummary({
+            connections: connections.length,
+            imports: imports.length,
+            products: products.length,
+            published: products.filter(
+              (product: { published: boolean }) => product.published,
+            ).length,
+          });
+      } catch {
+        if (!signal?.aborted)
+          setError('Kurulum durumu yüklenemedi. Yeniden deneyebilirsin.');
+      }
+    },
+    [merchantId],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    setSummary(undefined);
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  const current = !summary?.connections
+    ? 'connect'
+    : !summary.imports
+      ? 'import'
+      : !summary.products
+        ? 'review'
+        : !summary.published
+          ? 'publish'
+          : 'view';
+  const completed = summary
+    ? [
+        ...(summary.connections ? ['connect' as const] : []),
+        ...(summary.imports ? ['import' as const] : []),
+        ...(summary.products ? ['review' as const] : []),
+        ...(summary.published ? ['publish' as const] : []),
+      ]
+    : [];
+  const actions = {
+    connect: {
+      href: '/dashboard/connections',
+      title: 'Önce katalog kaynağını seç',
+      text: 'Hızlı deneme için CSV ile başla; WooCommerce bağlantısını daha sonra ekleyebilirsin.',
+      action: 'Kaynak seç',
+    },
+    import: {
+      href: '/dashboard/imports',
+      title: 'Şimdi ürünlerini aktar',
+      text: 'Şablonu indir, kendi ürün bilginle doldur ve dosyayı yükle.',
+      action: 'CSV yükle',
+    },
+    review: {
+      href: '/dashboard/products',
+      title: 'Aktarılan ürünleri kontrol et',
+      text: 'Beden, renk, fiyat ve mağaza bağlantısını yayımlamadan önce gözden geçir.',
+      action: 'Ürünleri kontrol et',
+    },
+    publish: {
+      href: '/dashboard/products',
+      title: 'İlk ürününü yayımla',
+      text: 'Kontrol ettiğin taslağı alışveriş aramasında görünür yap.',
+      action: 'Taslakları aç',
+    },
+    view: {
+      href: '/',
+      title: 'Mağazan hazır',
+      text: 'Yayımlanan ürünlerinin alışveriş deneyiminde nasıl göründüğünü kontrol et.',
+      action: 'Mağazanı görüntüle',
+    },
+  }[current];
+
   return (
-    <main>
-      <a href="/login">Oturum değiştir</a>
-      <a href="/">← Kataloğa dön</a>
-      <h1>Mağaza paneli</h1>
-      <p>Aktif mağaza: {activeMerchant.name}</p>
-      <p>
-        Kataloğunuzu yükleyebilir, taslakları inceleyip yayımlayabilir ve
-        ölçülen yönlendirmeleri takip edebilirsiniz.
-      </p>
-      <nav aria-label="Mağaza işlemleri">
-        <a href="/dashboard/imports">CSV kataloğu yükle ve durumunu izle</a>
-        <a href="/dashboard/products">Taslakları incele ve yayımla</a>
-        <a href="/dashboard/connections">Canlı bağlantıları yönet</a>
-        <a href="/dashboard/analytics">Mağaza raporlarını görüntüle</a>
-      </nav>
-      <p>
-        Yeni ürünler içe aktarma sonrasında taslak kalır; ayrıca yayın onayı
-        gerekir.
-      </p>
+    <main className="dashboard-shell">
+      <header className="dashboard-header">
+        <div>
+          <p className="eyebrow">{activeMerchant.name}</p>
+          <h1>Mağazanı yayına hazırla</h1>
+        </div>
+        <nav>
+          <a href="/">Kataloğa dön</a>
+          <a href="/login">Oturum değiştir</a>
+        </nav>
+      </header>
+      <OnboardingSteps current={current} completed={completed} />
+      {error ? (
+        <div className="panel-alert" role="alert">
+          <p>{error}</p>
+          <button type="button" onClick={() => void load()}>
+            Yeniden dene
+          </button>
+        </div>
+      ) : null}
+      {!summary && !error ? (
+        <p role="status">Mağaza durumu kontrol ediliyor…</p>
+      ) : null}
+      {summary ? (
+        <section className="next-action">
+          <p className="eyebrow">Sıradaki adım</p>
+          <h2>{actions.title}</h2>
+          <p>{actions.text}</p>
+          {activeMerchant.role === 'viewer' && current !== 'view' ? (
+            <p className="role-note">
+              Görüntüleyici yetkin var. Bu adımı mağaza sahibi veya editör
+              tamamlayabilir.
+            </p>
+          ) : (
+            <a className="primary-link" href={actions.href}>
+              {actions.action} →
+            </a>
+          )}
+        </section>
+      ) : null}
+      <section className="dashboard-stats" aria-label="Katalog özeti">
+        <div>
+          <strong>{summary?.connections ?? '—'}</strong>
+          <span>bağlı kaynak</span>
+        </div>
+        <div>
+          <strong>{summary?.products ?? '—'}</strong>
+          <span>ürün</span>
+        </div>
+        <div>
+          <strong>{summary?.published ?? '—'}</strong>
+          <span>yayında</span>
+        </div>
+      </section>
     </main>
   );
 }

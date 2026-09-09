@@ -1,0 +1,2 @@
+external_id,product_key,title,description,category,image_url,image_alt,size,color,price_minor,currency,available,checkout_url
+ornek-tisort-siyah-m,ornek-tisort,Keten Dokulu Tişört,Nefes alan günlük tişört,tshirt,https://images.example.com/ornek-tisort.jpg,Siyah keten dokulu tişört,M,black,129900,TRY,true,https://magaza.example.com/urun/ornek-tisort

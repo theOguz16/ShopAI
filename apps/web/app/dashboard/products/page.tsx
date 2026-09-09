@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useActiveMerchant } from '../merchant-context';
+import { OnboardingSteps } from '../onboarding-steps';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -63,7 +64,8 @@ function ProductThumb({ product }: { product: Product }) {
 }
 
 export default function ProductsPage() {
-  const { merchantId } = useActiveMerchant();
+  const { merchantId, activeMerchant } = useActiveMerchant();
+  const canEdit = activeMerchant.role !== 'viewer';
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export default function ProductsPage() {
   }, [refresh]);
 
   async function changePublication(ids: string[], published: boolean) {
-    if (!merchantId || !ids.length) return;
+    if (!canEdit || !merchantId || !ids.length) return;
     const response = await fetch(
       `${api}/v1/merchants/${merchantId}/products/publication`,
       {
@@ -121,33 +123,41 @@ export default function ProductsPage() {
   }
 
   return (
-    <main>
-      <nav>
+    <main className="dashboard-shell">
+      <nav className="subnav">
         <a href="/dashboard">← Panele dön</a>
         <a href="/dashboard/imports">CSV importları</a>
       </nav>
+      <OnboardingSteps current="review" completed={['connect', 'import']} />
       <h1>Ürün kataloğu</h1>
       <p>
         Taslaklar yalnızca burada görünür; public aramada yayın onaylı ürünler
         yer alır.
       </p>
       {message ? <p role="status">{message}</p> : null}
-      <div>
-        <button
-          type="button"
-          disabled={!selected.length}
-          onClick={() => void changePublication(selected, true)}
-        >
-          Seçilenleri yayımla
-        </button>{' '}
-        <button
-          type="button"
-          disabled={!selected.length}
-          onClick={() => void changePublication(selected, false)}
-        >
-          Seçilenleri yayından kaldır
-        </button>
-      </div>
+      {canEdit ? (
+        <div>
+          <button
+            type="button"
+            disabled={!selected.length}
+            onClick={() => void changePublication(selected, true)}
+          >
+            Seçilenleri yayımla
+          </button>{' '}
+          <button
+            type="button"
+            disabled={!selected.length}
+            onClick={() => void changePublication(selected, false)}
+          >
+            Seçilenleri yayından kaldır
+          </button>
+        </div>
+      ) : (
+        <p className="role-note">
+          Görüntüleyici yetkin var. Ürünleri inceleyebilir, yayın durumunu
+          değiştiremezsin.
+        </p>
+      )}
       <ul>
         {products.map((product) => {
           const variant = product.variants.find((item) => item.offer);
@@ -155,20 +165,24 @@ export default function ProductsPage() {
           return (
             <li key={product.id} style={{ margin: '18px 0' }}>
               <ProductThumb product={product} />{' '}
-              <label>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(product.id)}
-                  onChange={(event) =>
-                    setSelected((current) =>
-                      event.target.checked
-                        ? [...current, product.id]
-                        : current.filter((id) => id !== product.id),
-                    )
-                  }
-                />{' '}
+              {canEdit ? (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(product.id)}
+                    onChange={(event) =>
+                      setSelected((current) =>
+                        event.target.checked
+                          ? [...current, product.id]
+                          : current.filter((id) => id !== product.id),
+                      )
+                    }
+                  />{' '}
+                  <strong>{product.title}</strong>
+                </label>
+              ) : (
                 <strong>{product.title}</strong>
-              </label>{' '}
+              )}{' '}
               <span>{product.published ? 'Yayında' : 'Taslak'}</span>{' '}
               <button
                 type="button"
@@ -178,14 +192,16 @@ export default function ProductsPage() {
               >
                 {expanded === product.id ? 'Detayı gizle' : 'Detay'}
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void changePublication([product.id], !product.published)
-                }
-              >
-                {product.published ? 'Yayından kaldır' : 'Yayımla'}
-              </button>
+              {canEdit ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void changePublication([product.id], !product.published)
+                  }
+                >
+                  {product.published ? 'Yayından kaldır' : 'Yayımla'}
+                </button>
+              ) : null}
               {offer ? (
                 <p>
                   {money(offer.priceMinor, offer.currency)} · stok:{' '}

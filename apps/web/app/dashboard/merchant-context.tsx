@@ -152,7 +152,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       <main>
         <h1>Mağaza seçin</h1>
         <p>Yönetmek istediğiniz mağazayı seçin.</p>
-        <label>
+        <label className="merchant-switcher">
           Mağaza
           <select
             value={activeMerchantId}

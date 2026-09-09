@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useActiveMerchant } from '../merchant-context';
+import { OnboardingSteps } from '../onboarding-steps';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -23,13 +24,15 @@ const freshnessLabel = (value: string | null) => {
 };
 
 export default function ConnectionsPage() {
-  const { merchantId } = useActiveMerchant();
+  const { merchantId, activeMerchant } = useActiveMerchant();
+  const canEdit = activeMerchant.role !== 'viewer';
   const [connections, setConnections] = useState<Connection[]>([]);
   const [credentialRefs, setCredentialRefs] = useState<
     Array<{ provider: string; credentialsRef: string }>
   >([]);
   const [selectedCredentialRef, setSelectedCredentialRef] = useState('');
   const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       if (!merchantId) return;
@@ -67,45 +70,65 @@ export default function ConnectionsPage() {
   }, [refresh]);
 
   async function connectPilot() {
-    const response = await fetch(
-      `${api}/v1/merchants/${merchantId}/connections`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          provider: 'woocommerce',
-          credentialsRef: selectedCredentialRef,
-          syncMode: 'incremental',
-        }),
-      },
-    );
-    setMessage(
-      response.ok
-        ? 'Bağlantı doğrulama kuyruğuna alındı.'
-        : 'Pilot bağlantısı oluşturulamadı.',
-    );
-    await refresh();
+    if (!canEdit || busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(
+        `${api}/v1/merchants/${merchantId}/connections`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'woocommerce',
+            credentialsRef: selectedCredentialRef,
+            syncMode: 'incremental',
+          }),
+        },
+      );
+      setMessage(
+        response.ok
+          ? 'WooCommerce bağlantısı doğrulanıyor.'
+          : 'Bağlantı oluşturulamadı. Bilgileri kontrol edip yeniden dene.',
+      );
+      await refresh();
+    } catch {
+      setMessage(
+        'Bağlantı kurulamadı. İnternet bağlantını kontrol edip yeniden dene.',
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function connectCsv() {
-    const response = await fetch(
-      `${api}/v1/merchants/${merchantId}/connections`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ provider: 'csv' }),
-      },
-    );
-    setMessage(
-      response.ok
-        ? 'CSV katalog bağlantısı hazır.'
-        : response.status === 409
-          ? 'CSV katalog bağlantısı zaten hazır.'
-          : 'CSV bağlantısı oluşturulamadı.',
-    );
-    await refresh();
+    if (!canEdit || busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(
+        `${api}/v1/merchants/${merchantId}/connections`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider: 'csv' }),
+        },
+      );
+      setMessage(
+        response.ok
+          ? 'CSV katalog kaynağı hazır.'
+          : response.status === 409
+            ? 'CSV katalog kaynağı zaten hazır.'
+            : 'CSV kaynağı oluşturulamadı. Yeniden dene.',
+      );
+      await refresh();
+    } catch {
+      setMessage(
+        'Kaynak hazırlanamadı. İnternet bağlantını kontrol edip yeniden dene.',
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function reauthorize(connectionId: string) {
@@ -142,39 +165,72 @@ export default function ConnectionsPage() {
   }
 
   return (
-    <main>
-      <h1>Canlı bağlantılar</h1>
-      <p>
-        Pilot sağlayıcı WooCommerce’tir. Anahtarlar tarayıcıya gönderilmez;
-        yalnız güvenli secret referansı sunucuda tutulur.
-      </p>
-      <button type="button" disabled={false} onClick={() => void connectCsv()}>
-        CSV katalog bağlantısını hazırla
-      </button>
-      <button
-        type="button"
-        disabled={!selectedCredentialRef}
-        onClick={() => void connectPilot()}
-      >
-        WooCommerce pilot bağlantısını ekle
-      </button>
+    <main className="dashboard-shell">
+      <a className="back-link" href="/dashboard">
+        ← Panele dön
+      </a>
+      <OnboardingSteps current="connect" />
+      <header className="section-heading">
+        <p className="eyebrow">1 · Kaynak bağla</p>
+        <h1>Katalog kaynağını seç</h1>
+        <p>
+          Hızlı deneme için CSV yükleyebilir veya atanmış WooCommerce
+          bağlantısını kullanabilirsin.
+        </p>
+      </header>
+      {!canEdit ? (
+        <p className="role-note">
+          Görüntüleyici yetkin var. Bağlantıları görebilir, değiştiremezsin.
+        </p>
+      ) : null}
+      {canEdit ? (
+        <div className="connection-actions">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void connectCsv()}
+          >
+            CSV katalog bağlantısını hazırla
+          </button>
+          <button
+            type="button"
+            disabled={!selectedCredentialRef || busy}
+            onClick={() => void connectPilot()}
+          >
+            WooCommerce pilot bağlantısını ekle
+          </button>
+        </div>
+      ) : null}
       <label>
         Atanmış WooCommerce bağlantısı
         <select
           value={selectedCredentialRef}
           onChange={(event) => setSelectedCredentialRef(event.target.value)}
-          disabled={!credentialRefs.length}
+          disabled={
+            !credentialRefs.some((ref) => ref.provider === 'woocommerce')
+          }
         >
           <option value="">Atanmış bağlantı seçin</option>
           {credentialRefs
             .filter((ref) => ref.provider === 'woocommerce')
             .map((ref) => (
               <option key={ref.credentialsRef} value={ref.credentialsRef}>
-                {ref.credentialsRef}
+                WooCommerce bağlantısı{' '}
+                {credentialRefs
+                  .filter((item) => item.provider === 'woocommerce')
+                  .findIndex(
+                    (item) => item.credentialsRef === ref.credentialsRef,
+                  ) + 1}
               </option>
             ))}
         </select>
       </label>
+      {!credentialRefs.some((ref) => ref.provider === 'woocommerce') ? (
+        <p className="panel-empty">
+          WooCommerce bağlantısı henüz mağazana atanmadı. Pilot yöneticinden
+          bağlantıyı mağazana atamasını iste veya CSV ile devam et.
+        </p>
+      ) : null}
       {message ? <p role="status">{message}</p> : null}
       {connections.map((connection) => (
         <article key={connection.id}>
@@ -204,7 +260,8 @@ export default function ConnectionsPage() {
           {connection.lastSyncError ? (
             <p role="alert">Son hata: {connection.lastSyncError}</p>
           ) : null}
-          {connection.authorizationStatus === 'reauthorization_required' ? (
+          {connection.authorizationStatus === 'reauthorization_required' &&
+          canEdit ? (
             <div role="alert">
               <p>WooCommerce yetkisi yenilenmeli.</p>
               <button
@@ -215,9 +272,15 @@ export default function ConnectionsPage() {
               </button>
             </div>
           ) : null}
-          <button type="button" onClick={() => void revoke(connection.id)}>
-            Bağlantıyı iptal et
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void revoke(connection.id)}
+            >
+              Bağlantıyı iptal et
+            </button>
+          ) : null}
         </article>
       ))}
     </main>

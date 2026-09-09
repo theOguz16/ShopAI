@@ -9,7 +9,7 @@ async function login(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/dashboard/u);
   await expect(
     page.getByRole('heading', {
-      name: /Mağaza paneli|Mağazanızı kurun|Mağaza seçin/u,
+      name: /Mağazanı yayına hazırla|Mağazanızı kurun|Mağaza seçin/u,
     }),
   ).toBeVisible();
   if (
@@ -18,13 +18,13 @@ async function login(page: import('@playwright/test').Page) {
     await page.getByLabel('Mağaza adı').fill(`Pilot ${Date.now()}`);
     await page.getByRole('button', { name: 'Mağazayı oluştur' }).click();
     await expect(
-      page.getByRole('heading', { name: 'Mağaza paneli' }),
+      page.getByRole('heading', { name: 'Mağazanı yayına hazırla' }),
     ).toBeVisible();
   }
   if (await page.getByRole('heading', { name: 'Mağaza seçin' }).isVisible()) {
     await page.getByLabel('Mağaza').selectOption({ index: 1 });
     await expect(
-      page.getByRole('heading', { name: 'Mağaza paneli' }),
+      page.getByRole('heading', { name: 'Mağazanı yayına hazırla' }),
     ).toBeVisible();
   }
 }
@@ -72,19 +72,15 @@ test.describe
         mimeType: 'text/csv',
         buffer: Buffer.from(csv),
       });
-      await page.getByRole('button', { name: 'Yükle' }).click();
-      await expect(page.getByRole('status')).toContainText('kuyruğa alındı');
+      await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
+      await expect(page.getByRole('status')).toContainText('kontrol ediliyor');
 
       await expect
-        .poll(
-          async () => {
-            await page.reload();
-            return page.getByRole('listitem').allTextContents();
-          },
-          { timeout: 60_000 },
-        )
+        .poll(async () => page.getByRole('listitem').allTextContents(), {
+          timeout: 60_000,
+        })
         .toEqual(
-          expect.arrayContaining([expect.stringContaining('completed')]),
+          expect.arrayContaining([expect.stringContaining('Tamamlandı')]),
         );
 
       await page.goto(`${pilot.webUrl}/dashboard/products`);
@@ -108,17 +104,15 @@ test.describe
         mimeType: 'text/csv',
         buffer: Buffer.from('external_id,title\nbroken,Eksik ürün'),
       });
-      await page.getByRole('button', { name: 'Yükle' }).click();
-      await expect(page.getByRole('status')).toContainText('kuyruğa alındı');
+      await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
+      await expect(page.getByRole('status')).toContainText('kontrol ediliyor');
       await expect
-        .poll(
-          async () => {
-            await page.reload();
-            return page.getByText(/Satır \d+:/u).allTextContents();
-          },
-          { timeout: 60_000 },
-        )
+        .poll(async () => page.getByText(/Satır \d+/u).allTextContents(), {
+          timeout: 60_000,
+        })
         .not.toHaveLength(0);
-      await expect(page.getByRole('button', { name: 'Yükle' })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Dosyayı yükle' }),
+      ).toBeVisible();
     });
   });
