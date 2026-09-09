@@ -484,10 +484,10 @@ describe('tenant analytics and signed conversions', () => {
       metrics: {
         searchAttempts: 5,
         successfulSearches: 4,
-        emptySearches: 2,
+        emptySearches: 3,
         failedSearches: 1,
         paginationRequests: 1,
-        noResultRate: 0.5,
+        noResultRate: 0.75,
         searchErrorRate: 0.2,
         searchesBySurface: { web: 3, chatgpt: 2 },
         searchesByChannel: { web: 3, chatgpt: 2 },
