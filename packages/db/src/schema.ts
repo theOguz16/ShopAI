@@ -42,7 +42,10 @@ export const discoverySessions = pgTable(
     id: id(),
     surface: text('surface').notNull(),
     transport: text('transport').notNull(),
-    merchantScope: jsonb('merchant_scope').$type<string[]>().notNull().default([]),
+    merchantScope: jsonb('merchant_scope')
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     referrer: text('referrer'),
     campaign: text('campaign'),
     anonymousUserId: uuid('anonymous_user_id').notNull(),
@@ -64,7 +67,10 @@ export const discoverySessions = pgTable(
       sql`jsonb_typeof(${t.merchantScope}) = 'array'`,
     ),
     index('discovery_sessions_surface_created').on(t.surface, t.createdAt),
-    index('discovery_sessions_anonymous_user').on(t.anonymousUserId, t.createdAt),
+    index('discovery_sessions_anonymous_user').on(
+      t.anonymousUserId,
+      t.createdAt,
+    ),
   ],
 );
 export const memberships = pgTable(
