@@ -52,6 +52,15 @@ export const stockStatusSchema = z.enum([
   'stale',
 ]);
 export type StockStatus = z.infer<typeof stockStatusSchema>;
+export const STOCK_STATUS_LABELS: Readonly<Record<StockStatus, string>> = {
+  in_stock: 'Stokta',
+  out_of_stock: 'Stok yok',
+  unknown: 'Stok bilgisi bilinmiyor',
+  stale: 'Stok bilgisi eski; güncel durum bilinmiyor',
+};
+export function stockStatusLabel(status: StockStatus) {
+  return STOCK_STATUS_LABELS[status];
+}
 export const catalogItemSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid(),

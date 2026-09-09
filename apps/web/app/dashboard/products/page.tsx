@@ -1,5 +1,6 @@
 'use client';
 
+import { type StockStatus, stockStatusLabel } from '@shopai/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { useActiveMerchant } from '../merchant-context';
 import { OnboardingSteps } from '../onboarding-steps';
@@ -20,6 +21,7 @@ type Variant = {
       available: boolean | null;
       observedAt: string;
       stockSource?: string;
+      stockStatus: StockStatus;
     } | null;
   } | null;
 };
@@ -160,8 +162,6 @@ export default function ProductsPage() {
       )}
       <ul>
         {products.map((product) => {
-          const variant = product.variants.find((item) => item.offer);
-          const offer = variant?.offer;
           return (
             <li key={product.id} style={{ margin: '18px 0' }}>
               <ProductThumb product={product} />{' '}
@@ -202,30 +202,10 @@ export default function ProductsPage() {
                   {product.published ? 'Yayından kaldır' : 'Yayımla'}
                 </button>
               ) : null}
-              {offer ? (
-                <p>
-                  {money(offer.priceMinor, offer.currency)} · stok:{' '}
-                  {offer.inventory?.available === true
-                    ? 'var'
-                    : offer.inventory?.available === false
-                      ? 'yok'
-                      : 'bilinmiyor'}{' '}
-                  · güncelleme:{' '}
-                  {new Date(offer.observedAt).toLocaleString('tr-TR')} · fiyat
-                  kaynağı: {offer.priceSource ?? 'catalog-import'} · stok
-                  kaynağı: {offer.inventory?.stockSource ?? 'catalog-import'} ·
-                  stok güncelleme:{' '}
-                  {offer.inventory
-                    ? new Date(offer.inventory.observedAt).toLocaleString(
-                        'tr-TR',
-                      )
-                    : 'yok'}
-                </p>
-              ) : (
-                <p>
-                  Aktif fiyat teklifi yok; yayın için önce importu düzeltin.
-                </p>
-              )}
+              <p>
+                {product.variants.length} varyant · Fiyat ve stok her varyant
+                için ayrı gösterilir.
+              </p>
               {expanded === product.id ? (
                 <div>
                   <p>{product.description}</p>
@@ -236,8 +216,8 @@ export default function ProductsPage() {
                       <li key={item.id}>
                         {item.size} / {item.color}:{' '}
                         {item.offer
-                          ? `${money(item.offer.priceMinor, item.offer.currency)} · ${item.offer.inventory?.available === true ? 'stokta' : 'stok yok'}`
-                          : 'teklif yok'}
+                          ? `${money(item.offer.priceMinor, item.offer.currency)} · ${item.offer.inventory ? stockStatusLabel(item.offer.inventory.stockStatus) : stockStatusLabel('unknown')}`
+                          : 'Fiyat ve stok bilgisi yok'}
                       </li>
                     ))}
                   </ul>

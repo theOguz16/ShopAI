@@ -2,6 +2,7 @@ import {
   bulkPublicationChangeSchema,
   publicationChangeSchema,
 } from '@shopai/contracts';
+import { stockStatus } from '@shopai/commerce';
 import {
   type Database,
   inventory,
@@ -73,6 +74,10 @@ function serializeProduct(product: ProductView, rows: VariantView[]) {
                     ...row.inventory,
                     stockSource: 'catalog-import',
                     observedAt: row.inventory.observedAt.toISOString(),
+                    stockStatus: stockStatus(
+                      row.inventory.available,
+                      row.inventory.fetchedAt.toISOString(),
+                    ),
                   }
                 : null,
             }

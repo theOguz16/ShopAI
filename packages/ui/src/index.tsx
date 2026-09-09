@@ -1,4 +1,4 @@
-import type { CatalogItem } from '@shopai/contracts';
+import { type CatalogItem, stockStatusLabel } from '@shopai/contracts';
 import { useState } from 'react';
 
 const colorLabels: Record<string, string> = {
@@ -38,15 +38,7 @@ export function ProductCard({
   item: CatalogItem;
   demo?: boolean;
 }) {
-  const stockText = demo
-    ? 'Sentetik stok bilgisi'
-    : item.stockStatus === 'in_stock'
-      ? 'Güncel kayıtta stokta'
-      : item.stockStatus === 'out_of_stock'
-        ? 'Güncel kayıtta stok yok'
-        : item.stockStatus === 'stale'
-          ? 'Stok verisi eski; güncel stok bilinmiyor'
-          : 'Stok bilinmiyor';
+  const stockText = stockStatusLabel(item.stockStatus);
   return (
     <li className="product-card">
       <ProductImage item={item} />
@@ -63,11 +55,7 @@ export function ProductCard({
             currency: item.currency,
           }).format(item.priceMinor / 100)}
         </strong>
-        <p
-          className={`stock ${item.stockStatus === 'in_stock' ? 'in-stock' : 'unavailable'}`}
-        >
-          {stockText}
-        </p>
+        <p className={`stock stock-${item.stockStatus}`}>{stockText}</p>
         <p className="product-freshness">
           {demo
             ? 'Bu bilgi yalnız deneyim testi içindir.'

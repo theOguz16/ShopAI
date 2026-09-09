@@ -89,6 +89,7 @@ test('örnek CSV ile aktarım tamamlanır ve ilk ürün yayımlanır', async ({
                   observedAt: '2026-09-09T09:00:00.000Z',
                   inventory: {
                     available: true,
+                    stockStatus: 'in_stock',
                     observedAt: '2026-09-09T09:00:00.000Z',
                   },
                 },

@@ -664,11 +664,15 @@ button:disabled {
   font-size: 0.88rem;
   font-weight: 700;
 }
-.stock.in-stock {
+.stock.stock-in_stock {
   color: #24643e;
 }
-.stock.unavailable {
+.stock.stock-out_of_stock {
   color: #8e2828;
+}
+.stock.stock-unknown,
+.stock.stock-stale {
+  color: #6e5c14;
 }
 .product-freshness {
   margin: 0 0 15px;
