@@ -152,7 +152,7 @@ export function createServices(env: ApiEnv) {
       context,
       attribution,
     );
-    return { ...result, ...toSearchProductsResponse(result) };
+    return toSearchProductsResponse(result);
   };
   return {
     search,
