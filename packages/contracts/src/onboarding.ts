@@ -6,7 +6,11 @@ const httpsStoreUrlSchema = z
   .min(1)
   .max(2048)
   .url()
-  .refine((value) => new URL(value).protocol === 'https:', 'HTTPS gerekli');
+  .refine((value) => new URL(value).protocol === 'https:', 'HTTPS gerekli')
+  .refine((value) => {
+    const url = new URL(value);
+    return !url.username && !url.password && !url.hash;
+  }, 'Store URL kullanıcı bilgisi veya fragment içeremez');
 
 export const woocommerceOnboardingCredentialsSchema = z
   .object({
