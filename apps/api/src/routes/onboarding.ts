@@ -1,5 +1,4 @@
 import {
-  assertPublicConnectorTarget,
   ManagedConnectorSecretStore,
   WooCommerceConnector,
 } from '@shopai/connectors';
@@ -192,7 +191,9 @@ export async function registerOnboardingRoutes(
 async function validateWooCommerce(
   credentials: ReturnType<typeof woocommerceOnboardingCredentialsSchema.parse>,
 ) {
-  await assertPublicConnectorTarget(credentials.storeUrl);
+  // WooCommerceConnector's default HTTP transport resolves and validates the
+  // destination, then opens TLS directly to that exact IP. There is no second
+  // hostname lookup between the SSRF decision and the socket connection.
   await new WooCommerceConnector(credentials).validate();
 }
 
