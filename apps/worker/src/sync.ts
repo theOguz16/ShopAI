@@ -174,15 +174,41 @@ export async function syncCatalogConnection(
 
     if (snapshot.rows.length) {
       try {
-        await importCatalog(db, {
-          schemaVersion: 1,
-          runId: randomUUID(),
-          merchantId: job.merchantId,
-          connectionId: job.connectionId,
-          observedAt:
-            snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
-          rows: snapshot.rows,
-        });
+        await importCatalog(
+          db,
+          {
+            schemaVersion: 1,
+            runId: randomUUID(),
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            observedAt:
+              snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+            rows: snapshot.rows,
+          },
+          {
+            onProgress: async ({ processedProducts }) => {
+              progress = {
+                status: 'running',
+                foundProducts: snapshot.progress.foundProducts,
+                processedProducts,
+                failedProducts: 0,
+                variants: snapshot.progress.variants,
+              };
+              await writeConnectionSyncProgress(
+                db,
+                job.merchantId,
+                job.connectionId,
+                {
+                  ...progress,
+                  startedAt,
+                  completedAt: null,
+                  error: null,
+                },
+                now(),
+              );
+            },
+          },
+        );
       } catch (error) {
         progress = {
           ...snapshot.progress,
@@ -194,7 +220,11 @@ export async function syncCatalogConnection(
     }
 
     const completedAt = now();
-    progress = { ...snapshot.progress, status: 'completed' };
+    progress = {
+      ...progress,
+      status: 'completed',
+      processedProducts: snapshot.progress.foundProducts,
+    };
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
       // Only a successfully completed full snapshot may deactivate missing offers.
