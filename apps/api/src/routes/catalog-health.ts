@@ -82,7 +82,10 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
           })
           .from(connections)
           .where(eq(connections.merchantId, merchantId))
-          .orderBy(desc(connections.active), desc(connections.lastSuccessfulSyncAt));
+          .orderBy(
+            desc(connections.active),
+            desc(connections.lastSuccessfulSyncAt),
+          );
 
         const connectionHealth: ConnectionHealthView[] = connectionRows.map(
           (connection) => {
@@ -92,8 +95,7 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
               provider: connection.provider,
               status: catalogConnectionHealth(connection, now.getTime()),
               authorizationStatus: connection.authorizationStatus,
-              lastSuccessfulSyncAt:
-                lastSuccessfulSyncAt?.toISOString() ?? null,
+              lastSuccessfulSyncAt: lastSuccessfulSyncAt?.toISOString() ?? null,
               lastSuccessfulSyncAgeMs: lastSuccessfulSyncAt
                 ? Math.max(0, now.getTime() - lastSuccessfulSyncAt.getTime())
                 : null,
