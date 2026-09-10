@@ -69,7 +69,7 @@ export function createPublicConnectorFetch(
   lookup: ConnectorDnsLookup = defaultLookup,
   requester: ConnectorPinnedRequester = requestPinnedHttps,
 ): typeof fetch {
-  return (async (input: URL | RequestInfo, init?: RequestInit) => {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
     const url =
       input instanceof URL
         ? input
