@@ -102,12 +102,12 @@
   font-weight: 800;
 }
 
-.connectionHeading span[data-status='healthy'] {
+.connectionHeading span[data-status="healthy"] {
   color: #567200;
 }
 
-.connectionHeading span[data-status='stale'],
-.connectionHeading span[data-status='attention'] {
+.connectionHeading span[data-status="stale"],
+.connectionHeading span[data-status="attention"] {
   color: #9f5b00;
 }
 
