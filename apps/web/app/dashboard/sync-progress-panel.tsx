@@ -99,7 +99,8 @@ export function SyncProgressPanel() {
   }, [load]);
 
   useEffect(() => {
-    const active = progress?.status === 'queued' || progress?.status === 'running';
+    const active =
+      progress?.status === 'queued' || progress?.status === 'running';
     const interval = window.setInterval(
       () => void load().catch(() => undefined),
       active || !progress ? 2000 : 30000,
