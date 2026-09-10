@@ -23,6 +23,7 @@ import {
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
+import { registerSyncStatusRoutes } from './routes/sync-status.js';
 import { createServices, type Services } from './services.js';
 
 const loginRequestSchema = z
@@ -118,6 +119,7 @@ export async function buildApp(
   });
   await registerMerchantRoutes(app, env);
   await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
+  await registerSyncStatusRoutes(app);
   await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
