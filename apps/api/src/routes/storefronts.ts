@@ -1,12 +1,12 @@
 import { buildCategoryFacetMap } from '@shopai/commerce/category-facets';
 import {
-  categoryFacetsResponseSchema,
-  categorySlugSchema,
-} from '@shopai/contracts/category-facets';
-import {
   publicStorefrontSchema,
   storefrontSlugSchema,
 } from '@shopai/contracts';
+import {
+  categoryFacetsResponseSchema,
+  categorySlugSchema,
+} from '@shopai/contracts/category-facets';
 import { categories, categoryFacets, merchants } from '@shopai/db';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -28,8 +28,7 @@ export async function registerStorefrontRoutes(app: FastifyInstance) {
       .from(categories)
       .where(eq(categories.slug, parsedSlug.data))
       .limit(1);
-    if (!category)
-      return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
+    if (!category) return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
 
     const rows = await db
       .select({ key: categoryFacets.key, options: categoryFacets.options })
