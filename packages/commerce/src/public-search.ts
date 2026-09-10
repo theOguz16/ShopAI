@@ -28,7 +28,9 @@ function valuesFor(
   return [...new Set(values)];
 }
 
-export function parseSearchProductsRequest(input: unknown): SearchProductsRequest {
+export function parseSearchProductsRequest(
+  input: unknown,
+): SearchProductsRequest {
   return searchProductsRequestSchema.parse(input);
 }
 
