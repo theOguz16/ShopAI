@@ -19,9 +19,7 @@ async function rpc(method: string, params?: unknown) {
 }
 
 function commerceIdentity(products: Array<Record<string, unknown>>) {
-  return products.map(
-    ({ checkoutUrl: _checkoutUrl, ...product }) => product,
-  );
+  return products.map(({ checkoutUrl: _checkoutUrl, ...product }) => product);
 }
 
 describe('MCP Apps product widget', () => {
