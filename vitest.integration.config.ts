@@ -10,6 +10,7 @@ export default defineConfig({
       'tests/integration/discovery-session.test.ts',
       'tests/integration/storefront.test.ts',
       'tests/integration/merchant-management.test.ts',
+      'tests/integration/merchant-onboarding.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 30000,
