@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { catalogItemSchema, moneySchema, searchFacetsSchema } from './index.js';
+
+const publicMoneySchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
 
 const searchAttributeValueSchema = z.union([
   z.string().trim().min(1).max(80),
@@ -16,8 +21,8 @@ export type SearchProductAttributes = z.infer<
 
 export const searchProductsPriceSchema = z
   .object({
-    min: moneySchema.optional(),
-    max: moneySchema.optional(),
+    min: publicMoneySchema.optional(),
+    max: publicMoneySchema.optional(),
   })
   .strict()
   .refine(
@@ -43,16 +48,3 @@ export const searchProductsRequestSchema = z
   .strict();
 
 export type SearchProductsRequest = z.infer<typeof searchProductsRequestSchema>;
-
-export const searchProductsResponseSchema = z
-  .object({
-    products: z.array(catalogItemSchema),
-    facets: searchFacetsSchema,
-    nextCursor: z.string().optional(),
-    searchId: z.string().uuid(),
-  })
-  .strict();
-
-export type SearchProductsResponse = z.infer<
-  typeof searchProductsResponseSchema
->;
