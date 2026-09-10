@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { Queue } from 'bullmq';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
 import { redisConnection } from '../../apps/worker/src/connection.js';
@@ -9,7 +9,11 @@ import {
   EnvironmentSecretResolver,
   syncCatalogConnection,
 } from '../../apps/worker/src/sync.js';
-import { ManagedConnectorSecretStore } from '../../packages/connectors/src/managed-secrets.js';
+import {
+  ManagedConnectorSecretStore,
+  WooCommerceConnector,
+  type WooCommerceCredentials,
+} from '../../packages/connectors/src/index.js';
 import { SYNC_QUEUE } from '../../packages/contracts/src/index.js';
 import { createDatabase } from '../../packages/db/src/client.js';
 import {
@@ -50,6 +54,11 @@ const database = createDatabase(databaseUrl, {
   applicationName: 'shopai-onboarding-fixtures',
 });
 const queue = new Queue(SYNC_QUEUE, { connection: redisConnection(redisUrl) });
+const connectorFetchMock = vi.fn(
+  async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) =>
+    new Response('{}', { status: 500 }),
+);
+const connectorFetcher = connectorFetchMock as unknown as typeof fetch;
 let app: Awaited<ReturnType<typeof buildApp>>;
 let cookie = '';
 let merchantId = '';
@@ -60,7 +69,12 @@ beforeAll(async () => {
   await database.db.execute(
     sql`truncate table ${connections}, ${merchantCredentialOwnerships}, ${memberships}, ${sessions}, ${users}, ${merchants} cascade`,
   );
-  app = await buildApp(undefined, env);
+  app = await buildApp(undefined, env, {
+    onboardingConnectorFactory: (credentials) =>
+      credentials.storeUrl.includes('127.0.0.1')
+        ? new WooCommerceConnector(credentials)
+        : new WooCommerceConnector(credentials, connectorFetcher),
+  });
   const login = await app.inject({
     method: 'POST',
     url: '/v1/auth/login',
@@ -79,8 +93,11 @@ beforeAll(async () => {
   merchantId = setup.json<{ merchant: { id: string } }>().merchant.id;
 });
 
+beforeEach(() => {
+  connectorFetchMock.mockReset();
+});
+
 afterAll(async () => {
-  vi.unstubAllGlobals();
   await app.close();
   await queue.obliterate({ force: true });
   await queue.close();
@@ -94,8 +111,6 @@ const payload = () => ({ storeUrl, consumerKey, consumerSecret });
 
 describe.sequential('merchant WooCommerce onboarding', () => {
   it('rejects private connector targets before making an HTTP request', async () => {
-    const fetcher = vi.fn();
-    vi.stubGlobal('fetch', fetcher);
     const response = await app.inject({
       method: 'POST',
       url: endpoint('test'),
@@ -110,14 +125,11 @@ describe.sequential('merchant WooCommerce onboarding', () => {
       status: 'failed',
       code: 'CONNECTION_FAILED',
     });
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(connectorFetchMock).not.toHaveBeenCalled();
   });
 
   it('returns a generic failure for wrong WooCommerce credentials', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('{}', { status: 401 })),
-    );
+    connectorFetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
     const response = await app.inject({
       method: 'POST',
       url: endpoint('test'),
@@ -134,8 +146,7 @@ describe.sequential('merchant WooCommerce onboarding', () => {
   });
 
   it('confirms valid credentials without echoing them to the browser', async () => {
-    const fetcher = vi.fn(async () => new Response('[]', { status: 200 }));
-    vi.stubGlobal('fetch', fetcher);
+    connectorFetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
     const response = await app.inject({
       method: 'POST',
       url: endpoint('test'),
@@ -149,20 +160,18 @@ describe.sequential('merchant WooCommerce onboarding', () => {
     });
     expect(response.body).not.toContain(consumerKey);
     expect(response.body).not.toContain(consumerSecret);
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
+    expect(connectorFetchMock).toHaveBeenCalledTimes(1);
+    expect(connectorFetchMock.mock.calls[0]?.[1]).toMatchObject({
+      redirect: 'manual',
+    });
   });
 
   it('creates a managed connector and queues the first sync without returning secret material', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response('[]', {
-            status: 200,
-            headers: { 'x-wp-totalpages': '1' },
-          }),
-      ),
+    connectorFetchMock.mockResolvedValue(
+      new Response('[]', {
+        status: 200,
+        headers: { 'x-wp-totalpages': '1' },
+      }),
     );
     const response = await app.inject({
       method: 'POST',
@@ -226,6 +235,13 @@ describe.sequential('merchant WooCommerce onboarding', () => {
       database.db,
       { merchantId, connectionId: body.connection.id },
       new EnvironmentSecretResolver({ UPLOAD_DIR: uploadDir }),
+      (_provider, credentials) => {
+        expect(credentials).toEqual(payload());
+        return new WooCommerceConnector(
+          credentials as WooCommerceCredentials,
+          connectorFetcher,
+        );
+      },
     );
     const [synced] = await database.db
       .select({
