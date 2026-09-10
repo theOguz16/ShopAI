@@ -11,6 +11,7 @@ export default defineConfig({
       'tests/integration/storefront.test.ts',
       'tests/integration/merchant-management.test.ts',
       'tests/integration/merchant-onboarding.test.ts',
+      'tests/integration/sync-status.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 30000,
