@@ -3,6 +3,7 @@ import { STOCK_REVALIDATE_AFTER_MS } from '@shopai/commerce';
 import {
   ConnectorHttpError,
   type LiveCatalogConnector,
+  ManagedConnectorSecretStore,
   WooCommerceConnector,
   type WooCommerceCredentials,
 } from '@shopai/connectors';
@@ -32,8 +33,12 @@ export class EnvironmentSecretResolver implements SecretResolver {
     if (!/^[A-Z][A-Z0-9_]{2,80}$/u.test(key))
       throw new Error('Geçersiz secret referansı.');
     const value = this.environment[key];
-    if (!value) throw new Error(`Secret çözülemedi: ${key}`);
-    return JSON.parse(value);
+    if (value) return JSON.parse(value);
+    if (ManagedConnectorSecretStore.supports(reference))
+      return new ManagedConnectorSecretStore(
+        this.environment.UPLOAD_DIR ?? 'private/uploads',
+      ).resolve(reference);
+    throw new Error(`Secret çözülemedi: ${key}`);
   }
 }
 
