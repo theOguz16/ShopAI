@@ -181,8 +181,7 @@ export async function syncCatalogConnection(
             runId: randomUUID(),
             merchantId: job.merchantId,
             connectionId: job.connectionId,
-            observedAt:
-              snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+            observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
             rows: snapshot.rows,
           },
           {
