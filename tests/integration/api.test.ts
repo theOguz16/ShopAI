@@ -27,14 +27,17 @@ describe('API and MCP', () => {
     const result = await app.inject({
       method: 'POST',
       url: '/v1/search',
-      payload: { filters: { colors: ['black'], sizes: ['M'] } },
+      payload: { attributes: { color: ['black'], size: ['M'] } },
     });
     expect(result.statusCode).toBe(200);
-    expect(result.json().items).toHaveLength(1);
+    expect(result.json().products).toHaveLength(1);
     expect(result.json().searchId).toMatch(/^[0-9a-f-]{36}$/u);
     expect(result.json().facets.categories).toEqual([
       { value: 'tshirt', count: 1 },
     ]);
+    expect(Object.keys(result.json()).sort()).toEqual(
+      ['facets', 'products', 'searchId'].sort(),
+    );
     const scoped = await app.inject({
       method: 'POST',
       url: '/v1/stores/10000000-0000-4000-8000-000000000001/search',
@@ -43,13 +46,22 @@ describe('API and MCP', () => {
       },
     });
     expect(scoped.statusCode).toBe(200);
-    expect(scoped.json().items).toEqual([]);
+    expect(scoped.json().products).toEqual([]);
     expect(
       (
         await app.inject({
           method: 'POST',
           url: '/v1/search',
           payload: { limit: 51 },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/search',
+          payload: { attributes: { material: ['cotton'] } },
         })
       ).statusCode,
     ).toBe(400);
@@ -90,7 +102,7 @@ describe('API and MCP', () => {
       },
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().result.structuredContent.items).toHaveLength(1);
+    expect(response.json().result.structuredContent.products).toHaveLength(1);
   });
   it('rejects untrusted browser origins for MCP', async () => {
     const app = await buildApp();
