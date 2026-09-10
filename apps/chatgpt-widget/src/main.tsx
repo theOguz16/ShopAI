@@ -1,4 +1,7 @@
-import { type SearchResponse, searchResponseSchema } from '@shopai/contracts';
+import {
+  type SearchProductsResponse,
+  searchProductsResponseSchema,
+} from '@shopai/contracts/search-products';
 import { ProductCard } from '@shopai/ui';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,12 +9,18 @@ import { createHostBridge, type WidgetSearchInput } from './host-bridge.js';
 
 const DTO_VERSION = 1;
 
+function selectedSize(input: WidgetSearchInput) {
+  const value = input.attributes?.size ?? input.attributes?.sizes;
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
 function Widget() {
   const bridge = useMemo(() => createHostBridge(), []);
   const [input, setInput] = useState<WidgetSearchInput>(
     bridge.snapshot().input ?? {},
   );
-  const [result, setResult] = useState<SearchResponse>();
+  const [result, setResult] = useState<SearchProductsResponse>();
   const [loading, setLoading] = useState(bridge.available);
   const [error, setError] = useState('');
 
@@ -19,8 +28,8 @@ function Widget() {
     const unsubscribe = bridge.subscribe((snapshot) => {
       if (snapshot.input) setInput(snapshot.input);
       if (!snapshot.output) return;
-      const parsed = searchResponseSchema.safeParse(snapshot.output);
-      if (!parsed.success || parsed.data.schemaVersion !== DTO_VERSION) {
+      const parsed = searchProductsResponseSchema.safeParse(snapshot.output);
+      if (!parsed.success) {
         setError(
           'Ürün verisi bu widget sürümüyle uyumlu değil. Aramayı sohbetten yeniden çalıştırın.',
         );
@@ -38,10 +47,14 @@ function Widget() {
 
   async function changeSize(event: ChangeEvent<HTMLSelectElement>) {
     const size = event.target.value;
+    const attributes = { ...(input.attributes ?? {}) };
+    delete attributes.size;
+    delete attributes.sizes;
+    if (size) attributes.size = [size];
+    const { cursor: _cursor, ...withoutCursor } = input;
     const nextInput: WidgetSearchInput = {
-      ...input,
-      cursor: null,
-      filters: { ...input.filters, sizes: size ? [size] : [] },
+      ...withoutCursor,
+      ...(Object.keys(attributes).length ? { attributes } : {}),
     };
     setInput(nextInput);
     setLoading(true);
@@ -67,7 +80,7 @@ function Widget() {
         body: JSON.stringify(input),
       });
       if (!response.ok) throw new Error('API erişilemiyor');
-      setResult(searchResponseSchema.parse(await response.json()));
+      setResult(searchProductsResponseSchema.parse(await response.json()));
     } catch {
       setError('Yerel API erişilemiyor.');
     } finally {
@@ -78,7 +91,7 @@ function Widget() {
   const localHost = ['127.0.0.1', 'localhost'].includes(
     window.location.hostname,
   );
-  const size = input.filters?.sizes?.[0] ?? '';
+  const size = selectedSize(input);
   return (
     <main
       style={{
@@ -135,14 +148,11 @@ function Widget() {
       ) : null}
       {loading ? <p role="status">Ürünler yükleniyor…</p> : null}
       {error ? <p role="alert">{error}</p> : null}
-      {!loading && result && !result.items.length ? (
+      {!loading && result && !result.products.length ? (
         <p role="status">
           Bu koşullara uygun ürün bulunamadı; filtreler gevşetilmedi.
         </p>
       ) : null}
-      {result?.warnings.map((warning) => (
-        <p key={warning}>{warning}</p>
-      ))}
       <section
         aria-label="Ürün sonuçları"
         style={{
@@ -151,12 +161,8 @@ function Widget() {
           gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))',
         }}
       >
-        {result?.items.map((item) => (
-          <ProductCard
-            key={item.offerId}
-            item={item}
-            demo={result.mode === 'demo'}
-          />
+        {result?.products.map((item) => (
+          <ProductCard key={item.offerId} item={item} demo={localHost} />
         ))}
       </section>
     </main>
