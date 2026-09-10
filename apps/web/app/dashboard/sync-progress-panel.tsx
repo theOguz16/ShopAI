@@ -88,12 +88,15 @@ export function SyncProgressPanel() {
   );
 
   useEffect(() => {
-    const controller = new AbortController();
     setConnectionId('');
     setProgress(undefined);
+  }, [merchantId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [merchantId]);
+  }, [load]);
 
   useEffect(() => {
     const active = progress?.status === 'queued' || progress?.status === 'running';
