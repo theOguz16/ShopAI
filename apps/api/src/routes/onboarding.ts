@@ -11,6 +11,7 @@ import {
 } from '@shopai/contracts';
 import {
   connections,
+  connectionSyncProgress,
   merchantCredentialOwnerships,
   withTenant,
 } from '@shopai/db';
@@ -144,6 +145,18 @@ export async function registerOnboardingRoutes(
             });
           if (!connection)
             throw new Error('WooCommerce bağlantısı oluşturulamadı.');
+          await tx.insert(connectionSyncProgress).values({
+            connectionId: connection.id,
+            merchantId,
+            status: 'queued',
+            foundProducts: 0,
+            processedProducts: 0,
+            failedProducts: 0,
+            variants: 0,
+            startedAt: null,
+            completedAt: null,
+            error: null,
+          });
           return {
             id: connection.id,
             provider: 'woocommerce' as const,

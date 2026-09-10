@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { STOCK_REVALIDATE_AFTER_MS } from '@shopai/commerce';
+import {
+  catalogSyncFailureStatus,
+  STOCK_REVALIDATE_AFTER_MS,
+  type CatalogSyncProgress,
+} from '@shopai/commerce';
 import {
   ConnectorHttpError,
   type LiveCatalogConnector,
@@ -7,7 +11,6 @@ import {
   WooCommerceConnector,
   type WooCommerceCredentials,
 } from '@shopai/connectors';
-import type { SourceRow } from '@shopai/contracts';
 import { type SyncJob, syncJobSchema } from '@shopai/contracts';
 import {
   connections,
@@ -17,8 +20,10 @@ import {
   merchantCredentialOwnerships,
   offers,
   setTenantContext,
+  writeConnectionSyncProgress,
 } from '@shopai/db';
 import { and, eq, isNull, lte, notInArray, or } from 'drizzle-orm';
+import { collectCatalogSnapshot } from './catalog-sync-progress.js';
 
 export interface SecretResolver {
   resolve(reference: string): Promise<unknown>;
@@ -61,6 +66,7 @@ export async function syncCatalogConnection(
   now: () => Date = () => new Date(),
 ) {
   const job = syncJobSchema.parse(input);
+  const startedAt = now();
   const connection = await db.transaction(async (tx) => {
     await setTenantContext(tx, job.merchantId);
     const [row] = await tx
@@ -89,7 +95,7 @@ export async function syncCatalogConnection(
     let effectiveSyncMode = row.syncMode as 'full' | 'incremental';
     if (effectiveSyncMode === 'incremental') {
       const revalidationCutoff = new Date(
-        now().getTime() - STOCK_REVALIDATE_AFTER_MS,
+        startedAt.getTime() - STOCK_REVALIDATE_AFTER_MS,
       );
       const [unverifiedOffer] = await tx
         .select({ id: offers.id })
@@ -118,13 +124,28 @@ export async function syncCatalogConnection(
     }
     await tx
       .update(connections)
-      .set({ lastSyncStartedAt: now(), lastSyncError: null })
+      .set({ lastSyncStartedAt: startedAt, lastSyncError: null })
       .where(eq(connections.id, row.id));
     return { ...row, effectiveSyncMode };
   });
   if (!connection) return { skipped: true } as const;
 
+  let progress: CatalogSyncProgress = {
+    status: 'running',
+    foundProducts: 0,
+    processedProducts: 0,
+    failedProducts: 0,
+    variants: 0,
+  };
+
   try {
+    await writeConnectionSyncProgress(
+      db,
+      job.merchantId,
+      job.connectionId,
+      { ...progress, startedAt, completedAt: null, error: null },
+      startedAt,
+    );
     if (!connection.credentialsRef)
       throw new Error('Bağlantının secret referansı eksik.');
     const connector = factory(
@@ -132,47 +153,77 @@ export async function syncCatalogConnection(
       await secrets.resolve(connection.credentialsRef),
     );
     await connector.validate();
-    const rows: SourceRow[] = [];
-    const externalIds = new Set<string>();
-    let cursor: string | null = null;
-    let latestSourceTime =
-      connection.lastSuccessfulSyncAt?.toISOString() ?? null;
-    let latestFetchedAt = new Date().toISOString();
-    let complete = false;
-    for (let pageCount = 0; pageCount < 100; pageCount += 1) {
-      const page = await connector.readPage({
-        cursor,
-        modifiedAfter:
-          connection.effectiveSyncMode === 'incremental'
-            ? connection.lastSuccessfulSyncAt?.toISOString()
-            : null,
-        mode: connection.effectiveSyncMode,
-      });
-      for (const row of page.rows) {
-        rows.push(row);
-        externalIds.add(row.externalId);
-      }
-      latestSourceTime = [latestSourceTime, page.sourceObservedAt]
-        .filter(Boolean)
-        .sort()
-        .at(-1) as string;
-      latestFetchedAt = page.fetchedAt;
-      cursor = page.nextCursor;
-      complete = page.complete && !cursor;
-      if (!cursor) break;
-    }
-    if (!complete)
-      throw new Error('Connector snapshot sayfa sınırında tamamlanamadı.');
-    if (rows.length)
-      await importCatalog(db, {
-        schemaVersion: 1,
-        runId: randomUUID(),
-        merchantId: job.merchantId,
-        connectionId: job.connectionId,
-        observedAt: latestSourceTime ?? latestFetchedAt,
-        rows,
-      });
+    const snapshot = await collectCatalogSnapshot({
+      connector,
+      mode: connection.effectiveSyncMode,
+      modifiedAfter:
+        connection.effectiveSyncMode === 'incremental'
+          ? (connection.lastSuccessfulSyncAt?.toISOString() ?? null)
+          : null,
+      onProgress: async (nextProgress) => {
+        progress = nextProgress;
+        await writeConnectionSyncProgress(
+          db,
+          job.merchantId,
+          job.connectionId,
+          { ...nextProgress, startedAt, completedAt: null, error: null },
+          now(),
+        );
+      },
+    });
 
+    if (snapshot.rows.length) {
+      try {
+        await importCatalog(
+          db,
+          {
+            schemaVersion: 1,
+            runId: randomUUID(),
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+            rows: snapshot.rows,
+          },
+          {
+            onProgress: async ({ processedProducts }) => {
+              progress = {
+                status: 'running',
+                foundProducts: snapshot.progress.foundProducts,
+                processedProducts,
+                failedProducts: 0,
+                variants: snapshot.progress.variants,
+              };
+              await writeConnectionSyncProgress(
+                db,
+                job.merchantId,
+                job.connectionId,
+                {
+                  ...progress,
+                  startedAt,
+                  completedAt: null,
+                  error: null,
+                },
+                now(),
+              );
+            },
+          },
+        );
+      } catch (error) {
+        progress = {
+          ...snapshot.progress,
+          processedProducts: 0,
+          failedProducts: snapshot.progress.foundProducts,
+        };
+        throw error;
+      }
+    }
+
+    const completedAt = now();
+    progress = {
+      ...progress,
+      status: 'completed',
+      processedProducts: snapshot.progress.foundProducts,
+    };
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
       // Only a successfully completed full snapshot may deactivate missing offers.
@@ -185,8 +236,11 @@ export async function syncCatalogConnection(
           .update(offers)
           .set({ active: false })
           .where(
-            externalIds.size
-              ? and(scope, notInArray(offers.externalId, [...externalIds]))
+            snapshot.externalIds.size
+              ? and(
+                  scope,
+                  notInArray(offers.externalId, [...snapshot.externalIds]),
+                )
               : scope,
           );
       }
@@ -195,21 +249,41 @@ export async function syncCatalogConnection(
         .set({
           authorizationStatus: 'active',
           syncCursor: null,
-          lastSuccessfulSyncAt: new Date(latestSourceTime ?? latestFetchedAt),
-          lastFetchedAt: new Date(latestFetchedAt),
+          lastSuccessfulSyncAt: new Date(
+            snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+          ),
+          lastFetchedAt: new Date(snapshot.latestFetchedAt),
           lastSyncError: null,
         })
         .where(eq(connections.id, job.connectionId));
     });
+    await writeConnectionSyncProgress(
+      db,
+      job.merchantId,
+      job.connectionId,
+      {
+        ...progress,
+        startedAt,
+        completedAt,
+        error: null,
+      },
+      completedAt,
+    );
     return {
       skipped: false,
-      imported: rows.length,
-      complete,
+      imported: snapshot.rows.length,
+      complete: snapshot.complete,
       mode: connection.effectiveSyncMode,
+      progress,
     } as const;
   } catch (error) {
     const message =
       error instanceof Error ? error.message.slice(0, 1000) : 'Senkron hatası';
+    const failedAt = now();
+    progress = {
+      ...progress,
+      status: catalogSyncFailureStatus(progress),
+    };
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
       await tx
@@ -223,6 +297,18 @@ export async function syncCatalogConnection(
         })
         .where(eq(connections.id, job.connectionId));
     });
+    await writeConnectionSyncProgress(
+      db,
+      job.merchantId,
+      job.connectionId,
+      {
+        ...progress,
+        startedAt,
+        completedAt: failedAt,
+        error: message,
+      },
+      failedAt,
+    );
     throw error;
   }
 }

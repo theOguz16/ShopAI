@@ -131,4 +131,31 @@ describe('database migrations', () => {
       'UPDATE "merchants" SET "display_name" = "name"',
     );
   });
+
+  it('persists tenant-scoped connector sync progress without public access', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0016_catalog_sync_progress.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TABLE "connection_sync_progress"');
+    expect(migration).toContain(
+      "CHECK (\"status\" in ('queued','running','completed','partial','failed'))",
+    );
+    expect(migration).toContain(
+      'REFERENCES "public"."source_connections"("merchant_id", "id")',
+    );
+    expect(migration).toContain(
+      'REVOKE ALL ON "connection_sync_progress" FROM shopai_public',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "connection_sync_progress" FORCE ROW LEVEL SECURITY',
+    );
+    expect(migration).toContain(
+      'CREATE POLICY tenant_connection_sync_progress',
+    );
+  });
 });
