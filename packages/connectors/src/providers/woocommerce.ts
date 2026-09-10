@@ -117,15 +117,10 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       : (input.modifiedAfter ?? fetchedAt);
     return {
       rows,
-      // Stop the outer cursor when a nested variation list is incomplete. The
-      // worker will reject this page before importing or deactivating offers.
       nextCursor:
         variationPagesComplete && page < totalPages ? String(page + 1) : null,
       sourceObservedAt,
       fetchedAt,
-      // A full snapshot is destructive only when WooCommerce explicitly proves
-      // that the last page was reached. A proxy stripping this header is not
-      // allowed to turn a partial response into a complete snapshot.
       complete:
         variationPagesComplete &&
         page >= totalPages &&
@@ -171,6 +166,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       let response: Response;
       try {
         response = await this.fetcher(url, {
+          redirect: 'manual',
           headers: {
             authorization: `Basic ${Buffer.from(`${this.credentials.consumerKey}:${this.credentials.consumerSecret}`).toString('base64')}`,
             accept: 'application/json',
