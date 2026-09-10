@@ -23,6 +23,24 @@ CREATE TABLE "product_attributes" (
   CONSTRAINT "product_attributes_merchant_id_product_id_products_merchant_id_id_fk" FOREIGN KEY ("merchant_id","product_id") REFERENCES "public"."products"("merchant_id","id") ON DELETE cascade
 );
 --> statement-breakpoint
+GRANT SELECT ON categories, category_facets TO shopai_app, shopai_worker, shopai_public;
+GRANT SELECT, INSERT, UPDATE, DELETE ON product_attributes TO shopai_app, shopai_worker;
+GRANT SELECT ON product_attributes TO shopai_public;
+--> statement-breakpoint
+ALTER TABLE product_attributes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_attributes FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_product_attributes ON product_attributes FOR ALL TO shopai_app, shopai_worker
+  USING (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY public_product_attributes ON product_attributes FOR SELECT TO shopai_public USING (
+  EXISTS (
+    SELECT 1 FROM products p
+    WHERE p.id = product_id
+      AND p.merchant_id = product_attributes.merchant_id
+      AND p.published = true
+  )
+);
+--> statement-breakpoint
 INSERT INTO "categories" ("slug", "name") VALUES
   ('tshirt', 'T-Shirt'),
   ('fishing-rod', 'Fishing Rod')
