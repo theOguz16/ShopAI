@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { AttributionContext, Surface, Transport } from '@shopai/contracts';
 import { surfaceSchema, transportSchema } from '@shopai/contracts';
 
+export * from './sync-progress.js';
+
 export type RedirectClaims = {
   version: 2;
   offerId: string;
