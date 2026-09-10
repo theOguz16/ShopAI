@@ -19,7 +19,7 @@ const fixtureRow = (index: number): SourceRow => ({
 });
 
 describe('catalog sync worker progress', () => {
-  it('collects a 10k-product fixture in 100 worker pages with persistent progress callbacks', async () => {
+  it('collects a 10k-product fixture in 100 worker pages without HTTP request work', async () => {
     const readPage = vi.fn(async ({ cursor }: { cursor?: string | null }) => {
       const page = cursor ? Number(cursor) : 1;
       const start = (page - 1) * 100 + 1;
@@ -53,13 +53,13 @@ describe('catalog sync worker progress', () => {
     expect(updates).toHaveLength(100);
     expect(updates[0]).toMatchObject({
       foundProducts: 100,
-      processedProducts: 100,
+      processedProducts: 0,
       failedProducts: 0,
       variants: 100,
     });
     expect(updates.at(-1)).toMatchObject({
       foundProducts: 10_000,
-      processedProducts: 10_000,
+      processedProducts: 0,
       failedProducts: 0,
       variants: 10_000,
     });
