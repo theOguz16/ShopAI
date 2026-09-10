@@ -1,4 +1,12 @@
-import { foreignKey, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  foreignKey,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { products } from './schema.js';
 
 export const categories = pgTable('categories', {
