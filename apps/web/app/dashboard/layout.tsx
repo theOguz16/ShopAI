@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import { MerchantProvider } from './merchant-context';
+import { SyncProgressPanel } from './sync-progress-panel';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -33,5 +34,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     };
   }, [pathname, router]);
   if (checking) return <main>Oturum doğrulanıyor…</main>;
-  return <MerchantProvider key={userId}>{children}</MerchantProvider>;
+  return (
+    <MerchantProvider key={userId}>
+      <SyncProgressPanel />
+      {children}
+    </MerchantProvider>
+  );
 }
