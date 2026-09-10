@@ -62,7 +62,9 @@ if (!databaseUrl || !redisUrl) {
   const database = createDatabase(databaseUrl, {
     applicationName: 'shopai-onboarding-fixtures',
   });
-  const queue = new Queue(SYNC_QUEUE, { connection: redisConnection(redisUrl) });
+  const queue = new Queue(SYNC_QUEUE, {
+    connection: redisConnection(redisUrl),
+  });
   const connectorFetchMock = vi.fn(
     async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) =>
       new Response('{}', { status: 500 }),
