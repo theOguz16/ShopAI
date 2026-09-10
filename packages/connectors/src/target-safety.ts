@@ -109,7 +109,9 @@ async function requestPinnedHttps(
   if (init?.redirect && init.redirect !== 'manual')
     throw new Error('Connector yönlendirmeleri takip edilemez.');
   if (init?.body)
-    throw new Error('Connector HTTP istemcisi yalnız gövdesiz istekleri destekler.');
+    throw new Error(
+      'Connector HTTP istemcisi yalnız gövdesiz istekleri destekler.',
+    );
 
   return new Promise<Response>((resolve, reject) => {
     const request = httpsRequest(
@@ -176,9 +178,7 @@ function isPublicIpv4(address: string) {
   const octets = address.split('.').map(Number);
   if (
     octets.length !== 4 ||
-    octets.some(
-      (value) => !Number.isInteger(value) || value < 0 || value > 255,
-    )
+    octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
   )
     return false;
   const [a, b] = octets;

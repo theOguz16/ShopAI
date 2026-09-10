@@ -135,7 +135,9 @@ export default function ConnectionsPage() {
     if (!canConnect || busy || testState !== 'success') return;
     setBusy(true);
     setStep(5);
-    setMessage('WooCommerce bağlantısı oluşturuluyor ve ilk sync başlatılıyor…');
+    setMessage(
+      'WooCommerce bağlantısı oluşturuluyor ve ilk sync başlatılıyor…',
+    );
     try {
       const response = await fetch(
         `${api}/v1/merchants/${merchantId}/onboarding/woocommerce/connect`,

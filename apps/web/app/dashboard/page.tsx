@@ -43,7 +43,8 @@ export default function Dashboard() {
         );
         const hasWooCommerce = connections.some(
           (connection: { provider?: string; active?: boolean }) =>
-            connection.provider === 'woocommerce' && connection.active !== false,
+            connection.provider === 'woocommerce' &&
+            connection.active !== false,
         );
         if (!signal?.aborted)
           setSummary({

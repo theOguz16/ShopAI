@@ -24,7 +24,9 @@ import {
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
 if (!databaseUrl || !redisUrl)
-  throw new Error('merchant-onboarding.test için DATABASE_URL ve REDIS_URL gerekli.');
+  throw new Error(
+    'merchant-onboarding.test için DATABASE_URL ve REDIS_URL gerekli.',
+  );
 
 const uploadDir = `/tmp/shopai-onboarding-${process.pid}`;
 const email = 'merchant-onboarding@test.example';
@@ -132,9 +134,7 @@ describe.sequential('merchant WooCommerce onboarding', () => {
   });
 
   it('confirms valid credentials without echoing them to the browser', async () => {
-    const fetcher = vi.fn(
-      async () => new Response('[]', { status: 200 }),
-    );
+    const fetcher = vi.fn(async () => new Response('[]', { status: 200 }));
     vi.stubGlobal('fetch', fetcher);
     const response = await app.inject({
       method: 'POST',

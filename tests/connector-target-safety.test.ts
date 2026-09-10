@@ -32,9 +32,12 @@ describe('connector target safety', () => {
     const requester = vi.fn(async () => new Response('[]', { status: 200 }));
     const safeFetch = createPublicConnectorFetch(lookup, requester);
 
-    await safeFetch(new URL('https://merchant.example/wp-json/wc/v3/products'), {
-      redirect: 'manual',
-    });
+    await safeFetch(
+      new URL('https://merchant.example/wp-json/wc/v3/products'),
+      {
+        redirect: 'manual',
+      },
+    );
 
     expect(lookup).toHaveBeenCalledTimes(1);
     expect(requester).toHaveBeenCalledTimes(1);
