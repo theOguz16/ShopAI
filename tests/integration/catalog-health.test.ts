@@ -215,9 +215,9 @@ if (!databaseUrl || !redisUrl) {
       expect(body.lastSuccessfulSyncAgeMs).toBeGreaterThanOrEqual(
         13 * 60 * 60 * 1000,
       );
-      expect(body.connections[0]?.lastSuccessfulSyncAgeMs).toBeGreaterThanOrEqual(
-        13 * 60 * 60 * 1000,
-      );
+      expect(
+        body.connections[0]?.lastSuccessfulSyncAgeMs,
+      ).toBeGreaterThanOrEqual(13 * 60 * 60 * 1000);
     });
 
     it('requires merchant membership', async () => {
