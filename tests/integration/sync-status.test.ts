@@ -106,7 +106,8 @@ if (!databaseUrl || !redisUrl) {
         },
       });
       expect(response.statusCode).toBe(201);
-      connectionId = response.json<{ connection: { id: string } }>().connection.id;
+      connectionId = response.json<{ connection: { id: string } }>().connection
+        .id;
 
       const status = await app.inject({
         method: 'GET',
