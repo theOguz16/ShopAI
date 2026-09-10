@@ -19,6 +19,10 @@
     "./catalog-health": {
       "types": "./dist/catalog-health.d.ts",
       "import": "./dist/catalog-health.js"
+    },
+    "./public-search": {
+      "types": "./dist/public-search.d.ts",
+      "import": "./dist/public-search.js"
     }
   },
   "dependencies": {
