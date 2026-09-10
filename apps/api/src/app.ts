@@ -16,6 +16,7 @@ import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
+import { registerOnboardingRoutes } from './routes/onboarding.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
@@ -108,6 +109,7 @@ export async function buildApp(
     return { user: request.auth };
   });
   await registerMerchantRoutes(app, env);
+  await registerOnboardingRoutes(app, env);
   await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
