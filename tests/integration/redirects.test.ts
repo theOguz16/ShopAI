@@ -95,7 +95,7 @@ describe('signed redirects', () => {
       });
       expect(search.statusCode).toBe(200);
       expect(repository.clicks).toHaveLength(0);
-      const link = new URL(search.json().items[0].checkoutUrl);
+      const link = new URL(search.json().products[0].checkoutUrl);
       expect(link.pathname).toMatch(/^\/r\//u);
       expect(link.searchParams.size).toBe(0);
 

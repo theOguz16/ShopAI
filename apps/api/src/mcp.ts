@@ -1,10 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { CHATGPT_ATTRIBUTION } from '@shopai/contracts';
 import {
-  CHATGPT_ATTRIBUTION,
-  searchFiltersSchema,
-  searchRequestSchema,
-  searchResponseSchema,
-} from '@shopai/contracts';
+  searchProductsRequestSchema,
+  searchProductsResponseSchema,
+} from '@shopai/contracts/search-products';
 import type { Services } from './services.js';
 
 export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-products-v1.html';
@@ -35,17 +34,17 @@ function widgetDocument(origin: string) {
 }
 
 function textResult(
-  result: Awaited<ReturnType<Services['search']['execute']>>,
+  result: Awaited<ReturnType<Services['executePublicSearch']>>,
 ) {
-  if (!result.items.length)
+  if (!result.products.length)
     return `ShopAI araması (${result.searchId}): Sonuç bulunamadı. Filtreler otomatik olarak gevşetilmedi.`;
-  const products = result.items
+  const products = result.products
     .map(
       (item) =>
         `- ${item.title} — ${item.size} beden, ${item.color}, ${(item.priceMinor / 100).toFixed(2)} ${item.currency}; ${item.stockStatus}; ${item.checkoutUrl}`,
     )
     .join('\n');
-  return `ShopAI araması (${result.searchId}) ${result.items.length} yayımlanmış sonuç döndürdü:\n${products}`;
+  return `ShopAI araması (${result.searchId}) ${result.products.length} yayımlanmış sonuç döndürdü:\n${products}`;
 }
 
 export function createMcpServer(
@@ -101,12 +100,9 @@ export function createMcpServer(
     {
       title: 'ShopAI ürün arama',
       description:
-        'Yayımlanmış katalogda ürün adı/açıklaması ile fiyat, kategori, beden, renk ve güncel stok filtrelerini birlikte uygular.',
-      inputSchema: {
-        ...searchRequestSchema.partial().shape,
-        filters: searchFiltersSchema.partial().optional(),
-      },
-      outputSchema: searchResponseSchema.shape,
+        'Yayımlanmış katalogda query, category, price, attributes ve inStockOnly alanlarını tek public discovery sözleşmesiyle uygular.',
+      inputSchema: searchProductsRequestSchema.shape,
+      outputSchema: searchProductsResponseSchema.shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -122,14 +118,14 @@ export function createMcpServer(
       },
     },
     async (input) => {
-      const result = await services.executeSearch(
+      const result = await services.executePublicSearch(
         input,
         {},
         CHATGPT_ATTRIBUTION,
       );
       const linkedResult = {
         ...result,
-        items: result.items.map((item) => ({
+        products: result.products.map((item) => ({
           ...item,
           checkoutUrl: services.redirects.createLink({
             offerId: item.offerId,

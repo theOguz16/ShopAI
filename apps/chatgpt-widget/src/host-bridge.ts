@@ -1,19 +1,12 @@
 import {
-  type SearchRequest,
-  type SearchResponse,
-  searchFiltersSchema,
-  searchRequestSchema,
-  searchResponseSchema,
-} from '@shopai/contracts';
+  type SearchProductsRequest,
+  type SearchProductsResponse,
+  searchProductsRequestSchema,
+  searchProductsResponseSchema,
+} from '@shopai/contracts/search-products';
 
 const UI_PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_TIMEOUT_MS = 10_000;
-
-const widgetSearchInputSchema = searchRequestSchema
-  .omit({ filters: true })
-  .partial()
-  .extend({ filters: searchFiltersSchema.partial().optional() })
-  .strict();
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -26,9 +19,7 @@ type JsonRpcMessage = {
   error?: { message?: string };
 };
 
-export type WidgetSearchInput = Omit<Partial<SearchRequest>, 'filters'> & {
-  filters?: Partial<SearchRequest['filters']>;
-};
+export type WidgetSearchInput = SearchProductsRequest;
 
 type OpenAiHost = {
   toolInput?: WidgetSearchInput;
@@ -73,7 +64,7 @@ export type HostBridge = {
   available: boolean;
   snapshot(): HostSnapshot;
   subscribe(listener: (snapshot: HostSnapshot) => void): () => void;
-  callSearch(input: WidgetSearchInput): Promise<SearchResponse>;
+  callSearch(input: WidgetSearchInput): Promise<SearchProductsResponse>;
   destroy(): void;
 };
 
@@ -116,7 +107,7 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
     }
     if (message.method === 'ui/notifications/tool-input') {
       if (!record(message.params) || !('arguments' in message.params)) return;
-      const arguments_ = widgetSearchInputSchema.safeParse(
+      const arguments_ = searchProductsRequestSchema.safeParse(
         message.params.arguments,
       );
       if (!arguments_.success) return;
@@ -159,9 +150,6 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
         appCapabilities: {},
       }).then(() => notify('ui/notifications/initialized'))
     : Promise.resolve();
-  // The widget may render an error state without ever issuing a tool call.
-  // Keep the rejection observable to callSearch while preventing a global
-  // unhandled rejection in that no-call path.
   void initialized.catch(() => undefined);
 
   return {
@@ -174,7 +162,7 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
     },
     async callSearch(input) {
       if (destroyed) throw new Error('Host köprüsü kapatıldı.');
-      const arguments_ = widgetSearchInputSchema.parse(input);
+      const arguments_ = searchProductsRequestSchema.parse(input);
       const result = framed
         ? ((await initialized.then(() =>
             request('tools/call', {
@@ -184,7 +172,7 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
           )) as { structuredContent?: unknown })
         : await hostWindow.openai?.callTool?.('search_products', arguments_);
       if (!result) throw new Error('Uyumlu MCP Apps host köprüsü bulunamadı.');
-      return searchResponseSchema.parse(result.structuredContent);
+      return searchProductsResponseSchema.parse(result.structuredContent);
     },
     destroy() {
       if (destroyed) return;

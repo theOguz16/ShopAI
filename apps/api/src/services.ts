@@ -11,6 +11,11 @@ import {
   DiscoverySessions,
   type DiscoverySessionRepository,
 } from '@shopai/commerce/discovery';
+import {
+  parseSearchProductsRequest,
+  toInternalSearchInput,
+  toSearchProductsResponse,
+} from '@shopai/commerce/public-search';
 import type { AttributionContext, DiscoverySession } from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import {
@@ -136,9 +141,23 @@ export function createServices(env: ApiEnv) {
       throw error;
     }
   };
+  const executePublicSearch = async (
+    input: unknown,
+    context: { merchantIds?: string[] } = {},
+    attribution: AttributionContext = WEB_ATTRIBUTION,
+  ) => {
+    const request = parseSearchProductsRequest(input);
+    const result = await executeSearch(
+      toInternalSearchInput(request),
+      context,
+      attribution,
+    );
+    return toSearchProductsResponse(result);
+  };
   return {
     search,
     executeSearch,
+    executePublicSearch,
     discoverySessions,
     repository,
     redirects: new RedirectService(

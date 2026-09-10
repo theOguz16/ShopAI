@@ -9,6 +9,11 @@ import {
   MemoryCatalogRepository,
   SearchProducts,
 } from '../packages/commerce/src/index.js';
+import {
+  parseSearchProductsRequest,
+  toInternalSearchInput,
+  toSearchProductsResponse,
+} from '../packages/commerce/src/public-search.js';
 
 type Rpc = {
   jsonrpc: '2.0';
@@ -63,8 +68,15 @@ const search = new SearchProducts(
   'demo',
 );
 
+async function publicSearch(input: unknown) {
+  const request = parseSearchProductsRequest(input);
+  return toSearchProductsResponse(
+    await search.execute(toInternalSearchInput(request)),
+  );
+}
+
 describe('ChatGPT widget host bridge', () => {
-  it('completes UI lifecycle before tools/call and uses the arguments envelope', async () => {
+  it('completes UI lifecycle before tools/call and uses canonical arguments', async () => {
     const host = fakeHost((message, current) => {
       if (message.method === 'ui/initialize')
         queueMicrotask(() =>
@@ -77,7 +89,7 @@ describe('ChatGPT widget host bridge', () => {
             jsonrpc: '2.0',
             id: message.id,
             result: {
-              structuredContent: await search.execute(params.arguments),
+              structuredContent: await publicSearch(params.arguments),
             },
           });
         });
@@ -85,8 +97,8 @@ describe('ChatGPT widget host bridge', () => {
     const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
 
     await expect(
-      bridge.callSearch({ filters: { sizes: ['M'] } }),
-    ).resolves.toMatchObject({ schemaVersion: 1 });
+      bridge.callSearch({ attributes: { size: ['M'] } }),
+    ).resolves.toMatchObject({ products: expect.any(Array) });
     expect(host.sent.map((message) => message.method)).toEqual([
       'ui/initialize',
       'ui/notifications/initialized',
@@ -94,12 +106,12 @@ describe('ChatGPT widget host bridge', () => {
     ]);
     expect(host.sent[2]?.params).toMatchObject({
       name: 'search_products',
-      arguments: { filters: { sizes: ['M'] } },
+      arguments: { attributes: { size: ['M'] } },
     });
     bridge.destroy();
   });
 
-  it('accepts only a validated protocol arguments envelope for tool input', () => {
+  it('accepts only a validated canonical arguments envelope for tool input', () => {
     const host = fakeHost(() => undefined);
     const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
     const snapshots = vi.fn();
@@ -114,9 +126,11 @@ describe('ChatGPT widget host bridge', () => {
     host.receive({
       jsonrpc: '2.0',
       method: 'ui/notifications/tool-input',
-      params: { arguments: { filters: { sizes: ['L'] } } },
+      params: { arguments: { attributes: { size: ['L'] } } },
     });
-    expect(bridge.snapshot().input).toEqual({ filters: { sizes: ['L'] } });
+    expect(bridge.snapshot().input).toEqual({
+      attributes: { size: ['L'] },
+    });
     expect(snapshots).toHaveBeenCalledTimes(2);
     bridge.destroy();
   });

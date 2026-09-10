@@ -18,6 +18,10 @@ async function rpc(method: string, params?: unknown) {
   });
 }
 
+function commerceIdentity(products: Array<Record<string, unknown>>) {
+  return products.map(({ checkoutUrl: _checkoutUrl, ...product }) => product);
+}
+
 describe('MCP Apps product widget', () => {
   it('registers a versioned UI resource with CSP and compatibility metadata', async () => {
     const listed = await rpc('tools/list');
@@ -32,6 +36,9 @@ describe('MCP Apps product widget', () => {
     });
     expect(tool._meta['openai/outputTemplate']).toBe(SHOPAI_WIDGET_URI);
     expect(tool._meta['shopai/dtoVersion']).toBe(1);
+    expect(tool.inputSchema.properties).toHaveProperty('attributes');
+    expect(tool.inputSchema.properties).toHaveProperty('price');
+    expect(tool.inputSchema.properties).not.toHaveProperty('filters');
 
     const resource = await rpc('resources/read', { uri: SHOPAI_WIDGET_URI });
     const content = resource.json().result.contents[0];
@@ -52,19 +59,27 @@ describe('MCP Apps product widget', () => {
       arguments: { query: 'Siyah M beden tişört' },
     });
     const result = response.json().result;
-    expect(result.structuredContent.items).toHaveLength(1);
+    expect(result.structuredContent.products).toHaveLength(1);
     expect(result.content[0].text).toMatch(
       /Minimal Siyah Tişört.*M beden.*http:\/\/127\.0\.0\.1:4000\/r\//s,
     );
   });
 
-  it('uses the same hard size rule for HTTP and widget-triggered MCP searches', async () => {
+  it('produces the same commerce result set for the same REST and MCP request', async () => {
     const app = await buildApp();
     apps.push(app);
+    const request = {
+      query: 'siyah tişört',
+      category: 'tshirt',
+      price: { max: 200_000 },
+      attributes: { size: ['L'], color: ['black'] },
+      inStockOnly: false,
+      limit: 12,
+    };
     const http = await app.inject({
       method: 'POST',
       url: '/v1/search',
-      payload: { query: 'siyah tişört', filters: { sizes: ['L'] } },
+      payload: request,
     });
     const mcp = await app.inject({
       method: 'POST',
@@ -76,15 +91,24 @@ describe('MCP Apps product widget', () => {
         method: 'tools/call',
         params: {
           name: 'search_products',
-          arguments: { query: 'siyah tişört', filters: { sizes: ['L'] } },
+          arguments: request,
         },
       },
     });
-    expect(mcp.json().result.structuredContent.items).toEqual(
-      http.json().items,
+
+    expect(http.statusCode).toBe(200);
+    expect(mcp.statusCode).toBe(200);
+    const restResult = http.json();
+    const mcpResult = mcp.json().result.structuredContent;
+    expect(commerceIdentity(mcpResult.products)).toEqual(
+      commerceIdentity(restResult.products),
     );
-    expect(mcp.json().result.structuredContent.appliedFilters.sizes).toEqual([
-      'L',
-    ]);
+    expect(mcpResult.facets).toEqual(restResult.facets);
+    expect(Object.keys(restResult).sort()).toEqual(
+      ['facets', 'products', 'searchId'].sort(),
+    );
+    expect(Object.keys(mcpResult).sort()).toEqual(
+      ['facets', 'products', 'searchId'].sort(),
+    );
   });
 });

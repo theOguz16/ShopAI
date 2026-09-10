@@ -131,9 +131,9 @@ describeWithDatabase('discovery sessions', () => {
     expect(search.statusCode).toBe(200);
     const searchBody = search.json<{
       searchId: string;
-      items: Array<{ checkoutUrl: string }>;
+      products: Array<{ checkoutUrl: string }>;
     }>();
-    expect(searchBody.items).toHaveLength(1);
+    expect(searchBody.products).toHaveLength(1);
 
     const [searchEvent] = await database.db
       .select({
@@ -147,7 +147,7 @@ describeWithDatabase('discovery sessions', () => {
       discoverySessionId: session.id,
     });
 
-    const redirectPath = new URL(searchBody.items[0]?.checkoutUrl ?? '')
+    const redirectPath = new URL(searchBody.products[0]?.checkoutUrl ?? '')
       .pathname;
     const token = redirectPath.slice('/r/'.length);
     const payloadPart = token.split('.')[0] ?? '';
