@@ -15,7 +15,7 @@ export async function assertPublicConnectorTarget(
   const url = new URL(value);
   if (url.protocol !== 'https:')
     throw new Error('Connector hedefi HTTPS olmalıdır.');
-  const hostname = url.hostname.toLowerCase();
+  const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
   if (
     hostname === 'localhost' ||
     hostname.endsWith('.localhost') ||
@@ -57,7 +57,9 @@ function isPublicIp(address: string) {
     a === 127 ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0) ||
     (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
     (a === 100 && b >= 64 && b <= 127) ||
     a >= 224
   );
