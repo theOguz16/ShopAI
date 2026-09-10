@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+const redisUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => ['redis:', 'rediss:'].includes(new URL(value).protocol), {
+    message: 'redis:// veya rediss:// adresi olmalı',
+  });
+
 const baseSchema = z.object({
   DEPLOY_ENV: z
     .enum(['local', 'test', 'staging', 'production'])
@@ -41,6 +48,7 @@ const baseSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
+  REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
   AI_PROVIDER: z.enum(['rules', 'openai']).default('rules'),
   OPENAI_API_KEY: z.string().min(1).optional(),
   AI_MODEL: z.string().min(1).default('gpt-5-mini'),
