@@ -7,6 +7,7 @@ import { OnboardingSteps } from './onboarding-steps';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 type Summary = {
   connections: number;
+  hasWooCommerce: boolean;
   imports: number;
   products: number;
   published: number;
@@ -40,9 +41,14 @@ export default function Dashboard() {
         const [connections, imports, products] = await Promise.all(
           responses.map((item) => item.json()),
         );
+        const hasWooCommerce = connections.some(
+          (connection: { provider?: string; active?: boolean }) =>
+            connection.provider === 'woocommerce' && connection.active !== false,
+        );
         if (!signal?.aborted)
           setSummary({
             connections: connections.length,
+            hasWooCommerce,
             imports: imports.length,
             products: products.length,
             published: products.filter(
@@ -63,9 +69,13 @@ export default function Dashboard() {
     return () => controller.abort();
   }, [load]);
 
+  const dataTransferred = Boolean(
+    summary &&
+      (summary.imports > 0 || (summary.hasWooCommerce && summary.products > 0)),
+  );
   const current = !summary?.connections
     ? 'connect'
-    : !summary.imports
+    : !dataTransferred
       ? 'import'
       : !summary.products
         ? 'review'
@@ -75,24 +85,32 @@ export default function Dashboard() {
   const completed = summary
     ? [
         ...(summary.connections ? ['connect' as const] : []),
-        ...(summary.imports ? ['import' as const] : []),
+        ...(dataTransferred ? ['import' as const] : []),
         ...(summary.products ? ['review' as const] : []),
         ...(summary.published ? ['publish' as const] : []),
       ]
     : [];
+  const importAction = summary?.hasWooCommerce
+    ? {
+        href: '/dashboard/connections',
+        title: 'İlk WooCommerce senkronunu tamamla',
+        text: 'Bağlantın oluşturuldu. İlk ürün aktarımının sonucunu bağlantılar ekranından takip et; CSV yüklemen gerekmiyor.',
+        action: 'Senkron durumunu aç',
+      }
+    : {
+        href: '/dashboard/imports',
+        title: 'Şimdi ürünlerini aktar',
+        text: 'Şablonu indir, kendi ürün bilginle doldur ve dosyayı yükle.',
+        action: 'CSV yükle',
+      };
   const actions = {
     connect: {
       href: '/dashboard/connections',
-      title: 'Önce katalog kaynağını seç',
-      text: 'Hızlı deneme için CSV ile başla; WooCommerce bağlantısını daha sonra ekleyebilirsin.',
-      action: 'Kaynak seç',
+      title: 'Mağazanı bir ürün kaynağına bağla',
+      text: 'WooCommerce mağaza adresini ve API bilgilerini gir; bağlantıyı ShopAI içinden test edip ilk senkronu başlatabilirsin.',
+      action: 'Mağazanı bağla',
     },
-    import: {
-      href: '/dashboard/imports',
-      title: 'Şimdi ürünlerini aktar',
-      text: 'Şablonu indir, kendi ürün bilginle doldur ve dosyayı yükle.',
-      action: 'CSV yükle',
-    },
+    import: importAction,
     review: {
       href: '/dashboard/products',
       title: 'Aktarılan ürünleri kontrol et',
