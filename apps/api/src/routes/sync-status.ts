@@ -1,10 +1,12 @@
 import { readConnectionSyncProgress } from '@shopai/db';
 import type { FastifyInstance } from 'fastify';
+import { registerCatalogHealthRoutes } from './catalog-health.js';
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export async function registerSyncStatusRoutes(app: FastifyInstance) {
+  await registerCatalogHealthRoutes(app);
   app.get(
     '/v1/connections/:connectionId/sync-status',
     async (request, reply) => {
