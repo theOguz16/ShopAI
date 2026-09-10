@@ -1,4 +1,4 @@
-# Uygulama durumu — 9 Eylül 2026
+# Uygulama durumu — 10 Eylül 2026
 
 Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun sınırıdır.
 
@@ -25,7 +25,9 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - WooCommerce variable ürün desteği: tüm variation sayfalarını okuma, variation external ID'sini koruma, beden/renk eşleme ve varyant bazında fiyat/stok aktarımı. Eksik variation sayfalaması tam snapshot sayılmaz.
 - Beş dakikalık canlı senkron kuyruğu; kaynak/alınma zamanları, son başarı/hata görünümü ve yalnız doğrulanmış tam snapshot'ta eksik offer pasifleştirme.
 - Secret referansı sahipliği merchant+provider+reference kapsamında tutulur; API ve worker başka mağazanın veya sahipliksiz referansın kullanılmasına izin vermez.
-- Dashboard mağazayı build-time ortam değişkeninden almaz. Oturum üyeliklerini listeler, mağazasız kullanıcıyı kuruluma yönlendirir, tek mağazayı otomatik seçer ve çoklu üyelikte seçim sunar.
+- Merchant dashboard WooCommerce onboarding wizard'ı mağaza bilgisi → kaynak seçimi → credential girişi → bağlantı testi → ilk sync → sonuç akışını teknik `secret://` müdahalesi olmadan tamamlar. Consumer key/secret yalnız istek gövdesinde alınır, API/connection response'larında veya browser'a geri gönderilmez; başarılı kurulum ilk BullMQ sync işini başlatır.
+- Kullanıcı kontrollü WooCommerce `storeUrl` istekleri SSRF için fail-closed çalışır: yalnız HTTPS/public hedef kabul edilir, local/private cevaplar reddedilir, redirect takip edilmez ve her gerçek connector request'i DNS sonucunu doğruladıktan sonra TLS socket'ini aynı doğrulanmış IP'ye pin eder. Orijinal hostname yalnız Host/SNI ve sertifika doğrulaması için korunur; DNS rebinding/TOCTOU ile ikinci çözümleme yapılamaz.
+- Dashboard mağazayı build-time ortam değişkeninden almaz. Oturum üyeliklerini listeler, mağazasız kullanıcıyı kuruluma yönlendirir, tek mağazayı otomatik seçer ve çoklu üyelikte seçim sunar. WooCommerce bağlantısı olan mağaza ilk sync sonucuna yönlendirilir; eski CSV yükleme adımı yalnız CSV akışı için gösterilir.
 - Bağlantı ve üyelik yönetiminin owner/editor/viewer kuralları ile çapraz-tenant reddi HTTP entegrasyon testleriyle kapsanır; eşzamanlı setup tek mağaza/üyelik üretir.
 - Tenant kapsamlı mağaza raporu: Web/MCP araması, boş sonuç, hata, sayfalama, insan yönlendirmesi, bot önizlemesi, kanal dağılımı, atfedilen satış, net tutar ve açık paydalar. Ham sorgu saklanmıyor; kontrol grubu olmadığı için ek satış bilinçli olarak ölçülmüyor.
 - Mağazaya türetilmiş anahtarla imzalanan satış callback'i; sipariş bazında idempotent paid/refunded/cancelled snapshot'ları ve eski olay koruması.
@@ -44,9 +46,10 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 6. ImportRun pending/validating/processing/completed/failed durumları, outbox retry ve satır hatası paneli var; object-storage sağlayıcısı sonraki dilimdir.
 7. RLS, public/application/worker DB rolleri ve tenant politikaları migration ile tanımlı; PostgreSQL/Redis entegrasyon paketi ve migration doğrulaması temizdir. Bu teknik kanıt staging yayını veya rollback provası değildir.
 8. Widget/MCP sözleşmesi ve yerel entegrasyon testleri hazırdır; gerçek ChatGPT hesabı ile staging TLS oturum testi henüz yapılmadı ve `docs/07-chatgpt-staging.md` içinde açık yayın kapısı olarak kayıtlıdır.
-9. WooCommerce connector davranışı sahte HTTP ve gerçek PostgreSQL entegrasyon testleriyle kapsanır; kontrollü gerçek pilot mağaza doğrulaması ancak mağaza URL'si ve secret yöneticisine yüklenmiş API anahtarıyla tamamlanabilir.
+9. WooCommerce connector davranışı sahte HTTP ve gerçek PostgreSQL entegrasyon testleriyle kapsanır; dashboard credential testi ve ilk sync başlatma akışı hazırdır. Kontrollü gerçek pilot mağaza kabulü yine gerçek mağaza URL'si ve geçerli WooCommerce API credential'ı gerektirir.
 10. Satış raporu yalnız callback secret'ı ve bağlantı capability'si etkinse ölçülür. Aksi durumda sıfır satış iddiası yerine `not_configured` döner; ek satış/artan etki için deney veya kontrol grubu henüz yoktur.
 11. Staging deploy/rollback workflow'u ve runbook hazırdır; gerçek `shopai-staging` runner, GitHub environment secret'ları ve platform erişimleri kurulup workflow URL'si kaydedilmeden canlı rollback provası tamamlanmış sayılmaz.
+12. Onboarding'in managed connector secret store'u pilot için private local filesystem'de `0700` directory ve `0600` JSON dosyası kullanır; DB ve browser yalnız opaque reference görür. Bu at-rest encryption değildir. Production readiness öncesi Vault/KMS/managed secret manager tabanlı şifreli depolama, rotation/revocation ve erişim audit'i ayrı güvenlik işi olarak tamamlanmalıdır.
 
 ## Kontrol kapsamı
 
