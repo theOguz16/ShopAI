@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useActiveMerchant } from './merchant-context';
 import styles from './sync-progress-panel.module.css';
 
@@ -40,6 +40,7 @@ const statusText: Record<SyncStatus, string> = {
 
 export function SyncProgressPanel() {
   const { merchantId } = useActiveMerchant();
+  const previousMerchantId = useRef(merchantId);
   const [connectionId, setConnectionId] = useState('');
   const [progress, setProgress] = useState<SyncProgress>();
 
@@ -88,6 +89,8 @@ export function SyncProgressPanel() {
   );
 
   useEffect(() => {
+    if (previousMerchantId.current === merchantId) return;
+    previousMerchantId.current = merchantId;
     setConnectionId('');
     setProgress(undefined);
   }, [merchantId]);
