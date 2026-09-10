@@ -123,17 +123,15 @@ export function createMcpServer(
         {},
         CHATGPT_ATTRIBUTION,
       );
-      const linkedResult = {
-        ...result,
-        products: result.products.map((item) => ({
-          ...item,
-          checkoutUrl: services.redirects.createLink({
-            offerId: item.offerId,
-            searchId: result.searchId,
-            ...CHATGPT_ATTRIBUTION,
-          }),
-        })),
-      };
+      const products = result.products.map((item) => ({
+        ...item,
+        checkoutUrl: services.redirects.createLink({
+          offerId: item.offerId,
+          searchId: result.searchId,
+          ...CHATGPT_ATTRIBUTION,
+        }),
+      }));
+      const linkedResult = { ...result, products, items: products };
       return {
         content: [{ type: 'text' as const, text: textResult(linkedResult) }],
         structuredContent: linkedResult,
