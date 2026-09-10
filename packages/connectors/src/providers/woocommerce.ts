@@ -4,6 +4,7 @@ import {
   type ConnectorPage,
   type LiveCatalogConnector,
 } from '../index.js';
+import { createPublicConnectorFetch } from '../target-safety.js';
 
 export type WooCommerceCredentials = {
   storeUrl: string;
@@ -37,6 +38,7 @@ type WooVariation = {
 
 type FetchLike = typeof fetch;
 type Sleep = (milliseconds: number) => Promise<void>;
+const safeConnectorFetch = createPublicConnectorFetch();
 
 export class WooCommerceConnector implements LiveCatalogConnector {
   readonly provider = 'woocommerce' as const;
@@ -48,7 +50,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
 
   constructor(
     private readonly credentials: WooCommerceCredentials,
-    private readonly fetcher: FetchLike = fetch,
+    private readonly fetcher: FetchLike = safeConnectorFetch,
     private readonly sleep: Sleep = (milliseconds) =>
       new Promise((resolve) => setTimeout(resolve, milliseconds)),
     private readonly maxAttempts = 3,
@@ -117,15 +119,10 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       : (input.modifiedAfter ?? fetchedAt);
     return {
       rows,
-      // Stop the outer cursor when a nested variation list is incomplete. The
-      // worker will reject this page before importing or deactivating offers.
       nextCursor:
         variationPagesComplete && page < totalPages ? String(page + 1) : null,
       sourceObservedAt,
       fetchedAt,
-      // A full snapshot is destructive only when WooCommerce explicitly proves
-      // that the last page was reached. A proxy stripping this header is not
-      // allowed to turn a partial response into a complete snapshot.
       complete:
         variationPagesComplete &&
         page >= totalPages &&
@@ -171,6 +168,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       let response: Response;
       try {
         response = await this.fetcher(url, {
+          redirect: 'manual',
           headers: {
             authorization: `Basic ${Buffer.from(`${this.credentials.consumerKey}:${this.credentials.consumerSecret}`).toString('base64')}`,
             accept: 'application/json',

@@ -16,6 +16,10 @@ import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
+import {
+  type OnboardingConnectorFactory,
+  registerOnboardingRoutes,
+} from './routes/onboarding.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
@@ -29,9 +33,14 @@ const loginRequestSchema = z
   .strict();
 const restDiscoverySurfaces = new Set(['web', 'brand_widget']);
 
+export type BuildAppOptions = {
+  onboardingConnectorFactory?: OnboardingConnectorFactory;
+};
+
 export async function buildApp(
   services?: Services,
   env: ApiEnv = parseApiEnv(process.env),
+  options: BuildAppOptions = {},
 ) {
   const resolvedServices = services ?? createServices(env);
   const authDatabase =
@@ -108,6 +117,7 @@ export async function buildApp(
     return { user: request.auth };
   });
   await registerMerchantRoutes(app, env);
+  await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
   await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
