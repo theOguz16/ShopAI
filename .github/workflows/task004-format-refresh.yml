@@ -1,0 +1,43 @@
+name: TASK-004 format refresh
+
+on:
+  push:
+    branches:
+      - task-004-merchant-onboarding-wizard
+
+permissions:
+  contents: write
+
+jobs:
+  format-task:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task-004-merchant-onboarding-wizard
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - name: Apply repository formatter
+        run: |
+          pnpm exec biome format --write \
+            apps/web/app/dashboard/connections/page.tsx \
+            apps/web/app/dashboard/page.tsx \
+            packages/connectors/src/target-safety.ts \
+            tests/connector-target-safety.test.ts \
+            tests/integration/merchant-onboarding.test.ts
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            echo "Formatting is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/page.tsx packages/connectors/src/target-safety.ts tests/connector-target-safety.test.ts tests/integration/merchant-onboarding.test.ts
+          git commit -m "style: format merchant onboarding changes"
+          git push origin HEAD:task-004-merchant-onboarding-wizard
