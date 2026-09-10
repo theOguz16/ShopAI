@@ -1,0 +1,162 @@
+.panel {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgb(17 17 17 / 6%);
+}
+
+.header,
+.connectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header h2,
+.header p,
+.connections h3,
+.connection p {
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin-top: 4px;
+  font-size: clamp(1.6rem, 3vw, 2.25rem);
+}
+
+.lastSync {
+  text-align: right;
+}
+
+.lastSync span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.lastSync strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0 0;
+}
+
+.metric {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--background);
+}
+
+.metric dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.metric dd {
+  margin: 5px 0 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+.connections {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.connections h3 {
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.connection {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--background);
+}
+
+.connection + .connection {
+  margin-top: 10px;
+}
+
+.connectionHeading span {
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.connectionHeading span[data-status='healthy'] {
+  color: #567200;
+}
+
+.connectionHeading span[data-status='stale'],
+.connectionHeading span[data-status='attention'] {
+  color: #9f5b00;
+}
+
+.connection p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.connection .warning {
+  color: #9f5b00;
+  font-weight: 750;
+}
+
+.connection .error {
+  color: #9f2d20;
+}
+
+.empty {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .panel {
+    padding: 18px;
+  }
+
+  .header,
+  .connectionHeading {
+    display: block;
+  }
+
+  .lastSync {
+    margin-top: 12px;
+    text-align: left;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .connectionHeading span {
+    display: inline-block;
+    margin-top: 6px;
+  }
+}
