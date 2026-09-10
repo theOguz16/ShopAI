@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -5,18 +6,16 @@ import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
 import { redisConnection } from '../../apps/worker/src/connection.js';
 import { SYNC_QUEUE } from '../../packages/contracts/src/index.js';
-import { createDatabase } from '../../packages/db/src/client.js';
 import {
   connections,
   connectionSyncProgress,
+  createDatabase,
   memberships,
   merchantCredentialOwnerships,
   merchants,
   products,
   sessions,
   users,
-} from '../../packages/db/src/index.js';
-import {
   withTenant,
   writeConnectionSyncProgress,
 } from '../../packages/db/src/index.js';
@@ -31,6 +30,7 @@ if (!databaseUrl || !redisUrl) {
 } else {
   const email = 'sync-status@test.example';
   const loginToken = 'sync-status-test-token-000000';
+  const uploadDir = `/tmp/shopai-sync-status-${process.pid}`;
   const env = parseApiEnv({
     CATALOG_MODE: 'postgres',
     DATABASE_URL: databaseUrl,
@@ -40,7 +40,7 @@ if (!databaseUrl || !redisUrl) {
     REDIRECT_SIGNING_SECRET: 'sync-status-redirect-secret-000000000000000000',
     AUTH_PILOT_CREDENTIALS: JSON.stringify({ [email]: loginToken }),
     LOGIN_RATE_LIMIT_MAX: '30',
-    UPLOAD_DIR: `/tmp/shopai-sync-status-${process.pid}`,
+    UPLOAD_DIR: uploadDir,
     LOG_LEVEL: 'silent',
   });
   const database = createDatabase(databaseUrl, {
@@ -63,6 +63,7 @@ if (!databaseUrl || !redisUrl) {
 
   describe.sequential('connection sync status integration', () => {
     beforeAll(async () => {
+      await rm(uploadDir, { recursive: true, force: true });
       await queue.obliterate({ force: true });
       await database.db.execute(
         sql`truncate table ${connectionSyncProgress}, ${connections}, ${merchantCredentialOwnerships}, ${memberships}, ${sessions}, ${users}, ${merchants} cascade`,
@@ -90,6 +91,7 @@ if (!databaseUrl || !redisUrl) {
       await queue.obliterate({ force: true });
       await queue.close();
       await database.close();
+      await rm(uploadDir, { recursive: true, force: true });
     });
 
     it('returns immediately with queued state while catalog work remains in BullMQ', async () => {
