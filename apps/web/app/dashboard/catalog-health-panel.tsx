@@ -35,7 +35,8 @@ const number = new Intl.NumberFormat('tr-TR');
 function relativeAge(ageMs: number | null, language: 'tr' | 'en') {
   if (ageMs === null) return language === 'tr' ? 'Henüz yok' : 'Never';
   const minutes = Math.max(0, Math.floor(ageMs / 60_000));
-  if (minutes < 1) return language === 'tr' ? 'az önce' : 'less than a minute ago';
+  if (minutes < 1)
+    return language === 'tr' ? 'az önce' : 'less than a minute ago';
   if (minutes < 60)
     return language === 'tr'
       ? `${minutes} dk önce`
