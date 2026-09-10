@@ -47,6 +47,7 @@ export class ConnectorHttpError extends Error {
 
 export * from './managed-secrets.js';
 export * from './providers/woocommerce.js';
+export * from './target-safety.js';
 
 export function parseCatalogCsv(content: string) {
   if (Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024)
