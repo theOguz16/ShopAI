@@ -4,6 +4,7 @@ import {
   type ConnectorPage,
   type LiveCatalogConnector,
 } from '../index.js';
+import { createPublicConnectorFetch } from '../target-safety.js';
 
 export type WooCommerceCredentials = {
   storeUrl: string;
@@ -37,6 +38,7 @@ type WooVariation = {
 
 type FetchLike = typeof fetch;
 type Sleep = (milliseconds: number) => Promise<void>;
+const safeConnectorFetch = createPublicConnectorFetch();
 
 export class WooCommerceConnector implements LiveCatalogConnector {
   readonly provider = 'woocommerce' as const;
@@ -48,7 +50,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
 
   constructor(
     private readonly credentials: WooCommerceCredentials,
-    private readonly fetcher: FetchLike = fetch,
+    private readonly fetcher: FetchLike = safeConnectorFetch,
     private readonly sleep: Sleep = (milliseconds) =>
       new Promise((resolve) => setTimeout(resolve, milliseconds)),
     private readonly maxAttempts = 3,
