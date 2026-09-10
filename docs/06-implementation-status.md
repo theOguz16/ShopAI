@@ -10,7 +10,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - Next.js demo arama ekranı ve ortak React ürün kartı.
 - Vite widget, yerel önizleme ve süreli MCP Apps/ChatGPT host köprüsü.
 - CSV parser, BullMQ enqueue/worker, scoped/idempotent DB import transaction.
-- 15 tablo, tenant ilişkileri için composite foreign key'ler, sıralı SQL migration'lar ve yerel demo seed.
+- 16 tablo, tenant ilişkileri için composite foreign key'ler, sıralı SQL migration'lar ve yerel demo seed.
 - CSV, fiyat/beden/stok eşleşmesi, taslak görünürlüğü, girdi doğrulama ve MCP testleri.
 - Özel CSV dosya yükleme + outbox/worker import akışı; satır hatası, retry ve tenant kapsamı.
 - Ürün yönetim API'si: varyant/fiyat/stok ayrıntısı, owner/editor yayın yetkisi, toplu yayın ve yayın değişikliği audit alanları.
@@ -24,6 +24,9 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 - WooCommerce pilot connector'ı: HTTPS bağlantı doğrulama, sayfalama, `modified_after` artımlı senkron, sınırlı 429/5xx retry, reauthorization durumu ve secret referansı çözümü.
 - WooCommerce variable ürün desteği: tüm variation sayfalarını okuma, variation external ID'sini koruma, beden/renk eşleme ve varyant bazında fiyat/stok aktarımı. Eksik variation sayfalaması tam snapshot sayılmaz.
 - Beş dakikalık canlı senkron kuyruğu; kaynak/alınma zamanları, son başarı/hata görünümü ve yalnız doğrulanmış tam snapshot'ta eksik offer pasifleştirme.
+- First Catalog Import UX: WooCommerce ilk sync durumu connection başına tenant-scoped PostgreSQL kaydında `queued/running/completed/partial/failed` olarak tutulur. Worker katalog sayfalarını okurken bulunan ürün/varyant sayılarını, DB import döngüsü ilerlerken işlenen ürün sayısını kalıcılaştırır; terminal hata bilgisi ve sayaçlar browser state'ine bağlı değildir.
+- `GET /v1/connections/:connectionId/sync-status` yalnız oturum açmış kullanıcının üye olduğu merchant kapsamlarında connection arar ve bulunan/işlenen/başarısız/varyant sayaçlarını döndürür. Dashboard layout bu endpoint'i aktif sync sırasında poll eder; sayfa yenilemesi veya yeni UI instance'ı progress'i PostgreSQL'den geri yükler.
+- İlk WooCommerce connect HTTP isteği yalnız credential doğrulama, connection/progress kaydı ve BullMQ enqueue yapar; katalog okuma/import döngüsü worker'da kalır. 100 sayfa × 100 ürünlük 10k fixture worker collector sınırını ve request dışı çalışmayı test eder.
 - Secret referansı sahipliği merchant+provider+reference kapsamında tutulur; API ve worker başka mağazanın veya sahipliksiz referansın kullanılmasına izin vermez.
 - Merchant dashboard WooCommerce onboarding wizard'ı mağaza bilgisi → kaynak seçimi → credential girişi → bağlantı testi → ilk sync → sonuç akışını teknik `secret://` müdahalesi olmadan tamamlar. Consumer key/secret yalnız istek gövdesinde alınır, API/connection response'larında veya browser'a geri gönderilmez; başarılı kurulum ilk BullMQ sync işini başlatır.
 - Kullanıcı kontrollü WooCommerce `storeUrl` istekleri SSRF için fail-closed çalışır: yalnız HTTPS/public hedef kabul edilir, local/private cevaplar reddedilir, redirect takip edilmez ve her gerçek connector request'i DNS sonucunu doğruladıktan sonra TLS socket'ini aynı doğrulanmış IP'ye pin eder. Orijinal hostname yalnız Host/SNI ve sertifika doğrulaması için korunur; DNS rebinding/TOCTOU ile ikinci çözümleme yapılamaz.
@@ -50,6 +53,7 @@ Hedef mimari belgeleri daha geniş kapsamı tarif eder. Bu dosya mevcut kodun s�
 10. Satış raporu yalnız callback secret'ı ve bağlantı capability'si etkinse ölçülür. Aksi durumda sıfır satış iddiası yerine `not_configured` döner; ek satış/artan etki için deney veya kontrol grubu henüz yoktur.
 11. Staging deploy/rollback workflow'u ve runbook hazırdır; gerçek `shopai-staging` runner, GitHub environment secret'ları ve platform erişimleri kurulup workflow URL'si kaydedilmeden canlı rollback provası tamamlanmış sayılmaz.
 12. Onboarding'in managed connector secret store'u pilot için private local filesystem'de `0700` directory ve `0600` JSON dosyası kullanır; DB ve browser yalnız opaque reference görür. Bu at-rest encryption değildir. Production readiness öncesi Vault/KMS/managed secret manager tabanlı şifreli depolama, rotation/revocation ve erişim audit'i ayrı güvenlik işi olarak tamamlanmalıdır.
+13. WooCommerce sync progress DB'de kalıcı olsa da V1 canlı connector import'u tek katalog transaction'ında tamamlanır; `partial` terminal durumu yalnız bazı işleme adımları tamamlandıktan sonra sonraki sync-finalization adımı hata verirse anlamlıdır. Row-level best-effort partial commit semantiği henüz yoktur.
 
 ## Kontrol kapsamı
 
