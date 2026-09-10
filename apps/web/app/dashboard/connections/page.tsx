@@ -80,7 +80,10 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     if (step !== 6 || !onboardedConnectionId) return;
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 2000);
+    const timer = window.setInterval(
+      () => void refresh().catch(() => undefined),
+      2000,
+    );
     return () => window.clearInterval(timer);
   }, [step, onboardedConnectionId, refresh]);
 
@@ -215,13 +218,18 @@ export default function ConnectionsPage() {
         </p>
       </header>
 
-      <ol className="connector-wizard-steps" aria-label="Connector kurulum adımları">
+      <ol
+        className="connector-wizard-steps"
+        aria-label="Connector kurulum adımları"
+      >
         {wizardSteps.map((label, index) => {
           const number = (index + 1) as WizardStep;
           return (
             <li
               key={label}
-              className={number === step ? 'current' : number < step ? 'done' : ''}
+              className={
+                number === step ? 'current' : number < step ? 'done' : ''
+              }
               aria-current={number === step ? 'step' : undefined}
             >
               <span>{number < step ? '✓' : number}</span>
@@ -233,18 +241,20 @@ export default function ConnectionsPage() {
 
       {!canConnect ? (
         <p className="role-note">
-          Görüntüleyici yetkin var. Bağlantıları görebilir, onboarding başlatamazsın.
+          Görüntüleyici yetkin var. Bağlantıları görebilir, onboarding
+          başlatamazsın.
         </p>
       ) : null}
 
-      {canConnect && !hasActiveWoo ? (
+      {canConnect && (!hasActiveWoo || step === 6) ? (
         <section className="connector-wizard-card">
           {step === 1 ? (
             <>
               <p className="eyebrow">1 · Mağaza bilgileri</p>
               <h2>{activeMerchant.name}</h2>
               <p>
-                Kurulum bu mağaza için yapılacak. Slug: <strong>{activeMerchant.slug}</strong>
+                Kurulum bu mağaza için yapılacak. Slug:{' '}
+                <strong>{activeMerchant.slug}</strong>
               </p>
               <button type="button" onClick={() => setStep(2)}>
                 Devam et
@@ -265,7 +275,8 @@ export default function ConnectionsPage() {
                 <span>Canlı katalog ve stok senkronu</span>
               </button>
               <p className="panel-empty">
-                MVP’de yalnızca production-ready WooCommerce connector gösteriliyor.
+                MVP’de yalnızca production-ready WooCommerce connector
+                gösteriliyor.
               </p>
             </>
           ) : null}
@@ -329,15 +340,23 @@ export default function ConnectionsPage() {
                   disabled={busy}
                   onClick={() => void testConnection()}
                 >
-                  {testState === 'testing' ? 'Test ediliyor…' : 'Bağlantıyı Test Et'}
+                  {testState === 'testing'
+                    ? 'Test ediliyor…'
+                    : 'Bağlantıyı Test Et'}
                 </button>
-                <button type="button" disabled={busy} onClick={() => setStep(3)}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setStep(3)}
+                >
                   Bilgileri düzenle
                 </button>
               </div>
               {message ? (
                 <p
-                  className={testState === 'success' ? 'success-note' : 'error-note'}
+                  className={
+                    testState === 'success' ? 'success-note' : 'error-note'
+                  }
                   role="status"
                 >
                   {message}
@@ -359,7 +378,10 @@ export default function ConnectionsPage() {
             <>
               <p className="eyebrow">5 · İlk sync&apos;i başlat</p>
               <h2>Bağlantı hazırlanıyor…</h2>
-              <p>Credential güvenli alana yazılıyor ve ilk katalog işi kuyruğa alınıyor.</p>
+              <p>
+                Credential güvenli alana yazılıyor ve ilk katalog işi kuyruğa
+                alınıyor.
+              </p>
             </>
           ) : null}
 
@@ -400,16 +422,21 @@ export default function ConnectionsPage() {
         </section>
       ) : null}
 
-      {message && step !== 4 && step !== 6 ? <p role="status">{message}</p> : null}
+      {message && step !== 4 && step !== 6 ? (
+        <p role="status">{message}</p>
+      ) : null}
 
       <section className="connection-list" aria-label="Mevcut bağlantılar">
         <h2>Mevcut bağlantılar</h2>
-        {!connections.length ? <p className="panel-empty">Henüz bağlantı yok.</p> : null}
+        {!connections.length ? (
+          <p className="panel-empty">Henüz bağlantı yok.</p>
+        ) : null}
         {connections.map((connection) => (
           <article key={connection.id}>
             <h3>{connection.provider}</h3>
             <p>
-              Yetki: {connection.authorizationStatus} · mod: {connection.syncMode}
+              Yetki: {connection.authorizationStatus} · mod:{' '}
+              {connection.syncMode}
             </p>
             <p>
               Satış doğrulaması:{' '}
@@ -418,7 +445,9 @@ export default function ConnectionsPage() {
             <p>
               Son başarılı senkron:{' '}
               {connection.lastSuccessfulSyncAt
-                ? new Date(connection.lastSuccessfulSyncAt).toLocaleString('tr-TR')
+                ? new Date(connection.lastSuccessfulSyncAt).toLocaleString(
+                    'tr-TR',
+                  )
                 : 'Henüz yok'}
             </p>
             <p>
