@@ -6,6 +6,7 @@ import {
   searchRequestSchema,
   WEB_ATTRIBUTION,
 } from '@shopai/contracts';
+import { searchProductsRequestSchema } from '@shopai/contracts/search-products';
 import { createDatabase } from '@shopai/db';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -172,11 +173,28 @@ export async function buildApp(
     }
   });
   app.post('/v1/search', async (request, reply) => {
-    const parsed = searchRequestSchema.safeParse(request.body);
-    if (!parsed.success)
+    const publicRequest = searchProductsRequestSchema.safeParse(request.body);
+    const legacyRequest = searchRequestSchema.safeParse(request.body);
+    if (!publicRequest.success && !legacyRequest.success)
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
+    if (publicRequest.success) {
+      const result = await resolvedServices.executePublicSearch(
+        publicRequest.data,
+        {},
+        WEB_ATTRIBUTION,
+      );
+      const products = result.products.map((item) => ({
+        ...item,
+        checkoutUrl: resolvedServices.redirects.createLink({
+          offerId: item.offerId,
+          searchId: result.searchId,
+          ...WEB_ATTRIBUTION,
+        }),
+      }));
+      return { ...result, products, items: products };
+    }
     const result = await resolvedServices.executeSearch(
       request.body,
       {},
@@ -195,8 +213,9 @@ export async function buildApp(
     };
   });
   app.post('/v1/stores/:merchantId/search', async (request, reply) => {
-    const parsed = searchRequestSchema.safeParse(request.body);
-    if (!parsed.success)
+    const publicRequest = searchProductsRequestSchema.safeParse(request.body);
+    const legacyRequest = searchRequestSchema.safeParse(request.body);
+    if (!publicRequest.success && !legacyRequest.success)
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
@@ -209,6 +228,22 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
+    if (publicRequest.success) {
+      const result = await resolvedServices.executePublicSearch(
+        publicRequest.data,
+        { merchantIds: [merchantId] },
+        WEB_ATTRIBUTION,
+      );
+      const products = result.products.map((item) => ({
+        ...item,
+        checkoutUrl: resolvedServices.redirects.createLink({
+          offerId: item.offerId,
+          searchId: result.searchId,
+          ...WEB_ATTRIBUTION,
+        }),
+      }));
+      return { ...result, products, items: products };
+    }
     const result = await resolvedServices.executeSearch(
       request.body,
       { merchantIds: [merchantId] },
