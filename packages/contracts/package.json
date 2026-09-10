@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./search-products": {
+      "types": "./dist/search-products.d.ts",
+      "import": "./dist/search-products.js"
     }
   },
   "dependencies": {
