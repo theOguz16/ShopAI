@@ -117,11 +117,7 @@ export async function buildApp(
     return { user: request.auth };
   });
   await registerMerchantRoutes(app, env);
-  await registerOnboardingRoutes(
-    app,
-    env,
-    options.onboardingConnectorFactory,
-  );
+  await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
   await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
