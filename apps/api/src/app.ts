@@ -185,15 +185,17 @@ export async function buildApp(
         {},
         WEB_ATTRIBUTION,
       );
-      const products = result.products.map((item) => ({
-        ...item,
-        checkoutUrl: resolvedServices.redirects.createLink({
-          offerId: item.offerId,
-          searchId: result.searchId,
-          ...WEB_ATTRIBUTION,
-        }),
-      }));
-      return { ...result, products, items: products };
+      return {
+        ...result,
+        products: result.products.map((item) => ({
+          ...item,
+          checkoutUrl: resolvedServices.redirects.createLink({
+            offerId: item.offerId,
+            searchId: result.searchId,
+            ...WEB_ATTRIBUTION,
+          }),
+        })),
+      };
     }
     const result = await resolvedServices.executeSearch(
       request.body,
@@ -234,15 +236,17 @@ export async function buildApp(
         { merchantIds: [merchantId] },
         WEB_ATTRIBUTION,
       );
-      const products = result.products.map((item) => ({
-        ...item,
-        checkoutUrl: resolvedServices.redirects.createLink({
-          offerId: item.offerId,
-          searchId: result.searchId,
-          ...WEB_ATTRIBUTION,
-        }),
-      }));
-      return { ...result, products, items: products };
+      return {
+        ...result,
+        products: result.products.map((item) => ({
+          ...item,
+          checkoutUrl: resolvedServices.redirects.createLink({
+            offerId: item.offerId,
+            searchId: result.searchId,
+            ...WEB_ATTRIBUTION,
+          }),
+        })),
+      };
     }
     const result = await resolvedServices.executeSearch(
       request.body,
