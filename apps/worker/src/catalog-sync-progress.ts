@@ -65,8 +65,7 @@ export async function collectCatalogSnapshot({
     progress = {
       status: 'running',
       foundProducts: productKeys.size,
-      // readPage has already normalized and schema-validated these products.
-      processedProducts: productKeys.size,
+      processedProducts: 0,
       failedProducts: 0,
       variants: rows.length,
     };
