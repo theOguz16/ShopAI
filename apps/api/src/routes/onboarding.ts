@@ -1,6 +1,7 @@
 import {
   ManagedConnectorSecretStore,
   WooCommerceConnector,
+  type WooCommerceCredentials,
 } from '@shopai/connectors';
 import {
   connectorOnboardingResponseSchema,
@@ -19,9 +20,17 @@ import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
 import { requireRole, requireSameOrigin } from '../plugins/auth.js';
 
+export type OnboardingConnectorFactory = (
+  credentials: WooCommerceCredentials,
+) => Pick<WooCommerceConnector, 'validate'>;
+
+const createWooCommerceConnector: OnboardingConnectorFactory = (credentials) =>
+  new WooCommerceConnector(credentials);
+
 export async function registerOnboardingRoutes(
   app: FastifyInstance,
   env: ApiEnv,
+  connectorFactory: OnboardingConnectorFactory = createWooCommerceConnector,
 ) {
   const secretStore = new ManagedConnectorSecretStore(env.UPLOAD_DIR);
   let syncQueue: Queue | undefined;
@@ -45,7 +54,7 @@ export async function registerOnboardingRoutes(
       if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       try {
-        await validateWooCommerce(parsed.data);
+        await validateWooCommerce(parsed.data, connectorFactory);
         return connectorTestResponseSchema.parse({
           status: 'success',
           code: 'CONNECTION_OK',
@@ -75,7 +84,7 @@ export async function registerOnboardingRoutes(
       if (!db) return reply.code(503).send({ code: 'ONBOARDING_UNAVAILABLE' });
 
       try {
-        await validateWooCommerce(parsed.data);
+        await validateWooCommerce(parsed.data, connectorFactory);
       } catch {
         return reply.code(422).send({
           status: 'failed',
@@ -189,12 +198,12 @@ export async function registerOnboardingRoutes(
 }
 
 async function validateWooCommerce(
-  credentials: ReturnType<typeof woocommerceOnboardingCredentialsSchema.parse>,
+  credentials: WooCommerceCredentials,
+  connectorFactory: OnboardingConnectorFactory,
 ) {
-  // WooCommerceConnector's default HTTP transport resolves and validates the
-  // destination, then opens TLS directly to that exact IP. There is no second
-  // hostname lookup between the SSRF decision and the socket connection.
-  await new WooCommerceConnector(credentials).validate();
+  // The production factory uses WooCommerceConnector's default HTTP transport,
+  // which validates DNS and connects TLS directly to that same resolved IP.
+  await connectorFactory(credentials).validate();
 }
 
 function redisConnection(value: string) {
