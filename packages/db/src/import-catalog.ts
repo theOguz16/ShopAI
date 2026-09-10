@@ -16,8 +16,21 @@ import {
 } from './schema.js';
 import { setTenantContext } from './tenant-context.js';
 
+export type ImportCatalogProgress = {
+  processedRows: number;
+  processedProducts: number;
+};
+
+type ImportCatalogOptions = {
+  onProgress?: (progress: ImportCatalogProgress) => Promise<void> | void;
+};
+
 /** Trusted local CLI/worker only. New products always remain unpublished. */
-export async function importCatalog(db: Database, input: ImportJob) {
+export async function importCatalog(
+  db: Database,
+  input: ImportJob,
+  options: ImportCatalogOptions = {},
+) {
   const job = importJobSchema.parse(input);
   const observedAt = new Date(job.observedAt);
   const fetchedAt = new Date();
@@ -83,6 +96,8 @@ export async function importCatalog(db: Database, input: ImportJob) {
       }
       return { imported: 0, duplicate: false, stale: true };
     }
+    const processedProductKeys = new Set<string>();
+    let processedRows = 0;
     for (const row of job.rows) {
       const productData = {
         title: row.title,
@@ -190,6 +205,16 @@ export async function importCatalog(db: Database, input: ImportJob) {
           target: inventory.offerId,
           set: { available: row.available, observedAt, fetchedAt },
           setWhere: sql`${inventory.observedAt} <= ${observedAt}`,
+        });
+      processedRows += 1;
+      processedProductKeys.add(row.productKey);
+      if (
+        options.onProgress &&
+        (processedRows % 100 === 0 || processedRows === job.rows.length)
+      )
+        await options.onProgress({
+          processedRows,
+          processedProducts: processedProductKeys.size,
         });
     }
     if (done) {
