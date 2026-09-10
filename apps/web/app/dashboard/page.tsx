@@ -1,6 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import {
+  CatalogHealthPanel,
+  type CatalogHealthSnapshot,
+} from './catalog-health-panel';
 import { useActiveMerchant } from './merchant-context';
 import { OnboardingSteps } from './onboarding-steps';
 
@@ -11,6 +15,7 @@ type Summary = {
   imports: number;
   products: number;
   published: number;
+  health: CatalogHealthSnapshot;
 };
 
 export default function Dashboard() {
@@ -31,30 +36,34 @@ export default function Dashboard() {
             credentials: 'include',
             signal,
           }),
-          fetch(`${api}/v1/merchants/${merchantId}/products`, {
+          fetch(`${api}/v1/merchants/${merchantId}/catalog-health`, {
             credentials: 'include',
             signal,
           }),
         ]);
         if (!responses.every((item) => item.ok))
           throw new Error('summary_failed');
-        const [connections, imports, products] = await Promise.all(
+        const [connections, imports, health] = await Promise.all(
           responses.map((item) => item.json()),
         );
-        const hasWooCommerce = connections.some(
-          (connection: { provider?: string; active?: boolean }) =>
-            connection.provider === 'woocommerce' &&
-            connection.active !== false,
+        const typedConnections = connections as Array<{
+          provider?: string;
+          active?: boolean;
+        }>;
+        const typedImports = imports as unknown[];
+        const typedHealth = health as CatalogHealthSnapshot;
+        const hasWooCommerce = typedConnections.some(
+          (connection) =>
+            connection.provider === 'woocommerce' && connection.active !== false,
         );
         if (!signal?.aborted)
           setSummary({
-            connections: connections.length,
+            connections: typedConnections.length,
             hasWooCommerce,
-            imports: imports.length,
-            products: products.length,
-            published: products.filter(
-              (product: { published: boolean }) => product.published,
-            ).length,
+            imports: typedImports.length,
+            products: typedHealth.totalProducts,
+            published: typedHealth.publishedProducts,
+            health: typedHealth,
           });
       } catch {
         if (!signal?.aborted)
@@ -186,6 +195,7 @@ export default function Dashboard() {
           )}
         </section>
       ) : null}
+      {summary ? <CatalogHealthPanel health={summary.health} /> : null}
       <section className="dashboard-stats" aria-label="Katalog özeti">
         <div>
           <strong>{summary?.connections ?? '—'}</strong>
