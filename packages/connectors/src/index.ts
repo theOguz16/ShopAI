@@ -45,6 +45,7 @@ export class ConnectorHttpError extends Error {
   }
 }
 
+export * from './managed-secrets.js';
 export * from './providers/woocommerce.js';
 
 export function parseCatalogCsv(content: string) {
