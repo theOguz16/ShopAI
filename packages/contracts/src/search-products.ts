@@ -54,10 +54,10 @@ export const searchProductsResponseSchema = z
   .object({
     products: z.array(catalogItemSchema),
     facets: searchFacetsSchema,
-    nextCursor: z.string().nullable().optional(),
+    nextCursor: z.string().optional(),
     searchId: z.string().uuid(),
   })
-  .passthrough();
+  .strict();
 
 export type SearchProductsResponse = z.infer<
   typeof searchProductsResponseSchema
