@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { catalogItemSchema, searchFacetsSchema } from './index.js';
 
 const publicMoneySchema = z
   .number()
@@ -48,3 +49,16 @@ export const searchProductsRequestSchema = z
   .strict();
 
 export type SearchProductsRequest = z.infer<typeof searchProductsRequestSchema>;
+
+export const searchProductsResponseSchema = z
+  .object({
+    products: z.array(catalogItemSchema),
+    facets: searchFacetsSchema,
+    nextCursor: z.string().optional(),
+    searchId: z.string().uuid(),
+  })
+  .strict();
+
+export type SearchProductsResponse = z.infer<
+  typeof searchProductsResponseSchema
+>;
