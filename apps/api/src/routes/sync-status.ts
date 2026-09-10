@@ -11,8 +11,7 @@ export async function registerSyncStatusRoutes(app: FastifyInstance) {
       if (!request.auth)
         return reply.code(401).send({ code: 'UNAUTHENTICATED' });
       const db = app.authApi.db;
-      if (!db)
-        return reply.code(503).send({ code: 'SYNC_STATUS_UNAVAILABLE' });
+      if (!db) return reply.code(503).send({ code: 'SYNC_STATUS_UNAVAILABLE' });
       const { connectionId } = request.params as { connectionId: string };
       if (!uuid.test(connectionId))
         return reply.code(404).send({ code: 'CONNECTION_NOT_FOUND' });
