@@ -54,7 +54,8 @@ export default function Dashboard() {
         const typedHealth = health as CatalogHealthSnapshot;
         const hasWooCommerce = typedConnections.some(
           (connection) =>
-            connection.provider === 'woocommerce' && connection.active !== false,
+            connection.provider === 'woocommerce' &&
+            connection.active !== false,
         );
         if (!signal?.aborted)
           setSummary({
