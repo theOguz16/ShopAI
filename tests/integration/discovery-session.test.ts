@@ -362,4 +362,41 @@ describeWithDatabase('discovery sessions', () => {
       transport: 'rest',
     });
   });
+
+  it('rejects an already signed redirect after the merchant becomes private', async () => {
+    const search = await app.inject({
+      method: 'POST',
+      url: `/v1/stores/${maviId}/search`,
+      payload: { query: 'Mavi Ürün', limit: 1 },
+    });
+    expect(search.statusCode).toBe(200);
+    const body = search.json<{
+      searchId: string;
+      products: Array<{ checkoutUrl: string }>;
+    }>();
+    expect(body.products).toHaveLength(1);
+    const redirectPath = new URL(body.products[0]?.checkoutUrl ?? '').pathname;
+
+    await database.db
+      .update(merchants)
+      .set({ isPublic: false })
+      .where(eq(merchants.id, maviId));
+
+    const redirect = await app.inject({
+      method: 'GET',
+      url: redirectPath,
+      headers: { 'user-agent': 'Mozilla/5.0 stale signed redirect test' },
+    });
+    expect(redirect.statusCode).toBe(404);
+    expect(redirect.json()).toEqual({
+      code: 'OFFER_UNAVAILABLE',
+      message: 'Ürün bağlantısı artık kullanılamıyor.',
+    });
+
+    const clicks = await database.db
+      .select({ id: redirectClicks.id })
+      .from(redirectClicks)
+      .where(eq(redirectClicks.searchId, body.searchId));
+    expect(clicks).toEqual([]);
+  });
 });
