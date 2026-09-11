@@ -70,7 +70,8 @@ export class MemoryProductDetailRepository implements ProductDetailRepository {
         record.published &&
         record.merchantActive &&
         record.offerActive &&
-        (!context.merchantIds || context.merchantIds.includes(record.merchantId)),
+        (!context.merchantIds ||
+          context.merchantIds.includes(record.merchantId)),
     );
     const first = matching[0];
     if (!first) return null;
@@ -111,7 +112,9 @@ export class MemoryProductDetailRepository implements ProductDetailRepository {
   }
 }
 
-export function aggregateAvailability(statuses: readonly StockStatus[]): StockStatus {
+export function aggregateAvailability(
+  statuses: readonly StockStatus[],
+): StockStatus {
   if (statuses.includes('in_stock')) return 'in_stock';
   if (
     statuses.length > 0 &&
@@ -122,7 +125,10 @@ export function aggregateAvailability(statuses: readonly StockStatus[]): StockSt
   return 'unknown';
 }
 
-function uniqueSimilarProducts(items: readonly CatalogItem[], productId: string) {
+function uniqueSimilarProducts(
+  items: readonly CatalogItem[],
+  productId: string,
+) {
   const seen = new Set<string>();
   const similar: CatalogItem[] = [];
   for (const item of items) {
@@ -144,7 +150,8 @@ export class ProductDetails {
     input: unknown,
     context: ProductDetailRepositoryContext = {},
   ): Promise<ProductDetailResponse> {
-    const request: ProductDetailRequest = productDetailRequestSchema.parse(input);
+    const request: ProductDetailRequest =
+      productDetailRequestSchema.parse(input);
     const snapshot = await this.repository.findProductDetail(
       request.productId,
       context,
