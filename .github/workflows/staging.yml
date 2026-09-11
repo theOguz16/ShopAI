@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Existing immutable image tag to roll back to; empty builds current commit
+        description: Existing immutable 40-char commit SHA to roll back to; empty builds current commit
         required: false
         type: string
 concurrency:
@@ -17,7 +17,6 @@ jobs:
     runs-on: [self-hosted, shopai-staging]
     environment: staging
     env:
-      SHOPAI_IMAGE: ghcr.io/${{ github.repository }}/app
       RELEASE_VERSION: ${{ inputs.release_version || github.sha }}
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       STAGING_REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
@@ -34,6 +33,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve immutable image name
+        shell: bash
+        run: echo "SHOPAI_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> "$GITHUB_ENV"
+
       - name: Validate staging configuration
         run: |
           node <<'NODE'
@@ -47,16 +50,22 @@ jobs:
             'STAGING_RESOURCE_DOMAINS',
             'STAGING_REDIRECT_SIGNING_SECRET',
             'STAGING_AUTH_PILOT_CREDENTIALS',
+            'BACKUP_DIR',
+            'SHOPAI_IMAGE',
           ];
           for (const key of required) {
             if (!process.env[key]) throw new Error(`${key} staging environment içinde tanımlı değil`);
           }
+          if (!/^[0-9a-f]{40}$/iu.test(process.env.RELEASE_VERSION))
+            throw new Error('RELEASE_VERSION immutable 40 karakter commit SHA olmalıdır');
           for (const key of ['STAGING_API_ORIGIN', 'STAGING_WIDGET_ORIGIN']) {
             const value = process.env[key];
             const url = new URL(value);
             if (url.protocol !== 'https:' || url.origin !== value)
               throw new Error(`${key} origin-only HTTPS URL olmalıdır`);
           }
+          if (process.env.STAGING_API_ORIGIN === process.env.STAGING_WIDGET_ORIGIN)
+            throw new Error('API ve widget staging originleri ayrı olmalıdır');
           const allowed = process.env.STAGING_ALLOWED_ORIGINS.split(',').map((value) => value.trim());
           if (!allowed.includes('https://chatgpt.com'))
             throw new Error('STAGING_ALLOWED_ORIGINS https://chatgpt.com içermelidir');
@@ -86,10 +95,16 @@ jobs:
       - name: Pull selected release
         run: docker pull "$SHOPAI_IMAGE:$RELEASE_VERSION"
 
-      - name: Backup before migration
-        env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-        run: infra/backup.sh
+      - name: Backup before migration with PostgreSQL 17 client
+        run: |
+          mkdir -p "$BACKUP_DIR"
+          chmod 700 "$BACKUP_DIR"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          docker run --rm \
+            --env DATABASE_URL="$STAGING_DATABASE_URL" \
+            --volume "$BACKUP_DIR:/backups" \
+            postgres:17-alpine \
+            sh -eu -c 'umask 077; target="/backups/shopai-'"$stamp"'.dump"; pg_dump --format=custom --no-owner --no-acl --file="$target" "$DATABASE_URL"; sha256sum "$target" > "$target.sha256"'
 
       - name: Apply reviewed migrations once
         run: docker compose --file infra/staging.compose.yaml --profile migration run --rm migrate
