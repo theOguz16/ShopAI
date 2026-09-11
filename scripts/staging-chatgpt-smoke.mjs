@@ -89,12 +89,17 @@ assert(
 
 const tools = await rpc('tools/list');
 const searchTool = tools.tools?.find((tool) => tool.name === 'search_products');
-const detailTool = tools.tools?.find((tool) => tool.name === 'get_product_detail');
+const detailTool = tools.tools?.find(
+  (tool) => tool.name === 'get_product_detail',
+);
 assert(searchTool, 'search_products tool bulunamadı');
 assert(detailTool, 'get_product_detail tool bulunamadı');
 
 const resourceUri = searchTool._meta?.ui?.resourceUri;
-assert(typeof resourceUri === 'string', 'search_products UI resource URI eksik');
+assert(
+  typeof resourceUri === 'string',
+  'search_products UI resource URI eksik',
+);
 assert(
   detailTool._meta?.ui?.resourceUri === resourceUri,
   'search/detail aynı widget resource sürümünü kullanmıyor',
@@ -102,14 +107,23 @@ assert(
 
 const resourceResult = await rpc('resources/read', { uri: resourceUri });
 const resource = resourceResult.contents?.[0];
-assert(resource?.mimeType === 'text/html;profile=mcp-app', 'widget MIME type yanlış');
+assert(
+  resource?.mimeType === 'text/html;profile=mcp-app',
+  'widget MIME type yanlış',
+);
 assert(
   resource._meta?.['openai/widgetDomain'] === widgetOrigin,
   'widgetDomain staging widget origin ile eşleşmiyor',
 );
 const csp = resource._meta?.['openai/widgetCSP'];
-assert(csp?.resource_domains?.includes(widgetOrigin), 'widget origin CSP resource_domains içinde değil');
-assert(csp?.redirect_domains?.includes(apiOrigin), 'ShopAI API origin CSP redirect_domains içinde değil');
+assert(
+  csp?.resource_domains?.includes(widgetOrigin),
+  'widget origin CSP resource_domains içinde değil',
+);
+assert(
+  csp?.redirect_domains?.includes(apiOrigin),
+  'ShopAI API origin CSP redirect_domains içinde değil',
+);
 assert(
   resource.text?.includes(`${widgetOrigin}/assets/widget-v3.js`),
   'hosted widget JS URL resource HTML içinde yok',
@@ -130,7 +144,10 @@ const searchResult = await rpc('tools/call', {
 });
 const search = searchResult.structuredContent;
 assert(typeof search?.searchId === 'string', 'searchId dönmedi');
-assert(search?.products?.length > 0, 'staging katalogda kabul testi için yayımlanmış ürün yok');
+assert(
+  search?.products?.length > 0,
+  'staging katalogda kabul testi için yayımlanmış ürün yok',
+);
 const product = search.products[0];
 
 const detailResult = await rpc('tools/call', {
@@ -138,7 +155,10 @@ const detailResult = await rpc('tools/call', {
   arguments: { productId: product.productId, searchId: search.searchId },
 });
 const detail = detailResult.structuredContent;
-assert(detail?.product?.id === product.productId, 'product detail yanlış ürünü döndürdü');
+assert(
+  detail?.product?.id === product.productId,
+  'product detail yanlış ürünü döndürdü',
+);
 assert(Array.isArray(detail?.variants), 'product detail variants eksik');
 
 const checkoutUrl = detail?.offers?.find(
@@ -160,7 +180,10 @@ assert(
 );
 const location = checkout.headers.get('location');
 assert(location, 'signed checkout redirect Location header dönmedi');
-assert(['http:', 'https:'].includes(new URL(location).protocol), 'checkout hedefi HTTP(S) değil');
+assert(
+  ['http:', 'https:'].includes(new URL(location).protocol),
+  'checkout hedefi HTTP(S) değil',
+);
 
 console.log(
   JSON.stringify(
