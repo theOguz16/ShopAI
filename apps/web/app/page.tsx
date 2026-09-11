@@ -8,6 +8,7 @@ import {
 } from '@shopai/contracts';
 import { ProductCard } from '@shopai/ui';
 import { type FormEvent, useRef, useState } from 'react';
+import { buildProductDetailHref } from '../lib/product-detail-href';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const SEARCH_TIMEOUT_MS = 10_000;
@@ -463,6 +464,10 @@ export default function Home() {
                   key={item.offerId}
                   item={item}
                   demo={result.mode === 'demo'}
+                  detailHref={buildProductDetailHref({
+                    productId: item.productId,
+                    searchId: result.searchId,
+                  })}
                 />
               ))}
             </ul>
