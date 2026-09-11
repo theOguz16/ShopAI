@@ -43,7 +43,8 @@ export function ProductCard({
   onDetail?: (item: CatalogItem) => void;
 }) {
   const stockText = stockStatusLabel(item.stockStatus);
-  const webDetailHref = detailHref ?? (!onDetail ? `/products/${item.productId}` : undefined);
+  const webDetailHref =
+    detailHref ?? (!onDetail ? `/products/${item.productId}` : undefined);
   return (
     <li className="product-card">
       <ProductImage item={item} />
