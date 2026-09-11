@@ -143,11 +143,18 @@ const apiEnvSchema = z
     }
     if (env.CATALOG_MODE === 'postgres') {
       for (const key of ['MCP_PUBLIC_ORIGIN', 'WIDGET_ORIGIN'] as const) {
-        if (new URL(env[key]).protocol !== 'https:')
+        const url = new URL(env[key]);
+        if (url.protocol !== 'https:')
           context.addIssue({
             code: z.ZodIssueCode.custom,
             path: [key],
             message: 'postgres/staging modunda HTTPS olmalıdır',
+          });
+        if (url.origin !== env[key])
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: 'path/query içermeyen origin-only URL olmalıdır',
           });
       }
       if (
@@ -159,6 +166,28 @@ const apiEnvSchema = z
           path: ['REDIRECT_SIGNING_SECRET'],
           message: 'postgres/staging modunda benzersiz bir secret olmalıdır',
         });
+    }
+    if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {
+      if (!env.MCP_ALLOWED_ORIGINS.includes('https://chatgpt.com'))
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['MCP_ALLOWED_ORIGINS'],
+          message: 'hosted ChatGPT için https://chatgpt.com allowlist içinde olmalıdır',
+        });
+      for (const [key, origins] of [
+        ['MCP_ALLOWED_ORIGINS', env.MCP_ALLOWED_ORIGINS],
+        ['WIDGET_RESOURCE_DOMAINS', env.WIDGET_RESOURCE_DOMAINS],
+      ] as const) {
+        for (const value of origins) {
+          const url = new URL(value);
+          if (url.protocol !== 'https:' || url.origin !== value)
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [key],
+              message: 'hosted ortamda yalnız origin-only HTTPS URL kullanılabilir',
+            });
+        }
+      }
     }
   });
 
