@@ -172,7 +172,8 @@ const apiEnvSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['MCP_ALLOWED_ORIGINS'],
-          message: 'hosted ChatGPT için https://chatgpt.com allowlist içinde olmalıdır',
+          message:
+            'hosted ChatGPT için https://chatgpt.com allowlist içinde olmalıdır',
         });
       for (const [key, origins] of [
         ['MCP_ALLOWED_ORIGINS', env.MCP_ALLOWED_ORIGINS],
@@ -184,7 +185,8 @@ const apiEnvSchema = z
             context.addIssue({
               code: z.ZodIssueCode.custom,
               path: [key],
-              message: 'hosted ortamda yalnız origin-only HTTPS URL kullanılabilir',
+              message:
+                'hosted ortamda yalnız origin-only HTTPS URL kullanılabilir',
             });
         }
       }
