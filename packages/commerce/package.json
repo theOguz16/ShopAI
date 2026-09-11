@@ -35,6 +35,14 @@
     "./merchant-conversions": {
       "types": "./dist/merchant-conversions.d.ts",
       "import": "./dist/merchant-conversions.js"
+    },
+    "./merchant-analytics": {
+      "types": "./dist/merchant-analytics.d.ts",
+      "import": "./dist/merchant-analytics.js"
+    },
+    "./product-views": {
+      "types": "./dist/product-views.d.ts",
+      "import": "./dist/product-views.js"
     }
   },
   "dependencies": {
