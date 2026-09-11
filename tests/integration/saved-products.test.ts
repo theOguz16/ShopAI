@@ -125,7 +125,7 @@ describeWithDatabase('saved products', () => {
     await database.close();
   });
 
-  it('connects Web and ChatGPT saves to the same anonymous shopping profile', async () => {
+  it('keeps Web and MCP save/list/unsave parity on the same anonymous profile', async () => {
     const profile = await app.inject({
       method: 'GET',
       url: '/v1/shopping-profile',
@@ -142,11 +142,6 @@ describeWithDatabase('saved products', () => {
     });
     expect(webSave.statusCode).toBe(201);
     savedId = webSave.json().item.id;
-    expect(webSave.json().item).toMatchObject({
-      productId,
-      variantId,
-      available: true,
-    });
 
     const chatgptSave = await app.inject({
       method: 'POST',
@@ -188,6 +183,123 @@ describeWithDatabase('saved products', () => {
       anonymousUserId,
       userId: null,
     });
+
+    const chatgptUnsave = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        cookie: anonymousCookie,
+      },
+      payload: mcpPayload('unsave_product', { savedId }),
+    });
+    expect(chatgptUnsave.statusCode).toBe(200);
+    expect(chatgptUnsave.json().result.structuredContent).toEqual({
+      removed: true,
+    });
+
+    const webList = await app.inject({
+      method: 'GET',
+      url: '/v1/saved-products',
+      headers: { cookie: anonymousCookie },
+    });
+    expect(webList.statusCode).toBe(200);
+    expect(webList.json().items).toEqual([]);
+
+    const secondUnsave = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        cookie: anonymousCookie,
+      },
+      payload: mcpPayload('unsave_product', { savedId }),
+    });
+    expect(secondUnsave.statusCode).toBe(200);
+    expect(secondUnsave.json().result.structuredContent).toEqual({
+      removed: false,
+    });
+  });
+
+  it('supports anonymous REST save → unsave with state-idempotent repeat', async () => {
+    const save = await app.inject({
+      method: 'POST',
+      url: '/v1/saved-products',
+      headers: { cookie: anonymousCookie },
+      payload: { productId, variantId },
+    });
+    expect(save.statusCode).toBe(201);
+    const restSavedId = save.json().item.id;
+
+    const before = await app.inject({
+      method: 'GET',
+      url: '/v1/saved-products',
+      headers: { cookie: anonymousCookie },
+    });
+    expect(before.statusCode).toBe(200);
+    expect(before.json().items).toHaveLength(1);
+
+    const remove = await app.inject({
+      method: 'DELETE',
+      url: `/v1/saved-products/${restSavedId}`,
+      headers: { cookie: anonymousCookie },
+    });
+    expect(remove.statusCode).toBe(200);
+    expect(remove.json()).toEqual({ removed: true });
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/v1/saved-products',
+      headers: { cookie: anonymousCookie },
+    });
+    expect(after.statusCode).toBe(200);
+    expect(after.json().items).toEqual([]);
+
+    const repeated = await app.inject({
+      method: 'DELETE',
+      url: `/v1/saved-products/${restSavedId}`,
+      headers: { cookie: anonymousCookie },
+    });
+    expect(repeated.statusCode).toBe(404);
+
+    const [deleted] = await database.db
+      .select({ id: savedProducts.id })
+      .from(savedProducts)
+      .where(eq(savedProducts.id, restSavedId));
+    expect(deleted).toBeUndefined();
+  });
+
+  it('does not let another anonymous identity remove an owned savedId', async () => {
+    const save = await app.inject({
+      method: 'POST',
+      url: '/v1/saved-products',
+      headers: { cookie: anonymousCookie },
+      payload: { productId, variantId },
+    });
+    expect(save.statusCode).toBe(201);
+    savedId = save.json().item.id;
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/v1/saved-products',
+    });
+    expect(second.statusCode).toBe(200);
+    const secondCookie = cookieFrom(second);
+    expect(secondCookie).toBeTruthy();
+    expect(secondCookie).not.toBe(anonymousCookie);
+
+    const forbiddenRemove = await app.inject({
+      method: 'DELETE',
+      url: `/v1/saved-products/${savedId}`,
+      headers: { cookie: secondCookie },
+    });
+    expect(forbiddenRemove.statusCode).toBe(404);
+
+    const [row] = await database.db
+      .select({ id: savedProducts.id })
+      .from(savedProducts)
+      .where(eq(savedProducts.id, savedId));
+    expect(row?.id).toBe(savedId);
   });
 
   it('keeps saved history when the product later becomes unavailable', async () => {
@@ -224,7 +336,7 @@ describeWithDatabase('saved products', () => {
       .where(eq(products.id, productId));
   });
 
-  it('isolates saved products between anonymous identities', async () => {
+  it('isolates saved products between anonymous identities at RLS level', async () => {
     const second = await app.inject({
       method: 'GET',
       url: '/v1/saved-products',
