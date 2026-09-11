@@ -180,4 +180,27 @@ describe('database migrations', () => {
     expect(migration).toContain('AND m.active = true');
     expect(migration).toContain('AND m.is_public = true');
   });
+
+  it('links merchant conversions to click attribution and enforces merchant-wide order idempotency', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0019_merchant_conversion_callback.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('ADD COLUMN "click_id" uuid');
+    expect(migration).toContain('ADD COLUMN "discovery_session_id" uuid');
+    expect(migration).toContain(
+      'UNIQUE("merchant_id","external_order_id")',
+    );
+    expect(migration).toContain(
+      'REFERENCES "public"."redirect_clicks"("merchant_id","id")',
+    );
+    expect(migration).toContain('"classification" = \'human\'');
+    expect(migration).toContain(
+      "RAISE EXCEPTION 'duplicate merchant/order ids must be reconciled before 0019'",
+    );
+  });
 });
