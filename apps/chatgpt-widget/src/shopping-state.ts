@@ -9,6 +9,12 @@ export const WIDGET_VIEWS = {
   PRODUCT_DETAIL: 'PRODUCT_DETAIL',
 } as const;
 
+export const QUERY_CONTEXT_PRESENTATION = {
+  groupLabel: 'Arama bağlamı',
+  chipClassName: 'facet-chip facet-chip-context',
+  tooltip: 'Arama metninde korunuyor; kesin filtre değildir.',
+} as const;
+
 export type WidgetView = (typeof WIDGET_VIEWS)[keyof typeof WIDGET_VIEWS];
 export type QuickAttribute = 'color' | 'size';
 
