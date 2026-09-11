@@ -683,6 +683,7 @@ function Widget() {
 
               <div
                 className="option-group"
+                role="group"
                 aria-label="Fiyat ve stok alarmları"
               >
                 <label htmlFor="alert-email">Bildirim e-postası</label>
