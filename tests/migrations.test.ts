@@ -171,15 +171,11 @@ describe('database migrations', () => {
     const productBackfill = migration.indexOf(
       'SET "product_id" = variant."product_id"',
     );
-    const notNull = migration.indexOf(
-      'ALTER COLUMN "product_id" SET NOT NULL',
-    );
+    const notNull = migration.indexOf('ALTER COLUMN "product_id" SET NOT NULL');
     expect(productBackfill).toBeGreaterThanOrEqual(0);
     expect(notNull).toBeGreaterThan(productBackfill);
     expect(migration).toContain('SET "campaign" = session."campaign"');
     expect(migration).toContain('redirect_clicks_campaign_reporting');
-    expect(migration).toContain(
-      'v.product_id = redirect_clicks.product_id',
-    );
+    expect(migration).toContain('v.product_id = redirect_clicks.product_id');
   });
 });
