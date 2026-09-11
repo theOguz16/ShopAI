@@ -92,11 +92,15 @@ describeWithDatabase('product price / stock alerts', () => {
   const credentialsRef = 'secret://ALERT_TEST_WOO';
   const sent: Array<{ to: string; subject: string; text: string }> = [];
   const sender: AlertEmailSender = {
-    async send(message) {
+    send: async (message) => {
       sent.push(message);
     },
   };
-  const secrets = { async resolve() { return {}; } };
+  const secrets = {
+    async resolve() {
+      return {};
+    },
+  };
 
   let app: Awaited<ReturnType<typeof buildApp>>;
   let anonymousCookie = '';
