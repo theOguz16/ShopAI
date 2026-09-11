@@ -177,5 +177,7 @@ describe('database migrations', () => {
     expect(migration).toContain('SET "campaign" = session."campaign"');
     expect(migration).toContain('redirect_clicks_campaign_reporting');
     expect(migration).toContain('v.product_id = redirect_clicks.product_id');
+    expect(migration).toContain('AND m.active = true');
+    expect(migration).toContain('AND m.is_public = true');
   });
 });
