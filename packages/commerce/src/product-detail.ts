@@ -51,9 +51,72 @@ export interface ProductDetailRepository {
   ): Promise<ProductDetailSnapshot | null>;
 }
 
+export type MemoryProductDetailRecord = CatalogItem & {
+  published: boolean;
+  merchantActive: boolean;
+  offerActive: boolean;
+};
+
+export class MemoryProductDetailRepository implements ProductDetailRepository {
+  constructor(private readonly records: readonly MemoryProductDetailRecord[]) {}
+
+  async findProductDetail(
+    productId: string,
+    context: ProductDetailRepositoryContext = {},
+  ) {
+    const matching = this.records.filter(
+      (record) =>
+        record.productId === productId &&
+        record.published &&
+        record.merchantActive &&
+        record.offerActive &&
+        (!context.merchantIds || context.merchantIds.includes(record.merchantId)),
+    );
+    const first = matching[0];
+    if (!first) return null;
+
+    return {
+      product: {
+        id: first.productId,
+        title: first.title,
+        description: first.description,
+        category: first.category,
+        imageUrl: first.imageUrl,
+        imageAlt: first.imageAlt,
+      },
+      merchant: {
+        id: first.merchantId,
+        name: first.merchantName,
+        slug: 'demo-store',
+        displayName: first.merchantName,
+        logoUrl: null,
+      },
+      attributes: {},
+      variants: matching.map((record) => ({
+        id: record.variantId,
+        size: record.size,
+        color: record.color,
+      })),
+      offers: matching.map((record) => ({
+        id: record.offerId,
+        variantId: record.variantId,
+        priceMinor: record.priceMinor,
+        currency: record.currency,
+        available: record.available,
+        offerObservedAt: record.priceObservedAt ?? record.observedAt,
+        stockObservedAt: record.stockObservedAt,
+        checkoutUrl: record.checkoutUrl,
+      })),
+    } satisfies ProductDetailSnapshot;
+  }
+}
+
 export function aggregateAvailability(statuses: readonly StockStatus[]): StockStatus {
   if (statuses.includes('in_stock')) return 'in_stock';
-  if (statuses.length > 0 && statuses.every((status) => status === 'out_of_stock'))
+  if (
+    statuses.length > 0 &&
+    statuses.every((status) => status === 'out_of_stock')
+  )
     return 'out_of_stock';
   if (statuses.includes('stale')) return 'stale';
   return 'unknown';
