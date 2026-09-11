@@ -111,6 +111,20 @@ describe('ChatGPT widget host bridge', () => {
     bridge.destroy();
   });
 
+  it('opens signed ShopAI checkout through ChatGPT exactly once', async () => {
+    const host = fakeHost(() => undefined);
+    const openExternal = vi.fn(async () => undefined);
+    host.openai = { openExternal };
+    const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
+    const href = 'https://api.staging.shopai.example/r/signed-token';
+
+    await bridge.openCheckout(href);
+
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(openExternal).toHaveBeenCalledWith({ href, redirectUrl: false });
+    bridge.destroy();
+  });
+
   it('accepts only a validated canonical arguments envelope for tool input', () => {
     const host = fakeHost(() => undefined);
     const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
