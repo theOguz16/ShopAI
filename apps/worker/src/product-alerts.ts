@@ -1,15 +1,8 @@
-import {
-  PostgresProductAlertRepository,
-  type Database,
-} from '@shopai/db';
+import { PostgresProductAlertRepository, type Database } from '@shopai/db';
 import type { WorkerEnv } from './env.js';
 
 export interface AlertEmailSender {
-  send(input: {
-    to: string;
-    subject: string;
-    text: string;
-  }): Promise<void>;
+  send(input: { to: string; subject: string; text: string }): Promise<void>;
 }
 
 export class ResendAlertEmailSender implements AlertEmailSender {
