@@ -127,8 +127,11 @@ export class PostgresProductDetailRepository
         .orderBy(asc(productAttributes.key), asc(productAttributes.value));
 
       const attributes: Record<string, string[]> = {};
-      for (const row of attributeRows)
-        (attributes[row.key] ??= []).push(row.value);
+      for (const row of attributeRows) {
+        const values = attributes[row.key] ?? [];
+        values.push(row.value);
+        attributes[row.key] = values;
+      }
 
       return {
         product: {
