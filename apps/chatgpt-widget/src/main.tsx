@@ -175,7 +175,10 @@ function Widget() {
       if (!snapshot.output) return;
       const search = searchProductsResponseSchema.safeParse(snapshot.output);
       if (search.success) {
-        applySearchResult(snapshot.input ?? bridge.snapshot().input ?? {}, search.data);
+        applySearchResult(
+          snapshot.input ?? bridge.snapshot().input ?? {},
+          search.data,
+        );
         setLoading(false);
         return;
       }
@@ -424,7 +427,9 @@ function Widget() {
                       disabled={loading || !canInteract}
                       aria-pressed={active}
                       onClick={() =>
-                        void runSearch(toggleAttributeFilter(input, 'color', color))
+                        void runSearch(
+                          toggleAttributeFilter(input, 'color', color),
+                        )
                       }
                     >
                       {colorLabels[color] ?? color}
@@ -448,7 +453,9 @@ function Widget() {
                       disabled={loading || !canInteract}
                       aria-pressed={active}
                       onClick={() =>
-                        void runSearch(toggleAttributeFilter(input, 'size', size))
+                        void runSearch(
+                          toggleAttributeFilter(input, 'size', size),
+                        )
                       }
                     >
                       {size}
