@@ -1,4 +1,7 @@
-import { buildProductAlertEmail, shouldTriggerProductAlert } from '@shopai/commerce/product-alerts';
+import {
+  buildProductAlertEmail,
+  shouldTriggerProductAlert,
+} from '@shopai/commerce/product-alerts';
 import type {
   CreateProductAlertRequest,
   ProductAlert,
@@ -17,7 +20,14 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { Database } from './client.js';
-import { inventory, merchants, offers, products, users, variants } from './schema.js';
+import {
+  inventory,
+  merchants,
+  offers,
+  products,
+  users,
+  variants,
+} from './schema.js';
 import type { ShopperIdentity } from './saved-product-repository.js';
 
 const at = (name: string) =>
@@ -27,6 +37,7 @@ export const productAlerts = pgTable(
   'product_alerts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    merchantId: uuid('merchant_id').notNull(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     anonymousUserId: uuid('anonymous_user_id'),
     productId: uuid('product_id').notNull(),
@@ -67,7 +78,11 @@ export const productAlerts = pgTable(
         sql`coalesce(${t.targetValue}, -1)`,
       )
       .where(sql`${t.status} = 'ACTIVE'`),
-    index('product_alerts_product_status').on(t.productId, t.status),
+    index('product_alerts_merchant_product_status').on(
+      t.merchantId,
+      t.productId,
+      t.status,
+    ),
     index('product_alerts_user_created').on(t.userId, t.createdAt),
     index('product_alerts_anonymous_created').on(
       t.anonymousUserId,
@@ -80,6 +95,7 @@ export const productAlertNotifications = pgTable(
   'product_alert_notifications',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    merchantId: uuid('merchant_id').notNull(),
     alertId: uuid('alert_id')
       .notNull()
       .references(() => productAlerts.id, { onDelete: 'cascade' }),
@@ -100,7 +116,11 @@ export const productAlertNotifications = pgTable(
       'product_alert_notifications_status',
       sql`${t.status} in ('PENDING','SENDING','SENT')`,
     ),
-    index('product_alert_notifications_pending').on(t.status, t.createdAt),
+    index('product_alert_notifications_pending').on(
+      t.merchantId,
+      t.status,
+      t.createdAt,
+    ),
   ],
 );
 
@@ -128,8 +148,11 @@ async function scopePublic(tx: Tx, identity: ShopperIdentity) {
   );
 }
 
-async function scopeWorker(tx: Tx) {
+async function scopeWorker(tx: Tx, merchantId: string) {
   await tx.execute(sql`set local role shopai_worker`);
+  await tx.execute(
+    sql`select set_config('app.tenant_id', ${merchantId}, true)`,
+  );
 }
 
 function toAlert(row: typeof productAlerts.$inferSelect): ProductAlert {
@@ -156,8 +179,9 @@ export class PostgresProductAlertRepository {
   ): Promise<ProductAlert> {
     return this.db.transaction(async (tx) => {
       await scopePublic(tx, identity);
-      await this.requirePublicTarget(tx, input);
+      const merchantId = await this.requirePublicTarget(tx, input);
       const values = {
+        merchantId,
         userId: identity.kind === 'user' ? identity.userId : null,
         anonymousUserId:
           identity.kind === 'anonymous' ? identity.anonymousUserId : null,
@@ -235,7 +259,7 @@ export class PostgresProductAlertRepository {
     now: Date = new Date(),
   ): Promise<{ evaluated: number; triggered: number }> {
     return this.db.transaction(async (tx) => {
-      await scopeWorker(tx);
+      await scopeWorker(tx, merchantId);
       const candidates = await tx
         .select({
           alert: productAlerts,
@@ -249,7 +273,7 @@ export class PostgresProductAlertRepository {
         .leftJoin(variants, eq(variants.id, productAlerts.variantId))
         .where(
           and(
-            eq(products.merchantId, merchantId),
+            eq(productAlerts.merchantId, merchantId),
             eq(products.published, true),
             eq(merchants.active, true),
             eq(merchants.isPublic, true),
@@ -331,6 +355,7 @@ export class PostgresProductAlertRepository {
         await tx
           .insert(productAlertNotifications)
           .values({
+            merchantId,
             alertId: candidate.alert.id,
             recipient: candidate.alert.deliveryEmail,
             subject: email.subject,
@@ -343,13 +368,18 @@ export class PostgresProductAlertRepository {
     });
   }
 
-  async claimPendingNotifications(limit = 20) {
+  async claimPendingNotifications(merchantId: string, limit = 20) {
     return this.db.transaction(async (tx) => {
-      await scopeWorker(tx);
+      await scopeWorker(tx, merchantId);
       const pending = await tx
         .select()
         .from(productAlertNotifications)
-        .where(eq(productAlertNotifications.status, 'PENDING'))
+        .where(
+          and(
+            eq(productAlertNotifications.merchantId, merchantId),
+            eq(productAlertNotifications.status, 'PENDING'),
+          ),
+        )
         .orderBy(asc(productAlertNotifications.createdAt))
         .limit(limit);
       const claimed: Array<typeof productAlertNotifications.$inferSelect> = [];
@@ -360,6 +390,7 @@ export class PostgresProductAlertRepository {
           .where(
             and(
               eq(productAlertNotifications.id, row.id),
+              eq(productAlertNotifications.merchantId, merchantId),
               eq(productAlertNotifications.status, 'PENDING'),
             ),
           )
@@ -370,32 +401,50 @@ export class PostgresProductAlertRepository {
     });
   }
 
-  async markNotificationSent(notificationId: string, sentAt = new Date()) {
+  async markNotificationSent(
+    merchantId: string,
+    notificationId: string,
+    sentAt = new Date(),
+  ) {
     return this.db.transaction(async (tx) => {
-      await scopeWorker(tx);
+      await scopeWorker(tx, merchantId);
       await tx
         .update(productAlertNotifications)
         .set({ status: 'SENT', sentAt, lastError: null })
-        .where(eq(productAlertNotifications.id, notificationId));
+        .where(
+          and(
+            eq(productAlertNotifications.id, notificationId),
+            eq(productAlertNotifications.merchantId, merchantId),
+          ),
+        );
     });
   }
 
-  async retryNotification(notificationId: string, error: string) {
+  async retryNotification(
+    merchantId: string,
+    notificationId: string,
+    error: string,
+  ) {
     return this.db.transaction(async (tx) => {
-      await scopeWorker(tx);
+      await scopeWorker(tx, merchantId);
       await tx
         .update(productAlertNotifications)
         .set({ status: 'PENDING', lastError: error.slice(0, 1000) })
-        .where(eq(productAlertNotifications.id, notificationId));
+        .where(
+          and(
+            eq(productAlertNotifications.id, notificationId),
+            eq(productAlertNotifications.merchantId, merchantId),
+          ),
+        );
     });
   }
 
   private async requirePublicTarget(
     tx: Tx,
     input: CreateProductAlertRequest,
-  ) {
+  ): Promise<string> {
     const [product] = await tx
-      .select({ id: products.id })
+      .select({ id: products.id, merchantId: products.merchantId })
       .from(products)
       .innerJoin(merchants, eq(merchants.id, products.merchantId))
       .where(
@@ -412,21 +461,23 @@ export class PostgresProductAlertRepository {
         statusCode: 404,
         code: 'PRODUCT_NOT_FOUND',
       });
-    if (!input.variantId) return;
-    const [variant] = await tx
-      .select({ id: variants.id })
-      .from(variants)
-      .where(
-        and(
-          eq(variants.id, input.variantId),
-          eq(variants.productId, input.productId),
-        ),
-      )
-      .limit(1);
-    if (!variant)
-      throw Object.assign(new Error('Varyant ürüne ait değil.'), {
-        statusCode: 400,
-        code: 'VARIANT_PRODUCT_MISMATCH',
-      });
+    if (input.variantId) {
+      const [variant] = await tx
+        .select({ id: variants.id })
+        .from(variants)
+        .where(
+          and(
+            eq(variants.id, input.variantId),
+            eq(variants.productId, input.productId),
+          ),
+        )
+        .limit(1);
+      if (!variant)
+        throw Object.assign(new Error('Varyant ürüne ait değil.'), {
+          statusCode: 400,
+          code: 'VARIANT_PRODUCT_MISMATCH',
+        });
+    }
+    return product.merchantId;
   }
 }
