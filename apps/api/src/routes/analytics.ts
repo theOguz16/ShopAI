@@ -79,9 +79,7 @@ export async function registerAnalyticsRoutes(
             count: sql<number>`count(*)::int`,
           })
           .from(redirectClicks)
-          .where(
-            and(clickRange, eq(redirectClicks.classification, 'human')),
-          )
+          .where(and(clickRange, eq(redirectClicks.classification, 'human')))
           .groupBy(redirectClicks.surface);
         const byCampaign = await tx
           .select({
@@ -258,8 +256,7 @@ export async function registerAnalyticsRoutes(
               'Geriye dönük alias; artık gerçek ürün detay görüntüleme event sayısını temsil eder.',
             conversionRate:
               'Geriye dönük alias; checkoutToOrderRate ile aynıdır.',
-            attributedSales:
-              'Geriye dönük alias; orders ile aynıdır.',
+            attributedSales: 'Geriye dönük alias; orders ile aynıdır.',
             incrementalSales:
               'Kontrol grubu olmadığından ölçülmüyor; atfedilen satışla aynı değildir.',
           },
