@@ -275,6 +275,7 @@ export async function buildApp(
     const server = createMcpServer(resolvedServices, {
       origin: env.WIDGET_ORIGIN,
       resourceDomains: env.WIDGET_RESOURCE_DOMAINS,
+      redirectOrigin: env.MCP_PUBLIC_ORIGIN,
     });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

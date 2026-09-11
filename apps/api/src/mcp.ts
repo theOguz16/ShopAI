@@ -10,12 +10,13 @@ import {
 } from '@shopai/contracts/search-products';
 import type { Services } from './services.js';
 
-export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-products-v1.html';
-export const SHOPAI_WIDGET_ASSET_VERSION = '1';
+export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-shopping-v2.html';
+export const SHOPAI_WIDGET_ASSET_VERSION = '2';
 
 export type WidgetConfig = {
   origin: string;
   resourceDomains: string[];
+  redirectOrigin: string;
 };
 
 function widgetDocument(origin: string) {
@@ -28,7 +29,7 @@ function widgetDocument(origin: string) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ShopAI ürün sonuçları</title>
+    <title>ShopAI visual shopping</title>
   </head>
   <body>
     <div id="root" data-dto-version="1"></div>
@@ -68,20 +69,21 @@ export function createMcpServer(
   widget: WidgetConfig = {
     origin: 'http://127.0.0.1:3001',
     resourceDomains: ['https://example.com'],
+    redirectOrigin: 'http://127.0.0.1:4000',
   },
 ) {
   const server = new McpServer(
-    { name: 'shopai', version: '0.2.0' },
+    { name: 'shopai', version: '0.3.0' },
     {
       instructions:
-        'Yalnız yayımlanmış public katalog verisini arayın. Widget kullanılamasa bile tool metnindeki ürün bilgilerini kullanıcıya sunun.',
+        'Ürün keşfi isteklerinde search_products kullanın. category, price, size ve color gibi desteklenen filtreleri canonical alanlara taşıyın; attributes içinde yalnız size/sizes ve color/colors kullanın. Fit/oversized/sleeve gibi henüz structured public-search filtresi olmayan nitelikleri query metninde koruyun, unsupported attribute üretmeyin. Uyumlu ChatGPT yüzeyinde structuredContent CATEGORY_SELECT → PRODUCT_GRID → PRODUCT_DETAIL visual-shopping widget akışında gösterilir; widget yoksa tool metnindeki yayımlanmış katalog bilgisini kullanıcıya sunun.',
     },
   );
   const resourceDomains = [
     ...new Set([widget.origin, ...widget.resourceDomains]),
   ];
   server.registerResource(
-    'shopai-products-widget',
+    'shopai-shopping-widget',
     SHOPAI_WIDGET_URI,
     {},
     async () => ({
@@ -97,12 +99,13 @@ export function createMcpServer(
               csp: { connectDomains: [], resourceDomains },
             },
             'openai/widgetDescription':
-              'ShopAI yayımlanmış ürün sonuçlarını ve ürün detayını varyant/stok seçimiyle gösterir.',
+              'ShopAI visual shopping: kategori seçimi, ürün görsel kartları, hızlı renk/beden/fiyat chip filtreleri ve varyant/stok kontrollü ürün detayı. Filtre chipleri yeni search_products çağrısı yapabilir.',
             'openai/widgetPrefersBorder': true,
             'openai/widgetDomain': widget.origin,
             'openai/widgetCSP': {
               connect_domains: [],
               resource_domains: resourceDomains,
+              redirect_domains: [widget.redirectOrigin],
             },
             'shopai/assetVersion': SHOPAI_WIDGET_ASSET_VERSION,
             'shopai/dtoVersion': 1,
@@ -116,7 +119,7 @@ export function createMcpServer(
     {
       title: 'ShopAI ürün arama',
       description:
-        'Yayımlanmış katalogda query, category, price, attributes ve inStockOnly alanlarını tek public discovery sözleşmesiyle uygular.',
+        'Yayımlanmış katalogda visual-shopping araması yapar ve ChatGPT widget için kart/facet verisi döndürür. category ve price alanlarını doğrudan kullanın; attributes şu anda yalnız size/sizes ve color/colors anahtarlarını destekler. Oversized/fit/sleeve gibi diğer ürün niteliklerini attributes içine koymayın, query metninde koruyun. Widget içindeki facet değişiklikleri aynı canonical request ile bu tool’u yeniden çağırır.',
       inputSchema: searchProductsRequestSchema.shape,
       outputSchema: searchProductsResponseSchema.shape,
       annotations: {
@@ -129,7 +132,7 @@ export function createMcpServer(
         'openai/outputTemplate': SHOPAI_WIDGET_URI,
         'openai/widgetAccessible': true,
         'openai/toolInvocation/invoking': 'Ürünler aranıyor…',
-        'openai/toolInvocation/invoked': 'Ürünler hazır',
+        'openai/toolInvocation/invoked': 'Alışveriş sonuçları hazır',
         'shopai/dtoVersion': 1,
       },
     },
@@ -163,7 +166,7 @@ export function createMcpServer(
     {
       title: 'ShopAI ürün detayı',
       description:
-        'Yayımlanmış bir ürünün varyantlarını, tekliflerini, güncel stok durumunu, niteliklerini ve benzer ürünlerini döndürür.',
+        'Visual-shopping widget içinde seçilen yayımlanmış ürünün varyantlarını, tekliflerini, güncel stok durumunu, niteliklerini ve benzer ürünlerini döndürür.',
       inputSchema: productDetailRequestSchema.shape,
       outputSchema: productDetailResponseSchema.shape,
       annotations: {

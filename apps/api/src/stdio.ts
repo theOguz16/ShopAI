@@ -7,6 +7,7 @@ const services = createServices(env);
 const server = createMcpServer(services, {
   origin: env.WIDGET_ORIGIN,
   resourceDomains: env.WIDGET_RESOURCE_DOMAINS,
+  redirectOrigin: env.MCP_PUBLIC_ORIGIN,
 });
 await server.connect(new StdioServerTransport());
 for (const signal of ['SIGINT', 'SIGTERM'] as const)

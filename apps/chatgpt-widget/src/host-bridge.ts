@@ -35,6 +35,10 @@ type OpenAiHost = {
     name: string,
     args: WidgetToolInput,
   ) => Promise<{ structuredContent?: unknown }>;
+  openExternal?: (input: {
+    href: string;
+    redirectUrl: false;
+  }) => Promise<unknown> | unknown;
 };
 
 declare global {
@@ -46,6 +50,12 @@ declare global {
 export type HostWindow = {
   parent: { postMessage(message: unknown, targetOrigin: string): void };
   openai?: OpenAiHost;
+  location?: { hostname: string };
+  open?: (
+    url?: string | URL,
+    target?: string,
+    features?: string,
+  ) => Window | null;
   addEventListener(
     type: 'message',
     listener: (event: MessageEvent<JsonRpcMessage>) => void,
@@ -75,6 +85,7 @@ export type HostBridge = {
   callProductDetail(
     input: ProductDetailRequest,
   ): Promise<ProductDetailResponse>;
+  openCheckout(href: string): Promise<void>;
   destroy(): void;
 };
 
@@ -198,6 +209,22 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
       return productDetailResponseSchema.parse(
         await callTool('get_product_detail', arguments_),
       );
+    },
+    async openCheckout(href) {
+      if (destroyed) throw new Error('Host köprüsü kapatıldı.');
+      if (hostWindow.openai?.openExternal) {
+        await hostWindow.openai.openExternal({ href, redirectUrl: false });
+        return;
+      }
+      if (
+        hostWindow.location &&
+        ['127.0.0.1', 'localhost'].includes(hostWindow.location.hostname) &&
+        hostWindow.open
+      ) {
+        hostWindow.open(href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      throw new Error('ChatGPT external navigation kullanılamıyor.');
     },
     destroy() {
       if (destroyed) return;
