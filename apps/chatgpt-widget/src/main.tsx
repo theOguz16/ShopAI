@@ -681,11 +681,8 @@ function Widget() {
                   : stockStatusLabel(detail.availability)}
               </p>
 
-              <div
-                className="option-group"
-                role="group"
-                aria-label="Fiyat ve stok alarmları"
-              >
+              <fieldset className="option-group">
+                <legend>Fiyat ve stok alarmları</legend>
                 <label htmlFor="alert-email">Bildirim e-postası</label>
                 <input
                   id="alert-email"
@@ -740,7 +737,7 @@ function Widget() {
                   </button>
                 ) : null}
                 {alertNotice ? <p role="status">{alertNotice}</p> : null}
-              </div>
+              </fieldset>
 
               {checkoutUrl ? (
                 <button
