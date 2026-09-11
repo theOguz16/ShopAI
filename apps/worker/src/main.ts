@@ -11,11 +11,13 @@ import { redisConnection } from './connection.js';
 import { parseWorkerEnv } from './env.js';
 import { enqueueImportOutboxEvent } from './outbox.js';
 import { processImportReference } from './process-import.js';
+import { createAlertEmailSender } from './product-alerts.js';
 import { connectionToSyncJob } from './scheduler.js';
 import { EnvironmentSecretResolver, syncCatalogConnection } from './sync.js';
 
 const env = parseWorkerEnv(process.env);
 const database = createDatabase(env.DATABASE_URL);
+const alertEmailSender = createAlertEmailSender(env);
 const operationalLog = (
   level: 'info' | 'error' | 'warn',
   event: string,
@@ -51,6 +53,9 @@ const syncWorker = new Worker(
       database.db,
       job.data,
       new EnvironmentSecretResolver(process.env),
+      undefined,
+      undefined,
+      alertEmailSender,
     ),
   {
     connection: {
