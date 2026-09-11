@@ -34,10 +34,14 @@ CREATE POLICY tenant_product_attributes ON product_attributes FOR ALL TO shopai_
   WITH CHECK (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 CREATE POLICY public_product_attributes ON product_attributes FOR SELECT TO shopai_public USING (
   EXISTS (
-    SELECT 1 FROM products p
+    SELECT 1
+    FROM products p
+    JOIN merchants m ON m.id = p.merchant_id
     WHERE p.id = product_id
       AND p.merchant_id = product_attributes.merchant_id
       AND p.published = true
+      AND m.active = true
+      AND m.is_public = true
   )
 );
 --> statement-breakpoint
