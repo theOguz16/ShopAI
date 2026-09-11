@@ -15,6 +15,7 @@ import {
   MemoryProductDetailRepository,
   ProductDetails,
 } from '@shopai/commerce/product-detail';
+import { ProductViews } from '@shopai/commerce/product-views';
 import {
   parseSearchProductsRequest,
   toInternalSearchInput,
@@ -36,6 +37,7 @@ import {
   PostgresCatalogRepository,
   PostgresDiscoverySessionRepository,
   PostgresProductDetailRepository,
+  PostgresProductViewEventRepository,
   PostgresRedirectRepository,
   PostgresSearchEventRepository,
 } from '@shopai/db';
@@ -94,6 +96,9 @@ export function createServices(env: ApiEnv) {
   const searchEventRepository = database
     ? new PostgresSearchEventRepository(database.db)
     : undefined;
+  const productViews = new ProductViews(
+    database ? new PostgresProductViewEventRepository(database.db) : undefined,
+  );
 
   const resolveRestAttribution = async (
     input: unknown,
@@ -214,14 +219,24 @@ export function createServices(env: ApiEnv) {
         ? (input as { discoverySessionId?: unknown })
         : {};
     let scopedContext = context;
+    let discoverySessionId: string | undefined;
     if (typeof requestInput.discoverySessionId === 'string') {
       const session = await discoverySessions.require(
         requestInput.discoverySessionId,
       );
       discoverySessions.assertAttribution(session, attribution);
       scopedContext = discoverySessions.applyMerchantScope(session, context);
+      discoverySessionId = session.id;
     }
-    return productDetails.execute(input, scopedContext);
+    const result = await productDetails.execute(input, scopedContext);
+    await productViews.record({
+      merchantId: result.merchant.id,
+      productId: result.product.id,
+      searchId: result.searchId,
+      ...(discoverySessionId ? { discoverySessionId } : {}),
+      ...attribution,
+    });
+    return result;
   };
   return {
     search,

@@ -14,6 +14,7 @@ export default defineConfig({
       'tests/integration/sync-status.test.ts',
       'tests/integration/product-detail-api.test.ts',
       'tests/integration/merchant-conversions.test.ts',
+      'tests/integration/merchant-analytics-dashboard.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 30000,

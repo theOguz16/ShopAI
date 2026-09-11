@@ -10,3 +10,4 @@ export * from './search-event-repository.js';
 export * from './discovery-session-repository.js';
 export * from './sync-progress.js';
 export * from './merchant-conversion-repository.js';
+export * from './product-view-event-repository.js';
