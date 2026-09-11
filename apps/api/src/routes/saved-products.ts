@@ -135,9 +135,7 @@ export async function registerSavedProductRoutes(
         env,
       );
       const item = await savedProductsApi.save(identity, parsed.data);
-      return reply
-        .code(201)
-        .send(savedProductResponseSchema.parse({ item }));
+      return reply.code(201).send(savedProductResponseSchema.parse({ item }));
     },
   );
 }
