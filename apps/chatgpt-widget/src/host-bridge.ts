@@ -5,6 +5,12 @@ import {
   productDetailResponseSchema,
 } from '@shopai/contracts/product-detail';
 import {
+  type SavedProduct,
+  type SaveProductRequest,
+  savedProductResponseSchema,
+  saveProductRequestSchema,
+} from '@shopai/contracts/saved-products';
+import {
   type SearchProductsRequest,
   type SearchProductsResponse,
   searchProductsRequestSchema,
@@ -26,7 +32,10 @@ type JsonRpcMessage = {
 };
 
 export type WidgetSearchInput = SearchProductsRequest;
-type WidgetToolInput = WidgetSearchInput | ProductDetailRequest;
+type WidgetToolInput =
+  | WidgetSearchInput
+  | ProductDetailRequest
+  | SaveProductRequest;
 
 type OpenAiHost = {
   toolInput?: WidgetSearchInput;
@@ -85,6 +94,7 @@ export type HostBridge = {
   callProductDetail(
     input: ProductDetailRequest,
   ): Promise<ProductDetailResponse>;
+  callSaveProduct(input: SaveProductRequest): Promise<SavedProduct>;
   openCheckout(href: string): Promise<void>;
   destroy(): void;
 };
@@ -209,6 +219,13 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
       return productDetailResponseSchema.parse(
         await callTool('get_product_detail', arguments_),
       );
+    },
+    async callSaveProduct(input) {
+      if (destroyed) throw new Error('Host köprüsü kapatıldı.');
+      const arguments_ = saveProductRequestSchema.parse(input);
+      return savedProductResponseSchema.parse(
+        await callTool('save_product', arguments_),
+      ).item;
     },
     async openCheckout(href) {
       if (destroyed) throw new Error('Host köprüsü kapatıldı.');
