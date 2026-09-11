@@ -269,9 +269,11 @@ export const redirectClicks = pgTable(
       () => discoverySessions.id,
     ),
     offerId: uuid('offer_id').notNull(),
+    productId: uuid('product_id').notNull(),
     merchantId: uuid('merchant_id').notNull(),
     transport: text('transport').notNull(),
     surface: text('surface').notNull(),
+    campaign: text('campaign'),
     classification: text('classification').notNull(),
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
@@ -279,6 +281,10 @@ export const redirectClicks = pgTable(
     foreignKey({
       columns: [t.merchantId, t.offerId],
       foreignColumns: [offers.merchantId, offers.id],
+    }),
+    foreignKey({
+      columns: [t.merchantId, t.productId],
+      foreignColumns: [products.merchantId, products.id],
     }),
     check(
       'redirect_click_transport',
@@ -300,6 +306,11 @@ export const redirectClicks = pgTable(
     index('redirect_clicks_surface_reporting').on(
       t.merchantId,
       t.surface,
+      t.occurredAt,
+    ),
+    index('redirect_clicks_campaign_reporting').on(
+      t.merchantId,
+      t.campaign,
       t.occurredAt,
     ),
     index('redirect_clicks_discovery_session').on(
