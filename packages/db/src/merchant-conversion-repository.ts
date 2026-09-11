@@ -1,4 +1,5 @@
 import type { MerchantConversionRepository } from '@shopai/commerce/merchant-conversions';
+import { surfaceSchema, transportSchema } from '@shopai/contracts';
 import { and, eq } from 'drizzle-orm';
 import type { Database } from './client.js';
 import {
@@ -57,6 +58,8 @@ export class PostgresMerchantConversionRepository
       if (!click) return { status: 'click_not_found' as const };
       if (!click.connectionActive || !click.conversionTrackingEnabled)
         return { status: 'tracking_not_configured' as const };
+      const transport = transportSchema.parse(click.transport);
+      const surface = surfaceSchema.parse(click.surface);
 
       const values = {
         merchantId: input.merchantId,
@@ -70,8 +73,8 @@ export class PostgresMerchantConversionRepository
         searchId: click.searchId,
         discoverySessionId: click.discoverySessionId,
         offerId: click.offerId,
-        transport: click.transport,
-        surface: click.surface,
+        transport,
+        surface,
         occurredAt: new Date(),
       };
       const [created] = await tx
@@ -88,8 +91,8 @@ export class PostgresMerchantConversionRepository
           discoverySessionId: click.discoverySessionId,
           offerId: click.offerId,
           connectionId: click.connectionId,
-          transport: click.transport,
-          surface: click.surface,
+          transport,
+          surface,
         };
 
       const [existing] = await tx
@@ -126,6 +129,8 @@ export class PostgresMerchantConversionRepository
         !existing.surface
       )
         return { status: 'order_conflict' as const };
+      const existingTransport = transportSchema.parse(existing.transport);
+      const existingSurface = surfaceSchema.parse(existing.surface);
 
       return {
         status: 'duplicate' as const,
@@ -135,8 +140,8 @@ export class PostgresMerchantConversionRepository
         discoverySessionId: existing.discoverySessionId,
         offerId: existing.offerId,
         connectionId: existing.connectionId,
-        transport: existing.transport,
-        surface: existing.surface,
+        transport: existingTransport,
+        surface: existingSurface,
       };
     });
   }
