@@ -24,9 +24,9 @@ describe('ChatGPT visual shopping state', () => {
       searchId: '11111111-1111-4111-8111-111111111111',
     };
 
-    expect(
-      resolveWidgetView({ request: {}, result, hasDetail: false }),
-    ).toBe(WIDGET_VIEWS.CATEGORY_SELECT);
+    expect(resolveWidgetView({ request: {}, result, hasDetail: false })).toBe(
+      WIDGET_VIEWS.CATEGORY_SELECT,
+    );
     expect(
       resolveWidgetView({
         request: { category: 'tshirt' },
