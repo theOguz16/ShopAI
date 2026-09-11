@@ -43,8 +43,7 @@ export default function ProductDetailPage() {
     const searchId = searchParams.get('searchId');
     const discoverySessionId = searchParams.get('discoverySessionId');
     if (searchId) query.set('searchId', searchId);
-    if (discoverySessionId)
-      query.set('discoverySessionId', discoverySessionId);
+    if (discoverySessionId) query.set('discoverySessionId', discoverySessionId);
     const suffix = query.size ? `?${query.toString()}` : '';
 
     setLoading(true);
@@ -63,8 +62,12 @@ export default function ProductDetailPage() {
         const next = productDetailResponseSchema.parse(await response.json());
         if (controller.signal.aborted) return;
         setDetail(next);
-        const firstSelectable = next.variants.find((variant) => variant.selectable);
-        setSelectedColor(firstSelectable?.color ?? next.variants[0]?.color ?? '');
+        const firstSelectable = next.variants.find(
+          (variant) => variant.selectable,
+        );
+        setSelectedColor(
+          firstSelectable?.color ?? next.variants[0]?.color ?? '',
+        );
         setSelectedVariantId(firstSelectable?.id);
       })
       .catch(() => {
@@ -99,8 +102,12 @@ export default function ProductDetailPage() {
     .sort((left, right) => left.priceMinor - right.priceMinor)[0];
   const displayOffer =
     checkoutOffer ??
-    selectedOffers?.slice().sort((left, right) => left.priceMinor - right.priceMinor)[0] ??
-    detail?.offers.slice().sort((left, right) => left.priceMinor - right.priceMinor)[0];
+    selectedOffers
+      ?.slice()
+      .sort((left, right) => left.priceMinor - right.priceMinor)[0] ??
+    detail?.offers
+      .slice()
+      .sort((left, right) => left.priceMinor - right.priceMinor)[0];
 
   function chooseColor(color: string) {
     setSelectedColor(color);
@@ -119,7 +126,9 @@ export default function ProductDetailPage() {
   if (missing)
     return (
       <main className="store-shell store-message">
-        <a className="brand" href="/">ShopAI<span>●</span></a>
+        <a className="brand" href="/">
+          ShopAI<span>●</span>
+        </a>
         <h1>Bu ürünü bulamadık.</h1>
         <p>Ürün yayından kalkmış veya mağaza artık herkese açık olmayabilir.</p>
       </main>
@@ -135,8 +144,12 @@ export default function ProductDetailPage() {
   return (
     <main className="store-shell">
       <header className="store-header">
-        <a className="brand" href="/">ShopAI<span>●</span></a>
-        <a href={`/shop/${detail.merchant.slug}`}>{detail.merchant.displayName}</a>
+        <a className="brand" href="/">
+          ShopAI<span>●</span>
+        </a>
+        <a href={`/shop/${detail.merchant.slug}`}>
+          {detail.merchant.displayName}
+        </a>
       </header>
 
       <section
@@ -221,7 +234,9 @@ export default function ProductDetailPage() {
             </div>
           </fieldset>
 
-          <p className={`stock stock-${selectedVariant?.availability ?? detail.availability}`}>
+          <p
+            className={`stock stock-${selectedVariant?.availability ?? detail.availability}`}
+          >
             {selectedVariant
               ? `${selectedVariant.size} ${stockStatusLabel(selectedVariant.availability)}`
               : stockStatusLabel(detail.availability)}
@@ -249,7 +264,9 @@ export default function ProductDetailPage() {
             <dl>
               {Object.entries(detail.attributes).map(([key, values]) => (
                 <div key={key} style={{ display: 'flex', gap: 8 }}>
-                  <dt><strong>{key}</strong></dt>
+                  <dt>
+                    <strong>{key}</strong>
+                  </dt>
                   <dd>{values.join(', ')}</dd>
                 </div>
               ))}
