@@ -58,6 +58,11 @@ describe('MCP Apps product widget', () => {
         resourceDomains: ['http://127.0.0.1:3001', 'https://example.com'],
       },
     });
+    expect(content._meta['openai/widgetCSP']).toEqual({
+      connect_domains: [],
+      resource_domains: ['http://127.0.0.1:3001', 'https://example.com'],
+      redirect_domains: ['http://127.0.0.1:4000'],
+    });
   });
 
   it('keeps a useful text result when UI rendering is unavailable', async () => {
