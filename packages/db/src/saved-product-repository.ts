@@ -19,8 +19,8 @@ const at = (name: string) =>
   timestamp(name, { withTimezone: true, mode: 'date' });
 
 export type ShopperIdentity =
-  | { userId: string; anonymousUserId?: never }
-  | { anonymousUserId: string; userId?: never };
+  | { kind: 'user'; userId: string }
+  | { kind: 'anonymous'; anonymousUserId: string };
 
 export const savedProducts = pgTable(
   'saved_products',
@@ -53,7 +53,7 @@ export const savedProducts = pgTable(
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 function identityWhere(identity: ShopperIdentity) {
-  return 'userId' in identity
+  return identity.kind === 'user'
     ? and(
         eq(savedProducts.userId, identity.userId),
         isNull(savedProducts.anonymousUserId),
@@ -86,13 +86,23 @@ export class PostgresSavedProductRepository {
   ): Promise<SavedProduct> {
     return this.db.transaction(async (tx) => {
       await this.scope(tx, identity);
+      const [existing] = await tx
+        .select({ id: savedProducts.id })
+        .from(savedProducts)
+        .where(savedProductWhere(identity, input))
+        .limit(1);
+      if (existing) {
+        const item = await this.selectOne(tx, identity, existing.id);
+        if (item) return item;
+      }
+
       await this.requirePublicTarget(tx, input);
       await tx
         .insert(savedProducts)
         .values({
-          userId: 'userId' in identity ? identity.userId : null,
+          userId: identity.kind === 'user' ? identity.userId : null,
           anonymousUserId:
-            'anonymousUserId' in identity ? identity.anonymousUserId : null,
+            identity.kind === 'anonymous' ? identity.anonymousUserId : null,
           productId: input.productId,
           variantId: input.variantId ?? null,
         })
@@ -235,10 +245,10 @@ export class PostgresSavedProductRepository {
   private async scope(tx: Tx, identity: ShopperIdentity) {
     await tx.execute(sql`set local role shopai_public`);
     await tx.execute(
-      sql`select set_config('app.user_id', ${'userId' in identity ? identity.userId : ''}, true)`,
+      sql`select set_config('app.user_id', ${identity.kind === 'user' ? identity.userId : ''}, true)`,
     );
     await tx.execute(
-      sql`select set_config('app.anonymous_user_id', ${'anonymousUserId' in identity ? identity.anonymousUserId : ''}, true)`,
+      sql`select set_config('app.anonymous_user_id', ${identity.kind === 'anonymous' ? identity.anonymousUserId : ''}, true)`,
     );
   }
 }
