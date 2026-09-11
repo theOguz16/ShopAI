@@ -7,7 +7,7 @@ import type {
   ProductAlert,
 } from '@shopai/contracts/product-alerts';
 import { productAlertSchema } from '@shopai/contracts/product-alerts';
-import { and, asc, eq, inArray, isNull, min, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, min, or, sql } from 'drizzle-orm';
 import {
   bigint,
   check,
@@ -32,6 +32,8 @@ import type { ShopperIdentity } from './saved-product-repository.js';
 
 const at = (name: string) =>
   timestamp(name, { withTimezone: true, mode: 'date' });
+
+export const PRODUCT_ALERT_NOTIFICATION_LEASE_MS = 10 * 60 * 1000;
 
 export const productAlerts = pgTable(
   'product_alerts',
@@ -105,6 +107,7 @@ export const productAlertNotifications = pgTable(
     body: text('body').notNull(),
     status: text('status').notNull().default('PENDING'),
     attempts: integer('attempts').notNull().default(0),
+    claimedAt: at('claimed_at'),
     lastError: text('last_error'),
     createdAt: at('created_at').notNull().defaultNow(),
     sentAt: at('sent_at'),
@@ -116,9 +119,14 @@ export const productAlertNotifications = pgTable(
       'product_alert_notifications_status',
       sql`${t.status} in ('PENDING','SENDING','SENT')`,
     ),
+    check(
+      'product_alert_notifications_state_shape',
+      sql`(${t.status} = 'PENDING' and ${t.claimedAt} is null and ${t.sentAt} is null) or (${t.status} = 'SENDING' and ${t.claimedAt} is not null and ${t.sentAt} is null) or (${t.status} = 'SENT' and ${t.claimedAt} is not null and ${t.sentAt} is not null)`,
+    ),
     index('product_alert_notifications_pending').on(
       t.merchantId,
       t.status,
+      t.claimedAt,
       t.createdAt,
     ),
   ],
@@ -370,16 +378,29 @@ export class PostgresProductAlertRepository {
     });
   }
 
-  async claimPendingNotifications(merchantId: string, limit = 20) {
+  async claimPendingNotifications(
+    merchantId: string,
+    now: Date = new Date(),
+    leaseMs: number = PRODUCT_ALERT_NOTIFICATION_LEASE_MS,
+    limit = 20,
+  ) {
     return this.db.transaction(async (tx) => {
       await scopeWorker(tx, merchantId);
+      const staleBefore = new Date(now.getTime() - leaseMs);
+      const claimable = or(
+        eq(productAlertNotifications.status, 'PENDING'),
+        and(
+          eq(productAlertNotifications.status, 'SENDING'),
+          lt(productAlertNotifications.claimedAt, staleBefore),
+        ),
+      );
       const pending = await tx
         .select()
         .from(productAlertNotifications)
         .where(
           and(
             eq(productAlertNotifications.merchantId, merchantId),
-            eq(productAlertNotifications.status, 'PENDING'),
+            claimable,
           ),
         )
         .orderBy(asc(productAlertNotifications.createdAt))
@@ -388,12 +409,16 @@ export class PostgresProductAlertRepository {
       for (const row of pending) {
         const [next] = await tx
           .update(productAlertNotifications)
-          .set({ status: 'SENDING', attempts: row.attempts + 1 })
+          .set({
+            status: 'SENDING',
+            claimedAt: now,
+            attempts: sql`${productAlertNotifications.attempts} + 1`,
+          })
           .where(
             and(
               eq(productAlertNotifications.id, row.id),
               eq(productAlertNotifications.merchantId, merchantId),
-              eq(productAlertNotifications.status, 'PENDING'),
+              claimable,
             ),
           )
           .returning();
@@ -417,6 +442,7 @@ export class PostgresProductAlertRepository {
           and(
             eq(productAlertNotifications.id, notificationId),
             eq(productAlertNotifications.merchantId, merchantId),
+            eq(productAlertNotifications.status, 'SENDING'),
           ),
         );
     });
@@ -431,11 +457,16 @@ export class PostgresProductAlertRepository {
       await scopeWorker(tx, merchantId);
       await tx
         .update(productAlertNotifications)
-        .set({ status: 'PENDING', lastError: error.slice(0, 1000) })
+        .set({
+          status: 'PENDING',
+          claimedAt: null,
+          lastError: error.slice(0, 1000),
+        })
         .where(
           and(
             eq(productAlertNotifications.id, notificationId),
             eq(productAlertNotifications.merchantId, merchantId),
+            eq(productAlertNotifications.status, 'SENDING'),
           ),
         );
     });
