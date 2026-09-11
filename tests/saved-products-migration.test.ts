@@ -38,16 +38,13 @@ describe('saved products migration', () => {
       ),
     ) as { entries: Array<{ idx: number; tag: string }> };
     expect(journal.entries.slice(-4)).toEqual([
-      expect.objectContaining({
-        idx: 18,
-        tag: '0019_merchant_conversion_callback',
-      }),
       expect.objectContaining({ idx: 19, tag: '0020_product_view_events' }),
       expect.objectContaining({
         idx: 20,
         tag: '0021_anonymous_shopping_profile',
       }),
       expect.objectContaining({ idx: 21, tag: '0022_saved_products' }),
+      expect.objectContaining({ idx: 22, tag: '0023_product_alerts' }),
     ]);
   });
 });
