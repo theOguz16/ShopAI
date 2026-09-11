@@ -8,6 +8,7 @@ import {
 import { ProductCard } from '@shopai/ui';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { buildProductDetailHref } from '../../../lib/product-detail-href';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -283,7 +284,15 @@ export default function ProductDetailPage() {
           </div>
           <ul className="product-grid">
             {detail.similarProducts.map((item) => (
-              <ProductCard key={item.offerId} item={item} />
+              <ProductCard
+                key={item.offerId}
+                item={item}
+                detailHref={buildProductDetailHref({
+                  productId: item.productId,
+                  searchId: detail.searchId,
+                  discoverySessionId: searchParams.get('discoverySessionId'),
+                })}
+              />
             ))}
           </ul>
         </section>
