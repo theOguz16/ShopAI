@@ -21,6 +21,7 @@ import {
   type OnboardingConnectorFactory,
   registerOnboardingRoutes,
 } from './routes/onboarding.js';
+import { registerProductDetailRoutes } from './routes/product-detail.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
@@ -124,6 +125,7 @@ export async function buildApp(
   await registerStorefrontRoutes(app);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
+  await registerProductDetailRoutes(app, resolvedServices);
   await registerRedirectRoutes(app, resolvedServices);
   await registerAnalyticsRoutes(app, env);
   await registerConversionRoutes(app, env);
