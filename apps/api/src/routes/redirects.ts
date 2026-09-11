@@ -9,10 +9,11 @@ export async function registerRedirectRoutes(
   app.get('/r/:token', async (request, reply) => {
     const { token } = request.params as { token: string };
     try {
-      const resolved = await services.redirects.open(
-        token,
-        request.headers['user-agent'],
-      );
+      const resolved = await services.redirects.open(token, {
+        userAgent: request.headers['user-agent'],
+        purpose: request.headers.purpose,
+        secPurpose: request.headers['sec-purpose'],
+      });
       if (!resolved)
         return reply.code(404).send({
           code: 'OFFER_UNAVAILABLE',
