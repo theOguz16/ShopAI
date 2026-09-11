@@ -1,7 +1,16 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
+  MerchantConversions,
+  verifyMerchantConversionRequestSignature,
+} from '@shopai/commerce/merchant-conversions';
+import {
+  MERCHANT_CONVERSION_HEADERS,
+  merchantConversionRequestSchema,
+} from '@shopai/contracts/merchant-conversions';
+import {
   connections,
   conversionOrders,
+  PostgresMerchantConversionRepository,
   searchEvents,
   setTenantContext,
 } from '@shopai/db';
@@ -31,10 +40,78 @@ const eventSchema = z
     path: ['refundedMinor'],
   });
 
+const merchantIdSchema = z.string().uuid();
+
+function headerValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export async function registerConversionRoutes(
   app: FastifyInstance,
   env: ApiEnv,
 ) {
+  const merchantConversions = app.authApi.db
+    ? new MerchantConversions(
+        new PostgresMerchantConversionRepository(app.authApi.db),
+      )
+    : null;
+
+  app.post('/merchant/conversions', async (request, reply) => {
+    if (!env.CONVERSION_CALLBACK_SECRET || !merchantConversions)
+      return reply.code(404).send({ code: 'CONVERSION_NOT_CONFIGURED' });
+    const parsed = merchantConversionRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ code: 'INVALID_EVENT' });
+
+    const merchantId = headerValue(
+      request.headers[MERCHANT_CONVERSION_HEADERS.merchantId],
+    );
+    const timestamp = headerValue(
+      request.headers[MERCHANT_CONVERSION_HEADERS.timestamp],
+    );
+    const signature = headerValue(
+      request.headers[MERCHANT_CONVERSION_HEADERS.signature],
+    );
+    if (
+      !merchantId ||
+      !merchantIdSchema.safeParse(merchantId).success ||
+      !timestamp ||
+      !signature
+    )
+      return reply.code(401).send({ code: 'INVALID_SIGNATURE' });
+
+    const verification = verifyMerchantConversionRequestSignature({
+      rootSecret: env.CONVERSION_CALLBACK_SECRET,
+      merchantId,
+      timestamp,
+      signature,
+      payload: parsed.data,
+    });
+    if (!verification.valid)
+      return reply.code(401).send({ code: verification.code });
+
+    const result = await merchantConversions.confirmPaidOrder(
+      merchantId,
+      parsed.data,
+    );
+    if (result.status === 'click_not_found')
+      return reply.code(404).send({ code: 'CLICK_NOT_FOUND' });
+    if (result.status === 'tracking_not_configured')
+      return reply.code(404).send({ code: 'CONVERSION_NOT_CONFIGURED' });
+    if (result.status === 'order_conflict')
+      return reply.code(409).send({ code: 'ORDER_ID_CONFLICT' });
+
+    return reply.code(result.status === 'created' ? 201 : 200).send({
+      accepted: true,
+      conversionId: result.conversionId,
+      duplicate: result.status === 'duplicate',
+      clickId: result.clickId,
+      searchId: result.searchId,
+      discoverySessionId: result.discoverySessionId,
+      surface: result.surface,
+    });
+  });
+
+  // Legacy connector callback kept for refund/cancellation compatibility.
   app.post(
     '/v1/conversions/:merchantId/:connectionId',
     async (request, reply) => {
@@ -130,7 +207,7 @@ export async function registerConversionRoutes(
           .values(values)
           .onConflictDoUpdate({
             target: [
-              conversionOrders.connectionId,
+              conversionOrders.merchantId,
               conversionOrders.externalOrderId,
             ],
             set: {

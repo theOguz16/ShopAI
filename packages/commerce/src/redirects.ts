@@ -148,7 +148,7 @@ export interface RedirectRepository {
     merchantId: string;
     productId: string;
     classification: 'human' | 'bot';
-  }): Promise<void>;
+  }): Promise<string>;
 }
 
 export class RedirectService {
@@ -175,12 +175,14 @@ export class RedirectService {
     if (url.protocol !== 'https:')
       throw new Error('Kayıtlı yönlendirme hedefi HTTPS değil.');
     const classification = classifyRedirectRequest(signals);
-    await this.repository.recordClick({
+    const clickId = await this.repository.recordClick({
       claims,
       merchantId: target.merchantId,
       productId: target.productId,
       classification,
     });
-    return { url: url.toString(), classification };
+    if (classification === 'human')
+      url.searchParams.set('shopai_click_id', clickId);
+    return { url: url.toString(), classification, clickId };
   }
 }

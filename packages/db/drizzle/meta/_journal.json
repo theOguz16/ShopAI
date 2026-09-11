@@ -127,6 +127,13 @@
       "when": 1789130000000,
       "tag": "0018_checkout_click_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789132200000,
+      "tag": "0019_merchant_conversion_callback",
+      "breakpoints": true
     }
   ]
 }

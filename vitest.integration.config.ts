@@ -13,6 +13,7 @@ export default defineConfig({
       'tests/integration/merchant-onboarding.test.ts',
       'tests/integration/sync-status.test.ts',
       'tests/integration/product-detail-api.test.ts',
+      'tests/integration/merchant-conversions.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 30000,

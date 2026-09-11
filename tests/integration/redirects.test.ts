@@ -108,7 +108,12 @@ describe('signed redirects', () => {
         headers: { 'user-agent': 'Mozilla/5.0 ShopAI acceptance test' },
       });
       expect(opened.statusCode).toBe(302);
-      expect(opened.headers.location).toBe('https://example.com/products/1');
+      const merchantLocation = new URL(opened.headers.location ?? '');
+      expect(merchantLocation.origin).toBe('https://example.com');
+      expect(merchantLocation.pathname).toBe('/products/1');
+      expect(merchantLocation.searchParams.get('shopai_click_id')).toBe(
+        repository.clicks[0]?.id,
+      );
       expect(repository.clicks).toHaveLength(1);
       expect(repository.clicks[0]).toMatchObject({
         productId: item.productId,
@@ -156,6 +161,9 @@ describe('signed redirects', () => {
       },
     );
     expect(opened?.classification).toBe('bot');
+    expect(new URL(opened?.url ?? '').searchParams.has('shopai_click_id')).toBe(
+      false,
+    );
     expect(repository.clicks[0]).toMatchObject({
       productId,
       classification: 'bot',

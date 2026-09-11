@@ -178,8 +178,11 @@ describeWithDatabase('discovery sessions', () => {
       headers: { 'user-agent': 'Mozilla/5.0 ShopAI discovery test' },
     });
     expect(redirect.statusCode).toBe(302);
-    expect(redirect.headers.location).toBe(
-      'https://merchant.example/mavi-product',
+    const merchantLocation = new URL(redirect.headers.location ?? '');
+    expect(merchantLocation.origin).toBe('https://merchant.example');
+    expect(merchantLocation.pathname).toBe('/mavi-product');
+    expect(merchantLocation.searchParams.get('shopai_click_id')).toMatch(
+      /^[0-9a-f-]{36}$/u,
     );
 
     const [click] = await database.db

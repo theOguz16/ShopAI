@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { RedirectRepository } from '@shopai/commerce';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
@@ -53,7 +54,7 @@ export class PostgresRedirectRepository implements RedirectRepository {
   }
 
   async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
-    await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
       const attributionResult = await tx.execute(
         sql`
@@ -74,7 +75,9 @@ export class PostgresRedirectRepository implements RedirectRepository {
             .where(eq(discoverySessions.id, discoverySessionId))
             .limit(1)
         : [];
+      const clickId = randomUUID();
       await tx.insert(redirectClicks).values({
+        id: clickId,
         searchId: input.claims.searchId,
         discoverySessionId,
         offerId: input.claims.offerId,
@@ -85,6 +88,7 @@ export class PostgresRedirectRepository implements RedirectRepository {
         campaign: session?.campaign ?? null,
         classification: input.classification,
       });
+      return clickId;
     });
   }
 }

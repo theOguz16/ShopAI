@@ -278,6 +278,7 @@ export const redirectClicks = pgTable(
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
   (t) => [
+    unique().on(t.merchantId, t.id),
     foreignKey({
       columns: [t.merchantId, t.offerId],
       foreignColumns: [offers.merchantId, offers.id],
@@ -384,7 +385,11 @@ export const conversionOrders = pgTable(
     refundedMinor: bigint('refunded_minor', { mode: 'number' })
       .notNull()
       .default(0),
+    clickId: uuid('click_id'),
     searchId: uuid('search_id'),
+    discoverySessionId: uuid('discovery_session_id').references(
+      () => discoverySessions.id,
+    ),
     offerId: uuid('offer_id'),
     transport: text('transport'),
     surface: text('surface'),
@@ -394,9 +399,14 @@ export const conversionOrders = pgTable(
   (t) => [
     unique().on(t.merchantId, t.id),
     unique().on(t.connectionId, t.externalOrderId),
+    unique().on(t.merchantId, t.externalOrderId),
     foreignKey({
       columns: [t.merchantId, t.connectionId],
       foreignColumns: [connections.merchantId, connections.id],
+    }),
+    foreignKey({
+      columns: [t.merchantId, t.clickId],
+      foreignColumns: [redirectClicks.merchantId, redirectClicks.id],
     }),
     foreignKey({
       columns: [t.merchantId, t.offerId],
@@ -423,6 +433,11 @@ export const conversionOrders = pgTable(
     index('conversion_orders_surface_reporting').on(
       t.merchantId,
       t.surface,
+      t.occurredAt,
+    ),
+    index('conversion_orders_click').on(t.merchantId, t.clickId),
+    index('conversion_orders_discovery_session').on(
+      t.discoverySessionId,
       t.occurredAt,
     ),
   ],
