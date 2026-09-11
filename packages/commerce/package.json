@@ -43,6 +43,10 @@
     "./product-views": {
       "types": "./dist/product-views.d.ts",
       "import": "./dist/product-views.js"
+    },
+    "./anonymous-shopping-profile": {
+      "types": "./dist/anonymous-shopping-profile.d.ts",
+      "import": "./dist/anonymous-shopping-profile.js"
     }
   },
   "dependencies": {

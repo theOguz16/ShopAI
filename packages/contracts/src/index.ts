@@ -2,6 +2,7 @@ export * from './attribution.js';
 export * from './discovery.js';
 export * from './onboarding.js';
 export * from './storefront.js';
+export * from './anonymous-shopping-profile.js';
 
 import { z } from 'zod';
 

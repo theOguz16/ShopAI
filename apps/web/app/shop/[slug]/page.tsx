@@ -40,6 +40,7 @@ export default function BrandedStorefrontPage() {
   const createDiscoverySession = useCallback(async (merchant?: string) => {
     const response = await fetch(`${api}/discovery-session`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         surface: 'web',
@@ -69,6 +70,7 @@ export default function BrandedStorefrontPage() {
             : `${api}/v1/search`;
         const response = await fetch(endpoint, {
           method: 'POST',
+          credentials: 'include',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             query: nextQuery,
@@ -103,6 +105,7 @@ export default function BrandedStorefrontPage() {
     setResult(undefined);
 
     void fetch(`${api}/v1/storefronts/${encodeURIComponent(slug)}`, {
+      credentials: 'include',
       signal: controller.signal,
     })
       .then(async (response) => {
