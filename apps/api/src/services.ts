@@ -12,6 +12,10 @@ import {
   type DiscoverySessionRepository,
 } from '@shopai/commerce/discovery';
 import {
+  MemoryProductDetailRepository,
+  ProductDetails,
+} from '@shopai/commerce/product-detail';
+import {
   parseSearchProductsRequest,
   toInternalSearchInput,
   toSearchProductsResponse,
@@ -27,6 +31,7 @@ import {
   createDatabase,
   PostgresCatalogRepository,
   PostgresDiscoverySessionRepository,
+  PostgresProductDetailRepository,
   PostgresRedirectRepository,
   PostgresSearchEventRepository,
 } from '@shopai/db';
@@ -74,6 +79,10 @@ export function createServices(env: ApiEnv) {
     : new MemoryDiscoverySessionRepository(demoRecords);
   const discoverySessions = new DiscoverySessions(discoverySessionRepository);
   const search = new SearchProducts(repository, parser, env.CATALOG_MODE);
+  const productDetailRepository = database
+    ? new PostgresProductDetailRepository(database.db)
+    : new MemoryProductDetailRepository(demoRecords);
+  const productDetails = new ProductDetails(productDetailRepository, search);
   const searchEventRepository = database
     ? new PostgresSearchEventRepository(database.db)
     : undefined;
@@ -154,10 +163,31 @@ export function createServices(env: ApiEnv) {
     );
     return toSearchProductsResponse(result);
   };
+  const executeProductDetail = async (
+    input: unknown,
+    context: { merchantIds?: string[] } = {},
+    attribution: AttributionContext = WEB_ATTRIBUTION,
+  ) => {
+    const requestInput =
+      input && typeof input === 'object'
+        ? (input as { discoverySessionId?: unknown })
+        : {};
+    let scopedContext = context;
+    if (typeof requestInput.discoverySessionId === 'string') {
+      const session = await discoverySessions.require(
+        requestInput.discoverySessionId,
+      );
+      discoverySessions.assertAttribution(session, attribution);
+      scopedContext = discoverySessions.applyMerchantScope(session, context);
+    }
+    return productDetails.execute(input, scopedContext);
+  };
   return {
     search,
+    productDetails,
     executeSearch,
     executePublicSearch,
+    executeProductDetail,
     discoverySessions,
     repository,
     redirects: new RedirectService(
