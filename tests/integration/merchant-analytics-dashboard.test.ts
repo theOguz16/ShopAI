@@ -52,7 +52,6 @@ describeWithDatabase('merchant analytics dashboard', () => {
   let productB = '';
   let offerA = '';
   let offerB = '';
-  let detailSearchId = '';
 
   beforeAll(async () => {
     await database.db.execute(
@@ -176,11 +175,11 @@ describeWithDatabase('merchant analytics dashboard', () => {
     await database.close();
   });
 
-  it('records successful product detail opens as product view events', async () => {
-    detailSearchId = randomUUID();
+  it('records successful REST product detail opens as web product view events', async () => {
+    const searchId = randomUUID();
     const response = await app.inject({
       method: 'GET',
-      url: `/v1/products/${productA}/detail?searchId=${detailSearchId}`,
+      url: `/v1/products/${productA}/detail?searchId=${searchId}`,
     });
     expect(response.statusCode).toBe(200);
 
@@ -190,15 +189,51 @@ describeWithDatabase('merchant analytics dashboard', () => {
       .where(
         and(
           eq(productViewEvents.merchantId, merchantA),
-          eq(productViewEvents.searchId, detailSearchId),
+          eq(productViewEvents.searchId, searchId),
         ),
       );
     expect(view).toMatchObject({
       merchantId: merchantA,
       productId: productA,
-      searchId: detailSearchId,
+      searchId,
       transport: 'rest',
       surface: 'web',
+    });
+  });
+
+  it('records MCP product detail opens as ChatGPT product view events', async () => {
+    const searchId = randomUUID();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { accept: 'application/json, text/event-stream' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'get_product_detail',
+          arguments: { productId: productA, searchId },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const [view] = await database.db
+      .select()
+      .from(productViewEvents)
+      .where(
+        and(
+          eq(productViewEvents.merchantId, merchantA),
+          eq(productViewEvents.searchId, searchId),
+        ),
+      );
+    expect(view).toMatchObject({
+      merchantId: merchantA,
+      productId: productA,
+      searchId,
+      transport: 'mcp',
+      surface: 'chatgpt',
     });
   });
 
@@ -394,7 +429,7 @@ describeWithDatabase('merchant analytics dashboard', () => {
       measurement: 'measured',
       metrics: {
         aiSearches: 2,
-        productViews: 2,
+        productViews: 3,
         checkoutClicks: 4,
         orders: 2,
         attributedGmvMinor: 15_000,
