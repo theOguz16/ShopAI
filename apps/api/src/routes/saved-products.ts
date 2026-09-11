@@ -79,7 +79,7 @@ class MemorySavedProductsApi implements SavedProductsApi {
   }
 
   private identityKey(identity: ShopperIdentity) {
-    return 'userId' in identity
+    return identity.kind === 'user'
       ? `user:${identity.userId}`
       : `anonymous:${identity.anonymousUserId}`;
   }
@@ -91,10 +91,10 @@ export async function resolveShopperIdentity(
   services: Services,
   env: ApiEnv,
 ): Promise<ShopperIdentity> {
-  if (request.auth) return { userId: request.auth.userId };
+  if (request.auth) return { kind: 'user', userId: request.auth.userId };
   const anonymousUserId = ensureAnonymousUserId(request, reply, env);
   await services.shoppingProfiles.getOrCreate(anonymousUserId);
-  return { anonymousUserId };
+  return { kind: 'anonymous', anonymousUserId };
 }
 
 export async function registerSavedProductRoutes(
