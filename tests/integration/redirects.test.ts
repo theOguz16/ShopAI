@@ -161,9 +161,9 @@ describe('signed redirects', () => {
       },
     );
     expect(opened?.classification).toBe('bot');
-    expect(
-      new URL(opened?.url ?? '').searchParams.has('shopai_click_id'),
-    ).toBe(false);
+    expect(new URL(opened?.url ?? '').searchParams.has('shopai_click_id')).toBe(
+      false,
+    );
     expect(repository.clicks[0]).toMatchObject({
       productId,
       classification: 'bot',
