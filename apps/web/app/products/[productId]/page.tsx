@@ -5,7 +5,11 @@ import {
   type ProductDetailResponse,
   productDetailResponseSchema,
 } from '@shopai/contracts/product-detail';
-import { savedProductResponseSchema } from '@shopai/contracts/saved-products';
+import {
+  savedProductResponseSchema,
+  savedProductsResponseSchema,
+  unsaveProductResponseSchema,
+} from '@shopai/contracts/saved-products';
 import { ProductCard } from '@shopai/ui';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -29,14 +33,19 @@ function money(minor: number, currency: 'TRY') {
   }).format(minor / 100);
 }
 
+function savedKey(productId: string, variantId?: string | null) {
+  return `${productId}:${variantId ?? '-'}`;
+}
+
 export default function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
   const searchParams = useSearchParams();
   const [detail, setDetail] = useState<ProductDetailResponse>();
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<string>();
-  const [savedKey, setSavedKey] = useState('');
+  const [savedIds, setSavedIds] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [savedStateLoading, setSavedStateLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState('');
@@ -53,7 +62,6 @@ export default function ProductDetailPage() {
     setLoading(true);
     setMissing(false);
     setError('');
-    setSavedKey('');
     void fetch(
       `${api}/v1/products/${encodeURIComponent(productId)}/detail${suffix}`,
       { signal: controller.signal },
@@ -85,6 +93,37 @@ export default function ProductDetailPage() {
     return () => controller.abort();
   }, [productId, searchParams]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setSavedStateLoading(true);
+    setSavedIds({});
+    void fetch(`${api}/v1/saved-products`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('saved_products_failed');
+        const result = savedProductsResponseSchema.parse(await response.json());
+        if (controller.signal.aborted) return;
+        setSavedIds(
+          Object.fromEntries(
+            result.items.map((item) => [
+              savedKey(item.productId, item.variantId),
+              item.id,
+            ]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setError('Kayıt durumu şu anda yüklenemiyor. Yeniden deneyebilirsin.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSavedStateLoading(false);
+      });
+    return () => controller.abort();
+  }, [productId]);
+
   const colors = useMemo(
     () => [...new Set(detail?.variants.map((variant) => variant.color) ?? [])],
     [detail],
@@ -113,8 +152,9 @@ export default function ProductDetailPage() {
     detail?.offers
       .slice()
       .sort((left, right) => left.priceMinor - right.priceMinor)[0];
-  const currentSavedKey = `${productId}:${selectedVariantId ?? '-'}`;
-  const isSaved = savedKey === currentSavedKey;
+  const currentSavedKey = savedKey(productId, selectedVariantId);
+  const currentSavedId = savedIds[currentSavedKey];
+  const isSaved = Boolean(currentSavedId);
 
   function chooseColor(color: string) {
     setSelectedColor(color);
@@ -124,11 +164,37 @@ export default function ProductDetailPage() {
     setSelectedVariantId(next?.id);
   }
 
-  async function saveProduct() {
-    if (!detail || saving || isSaved) return;
+  function clearSavedId(key: string) {
+    setSavedIds((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function toggleSavedProduct() {
+    if (!detail || saving || savedStateLoading) return;
     setSaving(true);
     setError('');
     try {
+      if (currentSavedId) {
+        const response = await fetch(
+          `${api}/v1/saved-products/${encodeURIComponent(currentSavedId)}`,
+          {
+            method: 'DELETE',
+            credentials: 'include',
+          },
+        );
+        if (response.status === 404) {
+          clearSavedId(currentSavedKey);
+          return;
+        }
+        if (!response.ok) throw new Error('unsave_product_failed');
+        const result = unsaveProductResponseSchema.parse(await response.json());
+        if (result.removed) clearSavedId(currentSavedKey);
+        return;
+      }
+
       const response = await fetch(`${api}/v1/saved-products`, {
         method: 'POST',
         credentials: 'include',
@@ -139,10 +205,17 @@ export default function ProductDetailPage() {
         }),
       });
       if (!response.ok) throw new Error('save_product_failed');
-      savedProductResponseSchema.parse(await response.json());
-      setSavedKey(currentSavedKey);
+      const result = savedProductResponseSchema.parse(await response.json());
+      setSavedIds((current) => ({
+        ...current,
+        [currentSavedKey]: result.item.id,
+      }));
     } catch {
-      setError('Ürün kaydedilemedi. Yeniden deneyebilirsin.');
+      setError(
+        isSaved
+          ? 'Ürün kayıttan çıkarılamadı. Yeniden deneyebilirsin.'
+          : 'Ürün kaydedilemedi. Yeniden deneyebilirsin.',
+      );
     } finally {
       setSaving(false);
     }
@@ -280,8 +353,8 @@ export default function ProductDetailPage() {
           <button
             type="button"
             aria-pressed={isSaved}
-            disabled={saving || isSaved}
-            onClick={() => void saveProduct()}
+            disabled={saving || savedStateLoading}
+            onClick={() => void toggleSavedProduct()}
             style={{
               minHeight: 44,
               borderRadius: 12,
@@ -290,7 +363,15 @@ export default function ProductDetailPage() {
               fontWeight: 700,
             }}
           >
-            {saving ? 'Kaydediliyor…' : isSaved ? '♥ Kaydedildi' : '♡ Kaydet'}
+            {savedStateLoading
+              ? 'Kayıt durumu yükleniyor…'
+              : saving
+                ? isSaved
+                  ? 'Kayıttan çıkarılıyor…'
+                  : 'Kaydediliyor…'
+                : isSaved
+                  ? '♥ Kaydedildi'
+                  : '♡ Kaydet'}
           </button>
 
           {checkoutOffer?.checkoutUrl ? (
