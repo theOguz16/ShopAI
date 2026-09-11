@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clearPriceFilter,
+  QUERY_CONTEXT_PRESENTATION,
   queryContextChips,
   removeQueryContext,
   resolveWidgetView,
@@ -77,7 +78,7 @@ describe('ChatGPT visual shopping state', () => {
     });
   });
 
-  it('keeps unsupported fit intent in query context instead of attributes', () => {
+  it('keeps unsupported fit intent as query context instead of a hard filter', () => {
     const input = {
       query: 'Siyah oversized tişört göster',
       category: 'tshirt',
@@ -87,6 +88,14 @@ describe('ChatGPT visual shopping state', () => {
     expect(queryContextChips(input.query)).toEqual([
       { id: 'fit:oversized', label: 'Oversize' },
     ]);
+    expect(QUERY_CONTEXT_PRESENTATION).toEqual({
+      groupLabel: 'Arama bağlamı',
+      chipClassName: 'facet-chip facet-chip-context',
+      tooltip: 'Arama metninde korunuyor; kesin filtre değildir.',
+    });
+    expect(QUERY_CONTEXT_PRESENTATION.chipClassName).not.toContain(
+      'facet-chip-active',
+    );
     expect(removeQueryContext(input, 'fit:oversized')).toEqual({
       query: 'Siyah tişört göster',
       category: 'tshirt',
