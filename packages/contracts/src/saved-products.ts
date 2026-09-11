@@ -9,6 +9,20 @@ export const saveProductRequestSchema = z
 
 export type SaveProductRequest = z.infer<typeof saveProductRequestSchema>;
 
+export const unsaveProductRequestSchema = z
+  .object({ savedId: z.string().uuid() })
+  .strict();
+
+export type UnsaveProductRequest = z.infer<typeof unsaveProductRequestSchema>;
+
+export const unsaveProductResponseSchema = z
+  .object({ removed: z.boolean() })
+  .strict();
+
+export type UnsaveProductResponse = z.infer<
+  typeof unsaveProductResponseSchema
+>;
+
 export const savedProductSchema = z
   .object({
     id: z.string().uuid(),
