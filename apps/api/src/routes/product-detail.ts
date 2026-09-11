@@ -34,15 +34,17 @@ export async function registerProductDetailRoutes(
     );
     const db = app.authApi.db;
     if (db) {
-      await new ProductViews(
-        new PostgresProductViewEventRepository(db),
-      ).record({
-        merchantId: result.merchant.id,
-        productId: result.product.id,
-        searchId: result.searchId,
-        discoverySessionId: parsed.data.discoverySessionId,
-        ...attribution,
-      });
+      await new ProductViews(new PostgresProductViewEventRepository(db)).record(
+        {
+          merchantId: result.merchant.id,
+          productId: result.product.id,
+          searchId: result.searchId,
+          ...(parsed.data.discoverySessionId
+            ? { discoverySessionId: parsed.data.discoverySessionId }
+            : {}),
+          ...attribution,
+        },
+      );
     }
     return {
       ...result,
