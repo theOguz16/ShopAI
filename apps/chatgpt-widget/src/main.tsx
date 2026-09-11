@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { createHostBridge, type WidgetSearchInput } from './host-bridge.js';
 import {
   clearPriceFilter,
+  QUERY_CONTEXT_PRESENTATION,
   queryContextChips,
   removeQueryContext,
   resolveWidgetView,
@@ -261,6 +262,17 @@ function Widget() {
     }
   }
 
+  async function openCheckout(href: string) {
+    setError('');
+    try {
+      await bridge.openCheckout(href);
+    } catch {
+      setError(
+        'Satın alma bağlantısı açılamadı. ChatGPT dış bağlantı iznini kontrol edip yeniden deneyin.',
+      );
+    }
+  }
+
   const selectedColors = selectedAttributeValues(input, 'color');
   const selectedSizes = selectedAttributeValues(input, 'size');
   const colors = mergeValues(
@@ -291,6 +303,7 @@ function Widget() {
         offer.checkoutUrl,
     )
     .sort((left, right) => left.priceMinor - right.priceMinor)[0];
+  const checkoutUrl = selectedOffer?.checkoutUrl;
   const displayOffer =
     selectedOffer ??
     detail?.offers
@@ -466,17 +479,33 @@ function Widget() {
               </div>
             ) : null}
 
-            {contextChips.length || priceChip ? (
+            {priceChip ? (
               <div className="facet-row">
-                <span className="facet-label">Aktif</span>
+                <span className="facet-label">Fiyat</span>
+                <button
+                  className="facet-chip facet-chip-active"
+                  type="button"
+                  disabled={loading || !canInteract}
+                  aria-pressed="true"
+                  onClick={() => void runSearch(clearPriceFilter(input))}
+                >
+                  {priceChip} ×
+                </button>
+              </div>
+            ) : null}
+
+            {contextChips.length ? (
+              <div className="facet-row">
+                <span className="facet-label">
+                  {QUERY_CONTEXT_PRESENTATION.groupLabel}
+                </span>
                 {contextChips.map((chip) => (
                   <button
-                    className="facet-chip facet-chip-active facet-chip-context"
+                    className={QUERY_CONTEXT_PRESENTATION.chipClassName}
                     key={chip.id}
                     type="button"
                     disabled={loading || !canInteract}
-                    aria-pressed="true"
-                    title="Arama metninden gelen bağlamsal filtre"
+                    title={QUERY_CONTEXT_PRESENTATION.tooltip}
                     onClick={() =>
                       void runSearch(removeQueryContext(input, chip.id))
                     }
@@ -484,17 +513,6 @@ function Widget() {
                     {chip.label} ×
                   </button>
                 ))}
-                {priceChip ? (
-                  <button
-                    className="facet-chip facet-chip-active"
-                    type="button"
-                    disabled={loading || !canInteract}
-                    aria-pressed="true"
-                    onClick={() => void runSearch(clearPriceFilter(input))}
-                  >
-                    {priceChip} ×
-                  </button>
-                ) : null}
               </div>
             ) : null}
           </section>
@@ -599,15 +617,14 @@ function Widget() {
                   : stockStatusLabel(detail.availability)}
               </p>
 
-              {selectedOffer?.checkoutUrl ? (
-                <a
+              {checkoutUrl ? (
+                <button
                   className="checkout-link"
-                  href={selectedOffer.checkoutUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  type="button"
+                  onClick={() => void openCheckout(checkoutUrl)}
                 >
                   Satın Al ↗
-                </a>
+                </button>
               ) : (
                 <button className="checkout-disabled" type="button" disabled>
                   Bu varyant satın alınamıyor
