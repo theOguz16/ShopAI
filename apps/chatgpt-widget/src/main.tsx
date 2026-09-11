@@ -327,7 +327,8 @@ function Widget() {
               },
             );
             if (!response.ok) throw new Error('alert_failed');
-            return productAlertResponseSchema.parse(await response.json()).alert;
+            return productAlertResponseSchema.parse(await response.json())
+              .alert;
           })();
       setAlertNotice(
         alert.conditionType === 'PRICE_BELOW'
@@ -680,7 +681,10 @@ function Widget() {
                   : stockStatusLabel(detail.availability)}
               </p>
 
-              <div className="option-group" aria-label="Fiyat ve stok alarmları">
+              <div
+                className="option-group"
+                aria-label="Fiyat ve stok alarmları"
+              >
                 <label htmlFor="alert-email">Bildirim e-postası</label>
                 <input
                   id="alert-email"
@@ -699,7 +703,9 @@ function Widget() {
                     step="0.01"
                     inputMode="decimal"
                     value={priceAlertTarget}
-                    onChange={(event) => setPriceAlertTarget(event.target.value)}
+                    onChange={(event) =>
+                      setPriceAlertTarget(event.target.value)
+                    }
                     placeholder={
                       displayOffer
                         ? `${Math.max(1, Math.floor(displayOffer.priceMinor / 100) - 1)}`
@@ -709,7 +715,9 @@ function Widget() {
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={alerting !== null || !displayOffer || !canInteract}
+                    disabled={
+                      alerting !== null || !displayOffer || !canInteract
+                    }
                     onClick={() => void createProductAlert('PRICE_BELOW')}
                   >
                     {alerting === 'PRICE_BELOW'
