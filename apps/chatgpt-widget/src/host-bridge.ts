@@ -1,4 +1,10 @@
 import {
+  type CreateProductAlertRequest,
+  type ProductAlert,
+  createProductAlertRequestSchema,
+  productAlertResponseSchema,
+} from '@shopai/contracts/product-alerts';
+import {
   type ProductDetailRequest,
   type ProductDetailResponse,
   productDetailRequestSchema,
@@ -35,7 +41,8 @@ export type WidgetSearchInput = SearchProductsRequest;
 type WidgetToolInput =
   | WidgetSearchInput
   | ProductDetailRequest
-  | SaveProductRequest;
+  | SaveProductRequest
+  | CreateProductAlertRequest;
 
 type OpenAiHost = {
   toolInput?: WidgetSearchInput;
@@ -95,6 +102,7 @@ export type HostBridge = {
     input: ProductDetailRequest,
   ): Promise<ProductDetailResponse>;
   callSaveProduct(input: SaveProductRequest): Promise<SavedProduct>;
+  callCreateProductAlert(input: CreateProductAlertRequest): Promise<ProductAlert>;
   openCheckout(href: string): Promise<void>;
   destroy(): void;
 };
@@ -226,6 +234,13 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
       return savedProductResponseSchema.parse(
         await callTool('save_product', arguments_),
       ).item;
+    },
+    async callCreateProductAlert(input) {
+      if (destroyed) throw new Error('Host köprüsü kapatıldı.');
+      const arguments_ = createProductAlertRequestSchema.parse(input);
+      return productAlertResponseSchema.parse(
+        await callTool('create_product_alert', arguments_),
+      ).alert;
     },
     async openCheckout(href) {
       if (destroyed) throw new Error('Host köprüsü kapatıldı.');
