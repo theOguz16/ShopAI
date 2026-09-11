@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
@@ -95,13 +95,13 @@ describeWithDatabase('discovery sessions', () => {
     await database.close();
   });
 
-  it('resolves redirect discovery attribution server-side without exposing session id in the token', async () => {
+  it('persists instagram_bio branded checkout attribution end-to-end', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/discovery-session',
       payload: {
         merchant: 'mavi',
-        surface: 'web',
+        surface: 'brand_widget',
         campaign: 'instagram_bio',
         referrer: 'https://instagram.com/mavi',
       },
@@ -116,7 +116,7 @@ describeWithDatabase('discovery sessions', () => {
       userId: string | null;
     }>();
     expect(session).toMatchObject({
-      surface: 'web',
+      surface: 'brand_widget',
       transport: 'rest',
       merchantScope: [maviId],
       campaign: 'instagram_bio',
@@ -131,24 +131,32 @@ describeWithDatabase('discovery sessions', () => {
     expect(search.statusCode).toBe(200);
     const searchBody = search.json<{
       searchId: string;
-      products: Array<{ checkoutUrl: string }>;
+      products: Array<{
+        checkoutUrl: string;
+        productId: string;
+        offerId: string;
+        merchantId: string;
+      }>;
     }>();
     expect(searchBody.products).toHaveLength(1);
+    const product = searchBody.products[0];
+    expect(product).toBeDefined();
 
     const [searchEvent] = await database.db
       .select({
         searchId: searchEvents.searchId,
         discoverySessionId: searchEvents.discoverySessionId,
+        surface: searchEvents.surface,
       })
       .from(searchEvents)
       .where(eq(searchEvents.searchId, searchBody.searchId));
     expect(searchEvent).toEqual({
       searchId: searchBody.searchId,
       discoverySessionId: session.id,
+      surface: 'brand_widget',
     });
 
-    const redirectPath = new URL(searchBody.products[0]?.checkoutUrl ?? '')
-      .pathname;
+    const redirectPath = new URL(product?.checkoutUrl ?? '').pathname;
     const token = redirectPath.slice('/r/'.length);
     const payloadPart = token.split('.')[0] ?? '';
     const tokenPayload = JSON.parse(
@@ -157,9 +165,11 @@ describeWithDatabase('discovery sessions', () => {
     expect(tokenPayload).toMatchObject({
       searchId: searchBody.searchId,
       transport: 'rest',
-      surface: 'web',
+      surface: 'brand_widget',
     });
     expect(tokenPayload).not.toHaveProperty('discoverySessionId');
+    expect(tokenPayload).not.toHaveProperty('campaign');
+    expect(tokenPayload).not.toHaveProperty('productId');
     expect(JSON.stringify(tokenPayload)).not.toContain(session.id);
 
     const redirect = await app.inject({
@@ -168,18 +178,35 @@ describeWithDatabase('discovery sessions', () => {
       headers: { 'user-agent': 'Mozilla/5.0 ShopAI discovery test' },
     });
     expect(redirect.statusCode).toBe(302);
+    expect(redirect.headers.location).toBe(
+      'https://merchant.example/mavi-product',
+    );
 
     const [click] = await database.db
       .select({
         searchId: redirectClicks.searchId,
         discoverySessionId: redirectClicks.discoverySessionId,
+        merchantId: redirectClicks.merchantId,
+        productId: redirectClicks.productId,
+        offerId: redirectClicks.offerId,
+        surface: redirectClicks.surface,
+        campaign: redirectClicks.campaign,
+        classification: redirectClicks.classification,
+        occurredAt: redirectClicks.occurredAt,
       })
       .from(redirectClicks)
       .where(eq(redirectClicks.searchId, searchBody.searchId));
-    expect(click).toEqual({
+    expect(click).toMatchObject({
       searchId: searchBody.searchId,
       discoverySessionId: session.id,
+      merchantId: maviId,
+      productId: product?.productId,
+      offerId: product?.offerId,
+      surface: 'brand_widget',
+      campaign: 'instagram_bio',
+      classification: 'human',
     });
+    expect(click?.occurredAt).toBeInstanceOf(Date);
 
     const outsideScope = await app.inject({
       method: 'POST',
@@ -187,6 +214,111 @@ describeWithDatabase('discovery sessions', () => {
       payload: { query: 'anything', discoverySessionId: session.id },
     });
     expect(outsideScope.statusCode).toBe(403);
+  });
+
+  it('persists a real MCP checkout click with surface chatgpt', async () => {
+    const search = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { accept: 'application/json, text/event-stream' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 12,
+        method: 'tools/call',
+        params: {
+          name: 'search_products',
+          arguments: { limit: 1 },
+        },
+      },
+    });
+    expect(search.statusCode).toBe(200);
+    const result = search.json().result.structuredContent as {
+      searchId: string;
+      products: Array<{
+        checkoutUrl: string;
+        merchantId: string;
+        productId: string;
+        offerId: string;
+      }>;
+    };
+    expect(result.products).toHaveLength(1);
+    const product = result.products[0];
+    expect(product).toBeDefined();
+
+    const redirectPath = new URL(product?.checkoutUrl ?? '').pathname;
+    const redirect = await app.inject({
+      method: 'GET',
+      url: redirectPath,
+      headers: { 'user-agent': 'Mozilla/5.0 ChatGPT external navigation' },
+    });
+    expect(redirect.statusCode).toBe(302);
+
+    const [click] = await database.db
+      .select({
+        discoverySessionId: redirectClicks.discoverySessionId,
+        searchId: redirectClicks.searchId,
+        merchantId: redirectClicks.merchantId,
+        productId: redirectClicks.productId,
+        offerId: redirectClicks.offerId,
+        surface: redirectClicks.surface,
+        transport: redirectClicks.transport,
+        campaign: redirectClicks.campaign,
+        classification: redirectClicks.classification,
+      })
+      .from(redirectClicks)
+      .where(eq(redirectClicks.searchId, result.searchId));
+    expect(click).toMatchObject({
+      searchId: result.searchId,
+      merchantId: product?.merchantId,
+      productId: product?.productId,
+      offerId: product?.offerId,
+      surface: 'chatgpt',
+      transport: 'mcp',
+      campaign: null,
+      classification: 'human',
+    });
+    expect(click?.discoverySessionId).toMatch(/^[0-9a-f-]{36}$/u);
+
+    const [session] = await database.db
+      .select({
+        surface: discoverySessions.surface,
+        transport: discoverySessions.transport,
+      })
+      .from(discoverySessions)
+      .where(eq(discoverySessions.id, click?.discoverySessionId ?? ''));
+    expect(session).toEqual({ surface: 'chatgpt', transport: 'mcp' });
+  });
+
+  it('stores bot previews separately and never counts them as human clicks', async () => {
+    const search = await app.inject({
+      method: 'POST',
+      url: `/v1/stores/${maviId}/search`,
+      payload: { limit: 1 },
+    });
+    const body = search.json<{
+      searchId: string;
+      products: Array<{ checkoutUrl: string }>;
+    }>();
+    const redirectPath = new URL(body.products[0]?.checkoutUrl ?? '').pathname;
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: redirectPath,
+      headers: {
+        'user-agent': 'Mozilla/5.0',
+        purpose: 'preview',
+      },
+    });
+    expect(preview.statusCode).toBe(302);
+
+    const [counts] = await database.db
+      .select({
+        human: sql<number>`count(*) filter (where ${redirectClicks.classification} = 'human')::int`,
+        bot: sql<number>`count(*) filter (where ${redirectClicks.classification} = 'bot')::int`,
+      })
+      .from(redirectClicks)
+      .where(eq(redirectClicks.searchId, body.searchId));
+    expect(counts).toEqual({ human: 0, bot: 1 });
   });
 
   it('uses an empty merchant scope for network-wide discovery', async () => {
