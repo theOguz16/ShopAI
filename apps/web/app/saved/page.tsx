@@ -3,6 +3,7 @@
 import {
   type SavedProduct,
   savedProductsResponseSchema,
+  unsaveProductResponseSchema,
 } from '@shopai/contracts/saved-products';
 import { useEffect, useState } from 'react';
 
@@ -11,6 +12,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 export default function SavedProductsPage() {
   const [items, setItems] = useState<SavedProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [removingId, setRemovingId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -33,6 +35,33 @@ export default function SavedProductsPage() {
       });
     return () => controller.abort();
   }, []);
+
+  async function removeSaved(savedId: string) {
+    if (removingId) return;
+    setRemovingId(savedId);
+    setError('');
+    try {
+      const response = await fetch(
+        `${api}/v1/saved-products/${encodeURIComponent(savedId)}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        },
+      );
+      if (response.status === 404) {
+        setItems((current) => current.filter((item) => item.id !== savedId));
+        return;
+      }
+      if (!response.ok) throw new Error('unsave_product_failed');
+      const result = unsaveProductResponseSchema.parse(await response.json());
+      if (result.removed)
+        setItems((current) => current.filter((item) => item.id !== savedId));
+    } catch {
+      setError('Ürün kayıttan çıkarılamadı. Yeniden deneyebilirsin.');
+    } finally {
+      setRemovingId('');
+    }
+  }
 
   return (
     <main className="store-shell">
@@ -106,6 +135,13 @@ export default function SavedProductsPage() {
                     Ürünü aç
                   </a>
                 ) : null}
+                <button
+                  type="button"
+                  disabled={Boolean(removingId)}
+                  onClick={() => void removeSaved(item.id)}
+                >
+                  {removingId === item.id ? 'Çıkarılıyor…' : 'Kayıttan çıkar'}
+                </button>
               </div>
             </li>
           ))}
