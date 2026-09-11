@@ -8,6 +8,8 @@ import {
   savedProductResponseSchema,
   savedProductsResponseSchema,
   saveProductRequestSchema,
+  unsaveProductRequestSchema,
+  unsaveProductResponseSchema,
 } from '@shopai/contracts/saved-products';
 import {
   searchProductsRequestSchema,
@@ -89,7 +91,7 @@ export function createMcpServer(
     { name: 'shopai', version: '0.4.0' },
     {
       instructions:
-        'Ürün keşfi isteklerinde search_products kullanın. category, price, size ve color gibi desteklenen filtreleri canonical alanlara taşıyın; attributes içinde yalnız size/sizes ve color/colors kullanın. Fit/oversized/sleeve gibi henüz structured public-search filtresi olmayan nitelikleri query metninde koruyun, unsupported attribute üretmeyin. Uyumlu ChatGPT yüzeyinde structuredContent CATEGORY_SELECT → PRODUCT_GRID → PRODUCT_DETAIL visual-shopping widget akışında gösterilir; widget yoksa tool metnindeki yayımlanmış katalog bilgisini kullanıcıya sunun. Kullanıcı bir ürünü daha sonra bulmak için kaydetmek isterse save_product, kaydettiklerini görmek isterse list_saved_products kullanın.',
+        'Ürün keşfi isteklerinde search_products kullanın. category, price, size ve color gibi desteklenen filtreleri canonical alanlara taşıyın; attributes içinde yalnız size/sizes ve color/colors kullanın. Fit/oversized/sleeve gibi henüz structured public-search filtresi olmayan nitelikleri query metninde koruyun, unsupported attribute üretmeyin. Uyumlu ChatGPT yüzeyinde structuredContent CATEGORY_SELECT → PRODUCT_GRID → PRODUCT_DETAIL visual-shopping widget akışında gösterilir; widget yoksa tool metnindeki yayımlanmış katalog bilgisini kullanıcıya sunun. Kullanıcı bir ürünü daha sonra bulmak için kaydetmek isterse save_product, kaydettiklerini görmek isterse list_saved_products, kayıttan çıkarmak isterse unsave_product kullanın.',
     },
   );
   const resourceDomains = [
@@ -263,6 +265,53 @@ export function createMcpServer(
             {
               type: 'text' as const,
               text: `${item.product?.title ?? item.productId} kaydedildi.`,
+            },
+          ],
+          structuredContent,
+        };
+      },
+    );
+
+    server.registerTool(
+      'unsave_product',
+      {
+        title: 'Ürünü kayıttan çıkar',
+        description:
+          'Kullanıcının kendi alışveriş profilindeki savedId ile eşleşen kaydı kaldırır. Aynı kayıt zaten kaldırılmışsa güvenli biçimde removed=false döndürür.',
+        inputSchema: unsaveProductRequestSchema.shape,
+        outputSchema: unsaveProductResponseSchema.shape,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          openWorldHint: false,
+        },
+        _meta: {
+          ui: { resourceUri: SHOPAI_WIDGET_URI, visibility: ['model', 'app'] },
+          'openai/outputTemplate': SHOPAI_WIDGET_URI,
+          'openai/widgetAccessible': true,
+          'openai/toolInvocation/invoking': 'Ürün kayıttan çıkarılıyor…',
+          'openai/toolInvocation/invoked': 'Ürün kayıttan çıkarıldı',
+          'shopai/dtoVersion': 1,
+        },
+      },
+      async (input) => {
+        const saved = (await shopper.savedProducts.list(shopper.identity)).find(
+          (item) => item.id === input.savedId,
+        );
+        const result = saved
+          ? await shopper.savedProducts.remove(shopper.identity, {
+              productId: saved.productId,
+              ...(saved.variantId ? { variantId: saved.variantId } : {}),
+            })
+          : { removed: false };
+        const structuredContent = unsaveProductResponseSchema.parse(result);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: result.removed
+                ? 'Ürün kayıttan çıkarıldı.'
+                : 'Ürün zaten kayıtlı değildi.',
             },
           ],
           structuredContent,
