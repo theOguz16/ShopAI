@@ -192,9 +192,7 @@ describe('database migrations', () => {
 
     expect(migration).toContain('ADD COLUMN "click_id" uuid');
     expect(migration).toContain('ADD COLUMN "discovery_session_id" uuid');
-    expect(migration).toContain(
-      'UNIQUE("merchant_id","external_order_id")',
-    );
+    expect(migration).toContain('UNIQUE("merchant_id","external_order_id")');
     expect(migration).toContain(
       'REFERENCES "public"."redirect_clicks"("merchant_id","id")',
     );
