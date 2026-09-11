@@ -287,7 +287,11 @@ describeWithDatabase('product price / stock alerts', () => {
       undefined,
     );
     expect(sync.alertEvaluation).toEqual(
-      expect.objectContaining({ triggered: 1, delivered: 0, pendingDelivery: true }),
+      expect.objectContaining({
+        triggered: 1,
+        delivered: 0,
+        pendingDelivery: true,
+      }),
     );
 
     const repository = new PostgresProductAlertRepository(database.db);
@@ -368,7 +372,8 @@ describeWithDatabase('product price / stock alerts', () => {
     const flakySender: AlertEmailSender = {
       async send(message) {
         attempts.push(message);
-        if (attempts.length === 1) throw new Error('simulated provider failure');
+        if (attempts.length === 1)
+          throw new Error('simulated provider failure');
       },
     };
     const first = await syncCatalogConnection(
