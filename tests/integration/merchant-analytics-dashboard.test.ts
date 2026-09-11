@@ -140,6 +140,15 @@ describeWithDatabase('merchant analytics dashboard', () => {
     if (!productA || !productB || !offerA || !offerB)
       throw new Error('Dashboard katalog fixture oluşturulamadı.');
 
+    await database.db
+      .update(products)
+      .set({ published: true })
+      .where(eq(products.id, productA));
+    await database.db
+      .update(products)
+      .set({ published: true })
+      .where(eq(products.id, productB));
+
     app = await buildApp(services, env);
     const login = await app.inject({
       method: 'POST',
