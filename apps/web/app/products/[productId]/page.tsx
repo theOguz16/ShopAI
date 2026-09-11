@@ -116,7 +116,9 @@ export default function ProductDetailPage() {
       })
       .catch(() => {
         if (!controller.signal.aborted)
-          setError('Kayıt durumu şu anda yüklenemiyor. Yeniden deneyebilirsin.');
+          setError(
+            'Kayıt durumu şu anda yüklenemiyor. Yeniden deneyebilirsin.',
+          );
       })
       .finally(() => {
         if (!controller.signal.aborted) setSavedStateLoading(false);
