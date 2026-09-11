@@ -43,6 +43,7 @@ export function ProductCard({
   onDetail?: (item: CatalogItem) => void;
 }) {
   const stockText = stockStatusLabel(item.stockStatus);
+  const webDetailHref = detailHref ?? (!onDetail ? `/products/${item.productId}` : undefined);
   return (
     <li className="product-card">
       <ProductImage item={item} />
@@ -65,8 +66,8 @@ export function ProductCard({
             ? 'Bu bilgi yalnız deneyim testi içindir.'
             : `Son kontrol: ${new Date(item.observedAt).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })}`}
         </p>
-        {detailHref ? (
-          <a className="product-link" href={detailHref}>
+        {webDetailHref ? (
+          <a className="product-link" href={webDetailHref}>
             Ürün detayları →
           </a>
         ) : null}
