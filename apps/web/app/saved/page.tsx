@@ -86,7 +86,13 @@ export default function SavedProductsPage() {
                     {item.variant.color} · {item.variant.size}
                   </p>
                 ) : null}
-                <p className={item.available ? 'stock stock-in_stock' : 'stock stock-out_of_stock'}>
+                <p
+                  className={
+                    item.available
+                      ? 'stock stock-in_stock'
+                      : 'stock stock-out_of_stock'
+                  }
+                >
                   {item.available
                     ? 'Ürün hâlâ erişilebilir'
                     : 'Ürün artık erişilebilir değil — kayıt geçmişi korundu'}
