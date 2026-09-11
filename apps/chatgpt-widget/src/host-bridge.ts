@@ -102,7 +102,9 @@ export type HostBridge = {
     input: ProductDetailRequest,
   ): Promise<ProductDetailResponse>;
   callSaveProduct(input: SaveProductRequest): Promise<SavedProduct>;
-  callCreateProductAlert(input: CreateProductAlertRequest): Promise<ProductAlert>;
+  callCreateProductAlert(
+    input: CreateProductAlertRequest,
+  ): Promise<ProductAlert>;
   openCheckout(href: string): Promise<void>;
   destroy(): void;
 };
