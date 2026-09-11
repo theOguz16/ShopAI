@@ -23,6 +23,10 @@
     "./public-search": {
       "types": "./dist/public-search.d.ts",
       "import": "./dist/public-search.js"
+    },
+    "./category-facets": {
+      "types": "./dist/category-facets.d.ts",
+      "import": "./dist/category-facets.js"
     }
   },
   "dependencies": {

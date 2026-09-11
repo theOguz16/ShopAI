@@ -1,12 +1,44 @@
+import { buildCategoryFacetMap } from '@shopai/commerce/category-facets';
 import {
   publicStorefrontSchema,
   storefrontSlugSchema,
 } from '@shopai/contracts';
-import { merchants } from '@shopai/db';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  categoryFacetsResponseSchema,
+  categorySlugSchema,
+} from '@shopai/contracts/category-facets';
+import { categories, categoryFacets, merchants } from '@shopai/db';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
 export async function registerStorefrontRoutes(app: FastifyInstance) {
+  app.get('/categories/:slug/facets', async (request, reply) => {
+    const parsedSlug = categorySlugSchema.safeParse(
+      (request.params as { slug?: string }).slug,
+    );
+    if (!parsedSlug.success)
+      return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
+
+    const db = app.authApi.db;
+    if (!db)
+      return reply.code(503).send({ code: 'CATEGORY_LOOKUP_UNAVAILABLE' });
+
+    const [category] = await db
+      .select({ slug: categories.slug })
+      .from(categories)
+      .where(eq(categories.slug, parsedSlug.data))
+      .limit(1);
+    if (!category) return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
+
+    const rows = await db
+      .select({ key: categoryFacets.key, options: categoryFacets.options })
+      .from(categoryFacets)
+      .where(eq(categoryFacets.categorySlug, category.slug))
+      .orderBy(asc(categoryFacets.position), asc(categoryFacets.key));
+
+    return categoryFacetsResponseSchema.parse(buildCategoryFacetMap(rows));
+  });
+
   app.get('/v1/storefronts/:slug', async (request, reply) => {
     const parsedSlug = storefrontSlugSchema.safeParse(
       (request.params as { slug?: string }).slug,

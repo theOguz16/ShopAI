@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { productAttributes } from '../../packages/db/src/category-model.js';
 import { createDatabase } from '../../packages/db/src/client.js';
 import {
   connections,
@@ -20,14 +21,28 @@ const applicationDatabase = createDatabase(url, {
 });
 const tenantA = 'a1000000-0000-4000-8000-000000000001';
 const tenantB = 'b1000000-0000-4000-8000-000000000001';
+const productA = 'a1000000-0000-4000-8000-000000000004';
+const productB = 'b1000000-0000-4000-8000-000000000004';
 
 beforeAll(async () => {
   await adminDatabase.db.execute(
-    sql`truncate table ${importOutboxEvents}, ${importRuns}, ${products}, ${connections}, ${merchants} cascade`,
+    sql`truncate table ${importOutboxEvents}, ${importRuns}, ${productAttributes}, ${products}, ${connections}, ${merchants} cascade`,
   );
   await adminDatabase.db.insert(merchants).values([
-    { id: tenantA, name: 'Tenant A', slug: 'tenant-a', active: true },
-    { id: tenantB, name: 'Tenant B', slug: 'tenant-b', active: true },
+    {
+      id: tenantA,
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      active: true,
+      isPublic: true,
+    },
+    {
+      id: tenantB,
+      name: 'Tenant B',
+      slug: 'tenant-b',
+      active: true,
+      isPublic: false,
+    },
   ]);
   await adminDatabase.db.insert(connections).values([
     {
@@ -45,23 +60,41 @@ beforeAll(async () => {
     .insert(products)
     .values([
       {
+        id: productA,
         merchantId: tenantA,
         connectionId: 'a1000000-0000-4000-8000-000000000002',
         externalKey: 'a-product',
         title: 'A özel',
         category: 'test',
+        published: true,
         observedAt: new Date(),
       },
       {
+        id: productB,
         merchantId: tenantB,
         connectionId: 'b1000000-0000-4000-8000-000000000002',
         externalKey: 'b-product',
         title: 'B özel',
         category: 'test',
+        published: true,
         observedAt: new Date(),
       },
     ])
     .onConflictDoNothing();
+  await adminDatabase.db.insert(productAttributes).values([
+    {
+      merchantId: tenantA,
+      productId: productA,
+      key: 'size',
+      value: 'M',
+    },
+    {
+      merchantId: tenantB,
+      productId: productB,
+      key: 'size',
+      value: 'L',
+    },
+  ]);
   await adminDatabase.db.insert(importRuns).values([
     {
       id: 'a1000000-0000-4000-8000-000000000003',
@@ -133,6 +166,24 @@ describe('database tenant isolation', () => {
         return tx.select().from(products);
       }),
     ).resolves.toEqual([]);
+  });
+
+  it('hides private merchant product attributes from the public role', async () => {
+    const visibility = await applicationDatabase.db.transaction(async (tx) => {
+      await tx.execute(sql`set local role shopai_public`);
+      const publicRows = await tx
+        .select({ value: productAttributes.value })
+        .from(productAttributes)
+        .where(eq(productAttributes.merchantId, tenantA));
+      const privateRows = await tx
+        .select({ value: productAttributes.value })
+        .from(productAttributes)
+        .where(eq(productAttributes.merchantId, tenantB));
+      return { publicRows, privateRows };
+    });
+
+    expect(visibility.publicRows).toEqual([{ value: 'M' }]);
+    expect(visibility.privateRows).toEqual([]);
   });
 
   it('isolates application outbox access and reserves global access for the worker', async () => {

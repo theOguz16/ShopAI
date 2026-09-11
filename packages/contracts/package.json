@@ -15,6 +15,10 @@
     "./search-products": {
       "types": "./dist/search-products.d.ts",
       "import": "./dist/search-products.js"
+    },
+    "./category-facets": {
+      "types": "./dist/category-facets.d.ts",
+      "import": "./dist/category-facets.js"
     }
   },
   "dependencies": {
