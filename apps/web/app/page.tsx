@@ -6,8 +6,12 @@ import {
   type SearchResponse,
   searchResponseSchema,
 } from '@shopai/contracts';
+import {
+  type AnonymousShoppingProfile,
+  anonymousShoppingProfileSchema,
+} from '@shopai/contracts/anonymous-shopping-profile';
 import { ProductCard } from '@shopai/ui';
-import { type FormEvent, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { buildProductDetailHref } from '../lib/product-detail-href';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
@@ -82,6 +86,7 @@ function withoutQueryHint(query: string, kind: 'category' | 'budget') {
 export default function Home() {
   const [query, setQuery] = useState('Siyah M beden tişört 1500 TL altında');
   const [filters, setFilters] = useState<UiFilters>(emptyFilters);
+  const [profile, setProfile] = useState<AnonymousShoppingProfile>();
   const [result, setResult] = useState<SearchResponse>();
   const [lastRequest, setLastRequest] = useState<SearchRequest>();
   const [retryRequest, setRetryRequest] = useState<RetryRequest>();
@@ -89,6 +94,47 @@ export default function Home() {
   const [error, setError] = useState('');
   const requestSequence = useRef(0);
   const activeController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`${api}/v1/shopping-profile`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const nextProfile = anonymousShoppingProfileSchema.parse(
+          await response.json(),
+        );
+        if (!controller.signal.aborted) setProfile(nextProfile);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  function preferredSize(category: string | null) {
+    if (!category) return null;
+    const value = profile?.preferredSizes[category]?.[0];
+    return value ? [value] : null;
+  }
+
+  async function savePreferredSize(category: string, size: string | null) {
+    try {
+      const response = await fetch(`${api}/v1/shopping-profile`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          preferredSizes: size ? [size] : [],
+        }),
+      });
+      if (!response.ok) return;
+      setProfile(anonymousShoppingProfileSchema.parse(await response.json()));
+    } catch {
+      // Preference persistence is non-blocking for shopping/search.
+    }
+  }
 
   function payloadFor(nextQuery = query, nextFilters = filters): SearchRequest {
     const explicit: Partial<SearchFilters> = {};
@@ -121,6 +167,7 @@ export default function Home() {
     try {
       const response = await fetch(`${api}/v1/search`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -157,6 +204,13 @@ export default function Home() {
     setQuery(nextQuery);
     void runSearch(payloadFor(nextQuery, next));
   }
+  function selectCategory(category: string | null) {
+    setFilters((current) => ({
+      ...current,
+      category,
+      sizes: preferredSize(category),
+    }));
+  }
   const applied = result?.appliedFilters;
 
   return (
@@ -191,15 +245,16 @@ export default function Home() {
               <select
                 aria-label="Beden"
                 value={filters.sizes?.[0] ?? 'infer'}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextSize =
+                    event.target.value === 'infer' ? null : event.target.value;
                   setFilters((current) => ({
                     ...current,
-                    sizes:
-                      event.target.value === 'infer'
-                        ? null
-                        : [event.target.value],
-                  }))
-                }
+                    sizes: nextSize ? [nextSize] : null,
+                  }));
+                  if (filters.category)
+                    void savePreferredSize(filters.category, nextSize);
+                }}
               >
                 <option value="infer">Tariften algıla</option>
                 {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => (
@@ -213,13 +268,9 @@ export default function Home() {
                 aria-label="Kategori"
                 value={filters.category ?? 'infer'}
                 onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    category:
-                      event.target.value === 'infer'
-                        ? null
-                        : event.target.value,
-                  }))
+                  selectCategory(
+                    event.target.value === 'infer' ? null : event.target.value,
+                  )
                 }
               >
                 <option value="infer">Tariften algıla</option>
@@ -399,7 +450,11 @@ export default function Home() {
                         aria-pressed={applied?.category === facet.value}
                         key={facet.value}
                         onClick={() =>
-                          applyFilters({ ...filters, category: facet.value })
+                          applyFilters({
+                            ...filters,
+                            category: facet.value,
+                            sizes: preferredSize(facet.value),
+                          })
                         }
                       >
                         {displayCategory(facet.value)}{' '}

@@ -1,4 +1,10 @@
+import {
+  AnonymousShoppingProfiles,
+  type AnonymousShoppingProfileRepository,
+} from '@shopai/commerce/anonymous-shopping-profile';
 import { buildCategoryFacetMap } from '@shopai/commerce/category-facets';
+import type { AnonymousShoppingProfile } from '@shopai/contracts/anonymous-shopping-profile';
+import { anonymousShoppingProfileUpdateSchema } from '@shopai/contracts/anonymous-shopping-profile';
 import {
   publicStorefrontSchema,
   storefrontSlugSchema,
@@ -7,11 +13,88 @@ import {
   categoryFacetsResponseSchema,
   categorySlugSchema,
 } from '@shopai/contracts/category-facets';
-import { categories, categoryFacets, merchants } from '@shopai/db';
+import {
+  categories,
+  categoryFacets,
+  merchants,
+  PostgresAnonymousShoppingProfileRepository,
+} from '@shopai/db';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
+import { ensureAnonymousUserId } from '../plugins/anonymous-user.js';
+import { requireSameOrigin } from '../plugins/auth.js';
+
+class MemoryAnonymousShoppingProfileRepository
+  implements AnonymousShoppingProfileRepository
+{
+  private readonly rows = new Map<string, AnonymousShoppingProfile>();
+
+  async getOrCreate(anonymousUserId: string) {
+    const existing = this.rows.get(anonymousUserId);
+    if (existing) return existing;
+    const now = new Date().toISOString();
+    const row: AnonymousShoppingProfile = {
+      anonymousUserId,
+      preferredSizes: {},
+      preferredColors: {},
+      preferredStyles: {},
+      preferredPriceRanges: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(anonymousUserId, row);
+    return row;
+  }
+
+  async replace(profile: AnonymousShoppingProfile) {
+    this.rows.set(profile.anonymousUserId, profile);
+    return profile;
+  }
+}
 
 export async function registerStorefrontRoutes(app: FastifyInstance) {
+  const profileRepository: AnonymousShoppingProfileRepository = app.authApi.db
+    ? new PostgresAnonymousShoppingProfileRepository(app.authApi.db)
+    : new MemoryAnonymousShoppingProfileRepository();
+  const shoppingProfiles = new AnonymousShoppingProfiles(profileRepository);
+
+  app.addHook('preValidation', async (request, reply) => {
+    if (
+      request.method !== 'POST' ||
+      request.url.split('?')[0] !== '/discovery-session' ||
+      !request.body ||
+      typeof request.body !== 'object' ||
+      Array.isArray(request.body)
+    )
+      return;
+    const anonymousUserId = ensureAnonymousUserId(request, reply);
+    request.body = {
+      ...(request.body as Record<string, unknown>),
+      anonymousUserId,
+    };
+  });
+
+  app.get('/v1/shopping-profile', async (request, reply) => {
+    const anonymousUserId = ensureAnonymousUserId(request, reply);
+    return shoppingProfiles.getOrCreate(anonymousUserId);
+  });
+
+  app.put(
+    '/v1/shopping-profile',
+    { preHandler: requireSameOrigin },
+    async (request, reply) => {
+      const parsed = anonymousShoppingProfileUpdateSchema.safeParse(
+        request.body,
+      );
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ code: 'INVALID_INPUT', requestId: request.id });
+      const anonymousUserId = ensureAnonymousUserId(request, reply);
+      return shoppingProfiles.update(anonymousUserId, parsed.data);
+    },
+  );
+
   app.get('/categories/:slug/facets', async (request, reply) => {
     const parsedSlug = categorySlugSchema.safeParse(
       (request.params as { slug?: string }).slug,

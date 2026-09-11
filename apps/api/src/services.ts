@@ -8,6 +8,10 @@ import {
   demoRecords,
 } from '@shopai/commerce';
 import {
+  AnonymousShoppingProfiles,
+  type AnonymousShoppingProfileRepository,
+} from '@shopai/commerce/anonymous-shopping-profile';
+import {
   DiscoverySessions,
   type DiscoverySessionRepository,
 } from '@shopai/commerce/discovery';
@@ -27,6 +31,7 @@ import type {
   Surface,
 } from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
+import type { AnonymousShoppingProfile } from '@shopai/contracts/anonymous-shopping-profile';
 import {
   DemoQueryParser,
   ModelQueryParser,
@@ -34,6 +39,7 @@ import {
 } from '@shopai/ai';
 import {
   createDatabase,
+  PostgresAnonymousShoppingProfileRepository,
   PostgresCatalogRepository,
   PostgresDiscoverySessionRepository,
   PostgresProductDetailRepository,
@@ -44,6 +50,10 @@ import {
 import type { ApiEnv } from './env.js';
 
 const restDiscoverySurfaces = new Set<Surface>(['web', 'brand_widget']);
+type SearchContext = {
+  merchantIds?: string[];
+  anonymousUserId?: string;
+};
 
 export function createServices(env: ApiEnv) {
   const database =
@@ -87,7 +97,14 @@ export function createServices(env: ApiEnv) {
   const discoverySessionRepository: DiscoverySessionRepository = database
     ? new PostgresDiscoverySessionRepository(database.db)
     : new MemoryDiscoverySessionRepository(demoRecords);
+  const anonymousShoppingProfileRepository: AnonymousShoppingProfileRepository =
+    database
+      ? new PostgresAnonymousShoppingProfileRepository(database.db)
+      : new MemoryAnonymousShoppingProfileRepository();
   const discoverySessions = new DiscoverySessions(discoverySessionRepository);
+  const shoppingProfiles = new AnonymousShoppingProfiles(
+    anonymousShoppingProfileRepository,
+  );
   const search = new SearchProducts(repository, parser, env.CATALOG_MODE);
   const productDetailRepository = database
     ? new PostgresProductDetailRepository(database.db)
@@ -128,7 +145,7 @@ export function createServices(env: ApiEnv) {
 
   const executeSearch = async (
     input: unknown,
-    context: { merchantIds?: string[] } = {},
+    context: SearchContext = {},
     attribution: AttributionContext = WEB_ATTRIBUTION,
   ) => {
     const requestInput =
@@ -140,7 +157,7 @@ export function createServices(env: ApiEnv) {
           })
         : {};
     const requestKind = requestInput.cursor ? 'pagination' : 'initial';
-    let scopedContext = context;
+    let scopedContext: { merchantIds?: string[] } = context;
     let discoverySessionId: string;
     if (typeof requestInput.discoverySessionId === 'string') {
       const session = await discoverySessions.require(
@@ -152,7 +169,10 @@ export function createServices(env: ApiEnv) {
     } else {
       const session = await discoverySessions.create(
         { surface: attribution.surface },
-        { transport: attribution.transport },
+        {
+          transport: attribution.transport,
+          anonymousUserId: context.anonymousUserId,
+        },
       );
       discoverySessionId = session.id;
     }
@@ -198,7 +218,7 @@ export function createServices(env: ApiEnv) {
   };
   const executePublicSearch = async (
     input: unknown,
-    context: { merchantIds?: string[] } = {},
+    context: SearchContext = {},
     attribution: AttributionContext = WEB_ATTRIBUTION,
   ) => {
     const request = parseSearchProductsRequest(input);
@@ -241,6 +261,7 @@ export function createServices(env: ApiEnv) {
   return {
     search,
     productDetails,
+    shoppingProfiles,
     executeSearch,
     executePublicSearch,
     executeProductDetail,
@@ -322,5 +343,33 @@ class MemoryDiscoverySessionRepository implements DiscoverySessionRepository {
 
   async findById(id: string) {
     return this.sessions.get(id) ?? null;
+  }
+}
+
+class MemoryAnonymousShoppingProfileRepository
+  implements AnonymousShoppingProfileRepository
+{
+  private readonly profiles = new Map<string, AnonymousShoppingProfile>();
+
+  async getOrCreate(anonymousUserId: string) {
+    const existing = this.profiles.get(anonymousUserId);
+    if (existing) return existing;
+    const now = new Date().toISOString();
+    const profile: AnonymousShoppingProfile = {
+      anonymousUserId,
+      preferredSizes: {},
+      preferredColors: {},
+      preferredStyles: {},
+      preferredPriceRanges: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.profiles.set(anonymousUserId, profile);
+    return profile;
+  }
+
+  async replace(profile: AnonymousShoppingProfile) {
+    this.profiles.set(profile.anonymousUserId, profile);
+    return profile;
   }
 }

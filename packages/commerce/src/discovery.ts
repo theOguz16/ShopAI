@@ -27,7 +27,11 @@ export class DiscoverySessions {
 
   async create(
     input: DiscoverySessionCreateRequest,
-    context: { transport: Transport; userId?: string | null },
+    context: {
+      transport: Transport;
+      userId?: string | null;
+      anonymousUserId?: string | null;
+    },
   ) {
     const merchantScope = input.merchant
       ? await this.resolveMerchantScope(input.merchant)
@@ -38,7 +42,8 @@ export class DiscoverySessions {
       merchantScope,
       referrer: input.referrer ?? null,
       campaign: input.campaign ?? null,
-      anonymousUserId: input.anonymousUserId ?? randomUUID(),
+      anonymousUserId:
+        context.anonymousUserId ?? input.anonymousUserId ?? randomUUID(),
       userId: context.userId ?? null,
     });
   }

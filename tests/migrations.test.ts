@@ -201,4 +201,31 @@ describe('database migrations', () => {
       "RAISE EXCEPTION 'duplicate merchant/order ids must be reconciled before 0019'",
     );
   });
+
+  it('isolates anonymous shopping profiles from merchant roles and other anonymous identities', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0021_anonymous_shopping_profile.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TABLE "anonymous_shopping_profiles"');
+    expect(migration).toContain(
+      'ALTER TABLE "anonymous_shopping_profiles" FORCE ROW LEVEL SECURITY',
+    );
+    expect(migration).toContain(
+      'REVOKE ALL ON "anonymous_shopping_profiles" FROM shopai_app, shopai_worker',
+    );
+    expect(migration).toContain(
+      "current_setting('app.anonymous_user_id', true)",
+    );
+    expect(migration).toContain(
+      'CREATE POLICY "anonymous_shopping_profiles_select_own"',
+    );
+    expect(migration).toContain(
+      'CREATE POLICY "anonymous_shopping_profiles_update_own"',
+    );
+  });
 });

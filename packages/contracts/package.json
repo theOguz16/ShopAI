@@ -27,6 +27,10 @@
     "./merchant-conversions": {
       "types": "./dist/merchant-conversions.d.ts",
       "import": "./dist/merchant-conversions.js"
+    },
+    "./anonymous-shopping-profile": {
+      "types": "./dist/anonymous-shopping-profile.d.ts",
+      "import": "./dist/anonymous-shopping-profile.js"
     }
   },
   "dependencies": {

@@ -15,6 +15,7 @@ export default defineConfig({
       'tests/integration/product-detail-api.test.ts',
       'tests/integration/merchant-conversions.test.ts',
       'tests/integration/merchant-analytics-dashboard.test.ts',
+      'tests/integration/anonymous-shopping-profile.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 30000,
