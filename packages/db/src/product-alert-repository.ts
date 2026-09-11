@@ -73,9 +73,7 @@ export const productAlerts = pgTable(
       .on(
         sql`coalesce(${t.userId}, ${t.anonymousUserId})`,
         t.productId,
-        sql`coalesce(${t.variantId}, ${
-          '00000000-0000-0000-0000-000000000000'
-        }::uuid)`,
+        sql`coalesce(${t.variantId}, ${'00000000-0000-0000-0000-000000000000'}::uuid)`,
         t.conditionType,
         sql`coalesce(${t.targetValue}, -1)`,
       )
@@ -191,7 +189,9 @@ export class PostgresProductAlertRepository {
         variantId: input.variantId ?? null,
         conditionType: input.conditionType,
         targetValue:
-          input.conditionType === 'PRICE_BELOW' ? (input.targetValue ?? null) : null,
+          input.conditionType === 'PRICE_BELOW'
+            ? (input.targetValue ?? null)
+            : null,
         deliveryEmail: input.email.toLowerCase(),
       };
       const [inserted] = await tx
