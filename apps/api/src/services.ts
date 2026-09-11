@@ -250,6 +250,7 @@ export type Services = ReturnType<typeof createServices>;
 
 export class MemoryRedirectRepository implements RedirectRepository {
   readonly clicks: Array<{
+    id: string;
     claims: RedirectClaims;
     merchantId: string;
     productId: string;
@@ -273,8 +274,10 @@ export class MemoryRedirectRepository implements RedirectRepository {
     return target?.active ? target : null;
   }
 
-  async recordClick(input: (typeof this.clicks)[number]) {
-    this.clicks.push(input);
+  async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
+    const id = crypto.randomUUID();
+    this.clicks.push({ id, ...input });
+    return id;
   }
 }
 
