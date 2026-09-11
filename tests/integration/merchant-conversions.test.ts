@@ -99,9 +99,8 @@ describeWithDatabase('merchant conversion callback', () => {
       products: Array<{ checkoutUrl: string }>;
     }>();
     searchId = searchBody.searchId;
-    const redirectPath = new URL(
-      searchBody.products[0]?.checkoutUrl ?? '',
-    ).pathname;
+    const redirectPath = new URL(searchBody.products[0]?.checkoutUrl ?? '')
+      .pathname;
     const redirect = await app.inject({
       method: 'GET',
       url: redirectPath,
@@ -233,10 +232,7 @@ describeWithDatabase('merchant conversion callback', () => {
       .select({ id: discoverySessions.id })
       .from(discoverySessions)
       .where(
-        eq(
-          discoverySessions.id,
-          orders[0]?.discoverySessionId ?? randomUUID(),
-        ),
+        eq(discoverySessions.id, orders[0]?.discoverySessionId ?? randomUUID()),
       );
     expect(session?.id).toBe(orders[0]?.discoverySessionId);
   });
