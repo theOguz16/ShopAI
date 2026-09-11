@@ -67,6 +67,7 @@ CREATE TABLE "product_alert_notifications" (
   "body" text NOT NULL,
   "status" text DEFAULT 'PENDING' NOT NULL,
   "attempts" integer DEFAULT 0 NOT NULL,
+  "claimed_at" timestamp with time zone,
   "last_error" text,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "sent_at" timestamp with time zone,
@@ -79,6 +80,13 @@ CREATE TABLE "product_alert_notifications" (
   CONSTRAINT "product_alert_notifications_channel" CHECK ("channel" = 'email'),
   CONSTRAINT "product_alert_notifications_status" CHECK (
     "status" IN ('PENDING', 'SENDING', 'SENT')
+  ),
+  CONSTRAINT "product_alert_notifications_state_shape" CHECK (
+    ("status" = 'PENDING' AND "claimed_at" IS NULL AND "sent_at" IS NULL)
+    OR
+    ("status" = 'SENDING' AND "claimed_at" IS NOT NULL AND "sent_at" IS NULL)
+    OR
+    ("status" = 'SENT' AND "claimed_at" IS NOT NULL AND "sent_at" IS NOT NULL)
   )
 );
 --> statement-breakpoint
@@ -86,7 +94,7 @@ CREATE UNIQUE INDEX "product_alert_notifications_alert_unique"
 ON "product_alert_notifications" ("alert_id");
 --> statement-breakpoint
 CREATE INDEX "product_alert_notifications_pending"
-ON "product_alert_notifications" ("merchant_id", "status", "created_at");
+ON "product_alert_notifications" ("merchant_id", "status", "claimed_at", "created_at");
 --> statement-breakpoint
 ALTER TABLE "product_alerts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "product_alerts" FORCE ROW LEVEL SECURITY;
