@@ -134,6 +134,13 @@
       "when": 1789132200000,
       "tag": "0019_merchant_conversion_callback",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789134600000,
+      "tag": "0020_product_view_events",
+      "breakpoints": true
     }
   ]
 }
