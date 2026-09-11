@@ -70,7 +70,9 @@ export function signMerchantConversionRequest(input: {
 }) {
   const key = deriveMerchantConversionKey(input.rootSecret, input.merchantId);
   return createHmac('sha256', key)
-    .update(`${input.timestamp}.${canonicalMerchantConversionPayload(input.payload)}`)
+    .update(
+      `${input.timestamp}.${canonicalMerchantConversionPayload(input.payload)}`,
+    )
     .digest('hex');
 }
 
