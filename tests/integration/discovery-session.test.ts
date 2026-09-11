@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
