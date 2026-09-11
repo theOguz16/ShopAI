@@ -4,7 +4,6 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import {
   discoverySessionCreateRequestSchema,
   searchRequestSchema,
-  WEB_ATTRIBUTION,
 } from '@shopai/contracts';
 import { searchProductsRequestSchema } from '@shopai/contracts/search-products';
 import { createDatabase } from '@shopai/db';
@@ -181,11 +180,14 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
+    const attribution = await resolvedServices.resolveRestAttribution(
+      request.body,
+    );
     if (publicRequest.success) {
       const result = await resolvedServices.executePublicSearch(
         publicRequest.data,
         {},
-        WEB_ATTRIBUTION,
+        attribution,
       );
       return {
         ...result,
@@ -194,7 +196,7 @@ export async function buildApp(
           checkoutUrl: resolvedServices.redirects.createLink({
             offerId: item.offerId,
             searchId: result.searchId,
-            ...WEB_ATTRIBUTION,
+            ...attribution,
           }),
         })),
       };
@@ -202,7 +204,7 @@ export async function buildApp(
     const result = await resolvedServices.executeSearch(
       request.body,
       {},
-      WEB_ATTRIBUTION,
+      attribution,
     );
     return {
       ...result,
@@ -211,7 +213,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          ...WEB_ATTRIBUTION,
+          ...attribution,
         }),
       })),
     };
@@ -232,11 +234,14 @@ export async function buildApp(
       return reply
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
+    const attribution = await resolvedServices.resolveRestAttribution(
+      request.body,
+    );
     if (publicRequest.success) {
       const result = await resolvedServices.executePublicSearch(
         publicRequest.data,
         { merchantIds: [merchantId] },
-        WEB_ATTRIBUTION,
+        attribution,
       );
       return {
         ...result,
@@ -245,7 +250,7 @@ export async function buildApp(
           checkoutUrl: resolvedServices.redirects.createLink({
             offerId: item.offerId,
             searchId: result.searchId,
-            ...WEB_ATTRIBUTION,
+            ...attribution,
           }),
         })),
       };
@@ -253,7 +258,7 @@ export async function buildApp(
     const result = await resolvedServices.executeSearch(
       request.body,
       { merchantIds: [merchantId] },
-      WEB_ATTRIBUTION,
+      attribution,
     );
     return {
       ...result,
@@ -262,7 +267,7 @@ export async function buildApp(
         checkoutUrl: resolvedServices.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          ...WEB_ATTRIBUTION,
+          ...attribution,
         }),
       })),
     };

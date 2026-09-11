@@ -120,6 +120,13 @@
       "when": 1789049760000,
       "tag": "0017_category_facets_mvp",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789130000000,
+      "tag": "0018_checkout_click_attribution",
+      "breakpoints": true
     }
   ]
 }

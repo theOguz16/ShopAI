@@ -2,6 +2,7 @@ import type { RedirectRepository } from '@shopai/commerce';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import {
+  discoverySessions,
   merchants,
   offers,
   products,
@@ -16,7 +17,11 @@ export class PostgresRedirectRepository implements RedirectRepository {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
       const [row] = await tx
-        .select({ url: offers.checkoutUrl, merchantId: offers.merchantId })
+        .select({
+          url: offers.checkoutUrl,
+          merchantId: offers.merchantId,
+          productId: products.id,
+        })
         .from(offers)
         .innerJoin(
           variants,
@@ -35,7 +40,11 @@ export class PostgresRedirectRepository implements RedirectRepository {
         )
         .innerJoin(
           merchants,
-          and(eq(merchants.id, offers.merchantId), eq(merchants.active, true)),
+          and(
+            eq(merchants.id, offers.merchantId),
+            eq(merchants.active, true),
+            eq(merchants.isPublic, true),
+          ),
         )
         .where(and(eq(offers.id, offerId), eq(offers.active, true)))
         .limit(1);
@@ -57,13 +66,23 @@ export class PostgresRedirectRepository implements RedirectRepository {
       const attribution = attributionResult.rows[0] as
         | { discoverySessionId: string | null }
         | undefined;
+      const discoverySessionId = attribution?.discoverySessionId ?? null;
+      const [session] = discoverySessionId
+        ? await tx
+            .select({ campaign: discoverySessions.campaign })
+            .from(discoverySessions)
+            .where(eq(discoverySessions.id, discoverySessionId))
+            .limit(1)
+        : [];
       await tx.insert(redirectClicks).values({
         searchId: input.claims.searchId,
-        discoverySessionId: attribution?.discoverySessionId ?? null,
+        discoverySessionId,
         offerId: input.claims.offerId,
+        productId: input.productId,
         merchantId: input.merchantId,
         transport: input.claims.transport,
         surface: input.claims.surface,
+        campaign: session?.campaign ?? null,
         classification: input.classification,
       });
     });

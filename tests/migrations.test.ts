@@ -158,4 +158,26 @@ describe('database migrations', () => {
       'CREATE POLICY tenant_connection_sync_progress',
     );
   });
+
+  it('backfills product and campaign checkout attribution before enforcing product integrity', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0018_checkout_click_attribution.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    const productBackfill = migration.indexOf(
+      'SET "product_id" = variant."product_id"',
+    );
+    const notNull = migration.indexOf('ALTER COLUMN "product_id" SET NOT NULL');
+    expect(productBackfill).toBeGreaterThanOrEqual(0);
+    expect(notNull).toBeGreaterThan(productBackfill);
+    expect(migration).toContain('SET "campaign" = session."campaign"');
+    expect(migration).toContain('redirect_clicks_campaign_reporting');
+    expect(migration).toContain('v.product_id = redirect_clicks.product_id');
+    expect(migration).toContain('AND m.active = true');
+    expect(migration).toContain('AND m.is_public = true');
+  });
 });

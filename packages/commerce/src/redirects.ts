@@ -119,21 +119,34 @@ export class RedirectTokens {
   }
 }
 
-export function classifyRedirectRequest(userAgent: string | undefined) {
-  if (!userAgent) return 'bot' as const;
-  return /bot|crawler|spider|preview|slackbot|discordbot|whatsapp|facebookexternalhit|twitterbot|linkedinbot/iu.test(
-    userAgent,
+export type RedirectRequestSignals = {
+  userAgent?: string;
+  purpose?: string;
+  secPurpose?: string;
+};
+
+export function classifyRedirectRequest(signals: RedirectRequestSignals = {}) {
+  const purpose = `${signals.purpose ?? ''} ${signals.secPurpose ?? ''}`;
+  if (/preview|prefetch|prerender/iu.test(purpose)) return 'bot' as const;
+  if (!signals.userAgent) return 'bot' as const;
+  return /bot|crawler|spider|preview|slackbot|discordbot|telegrambot|pinterestbot|applebot|google-inspectiontool|headlesschrome|whatsapp|facebookexternalhit|twitterbot|linkedinbot/iu.test(
+    signals.userAgent,
   )
     ? ('bot' as const)
     : ('human' as const);
 }
 
-export type RedirectTarget = { url: string; merchantId: string };
+export type RedirectTarget = {
+  url: string;
+  merchantId: string;
+  productId: string;
+};
 export interface RedirectRepository {
   resolvePublishedOffer(offerId: string): Promise<RedirectTarget | null>;
   recordClick(input: {
     claims: RedirectClaims;
     merchantId: string;
+    productId: string;
     classification: 'human' | 'bot';
   }): Promise<void>;
 }
@@ -154,17 +167,18 @@ export class RedirectService {
     ).toString();
   }
 
-  async open(token: string, userAgent?: string) {
+  async open(token: string, signals: RedirectRequestSignals = {}) {
     const claims = this.tokens.verify(token);
     const target = await this.repository.resolvePublishedOffer(claims.offerId);
     if (!target) return null;
     const url = new URL(target.url);
     if (url.protocol !== 'https:')
       throw new Error('Kayıtlı yönlendirme hedefi HTTPS değil.');
-    const classification = classifyRedirectRequest(userAgent);
+    const classification = classifyRedirectRequest(signals);
     await this.repository.recordClick({
       claims,
       merchantId: target.merchantId,
+      productId: target.productId,
       classification,
     });
     return { url: url.toString(), classification };

@@ -3,11 +3,12 @@
 import {
   type PublicStore,
   type SearchResponse,
+  discoverySessionSchema,
   publicStoreSchema,
   searchResponseSchema,
 } from '@shopai/contracts';
 import { ProductCard } from '@shopai/ui';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   type FormEvent,
   useCallback,
@@ -15,12 +16,21 @@ import {
   useRef,
   useState,
 } from 'react';
+import { buildProductDetailHref } from '../../../lib/product-detail-href';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
+const campaignPattern = /^[a-z0-9][a-z0-9_-]{0,127}$/u;
 
 export default function StorePage() {
   const { slug } = useParams<{ slug: string }>();
+  const searchParams = useSearchParams();
+  const requestedCampaign = searchParams.get('campaign')?.trim().toLowerCase();
+  const campaign =
+    requestedCampaign && campaignPattern.test(requestedCampaign)
+      ? requestedCampaign
+      : undefined;
   const [store, setStore] = useState<PublicStore>();
+  const [discoverySessionId, setDiscoverySessionId] = useState<string>();
   const [query, setQuery] = useState('');
   const [size, setSize] = useState('');
   const [result, setResult] = useState<SearchResponse>();
@@ -31,7 +41,12 @@ export default function StorePage() {
   const requestSequence = useRef(0);
 
   const search = useCallback(
-    async (merchantId: string, nextQuery = '', nextSize = '') => {
+    async (
+      merchantId: string,
+      nextQuery = '',
+      nextSize = '',
+      sessionId?: string,
+    ) => {
       const sequence = ++requestSequence.current;
       setSearching(true);
       setError('');
@@ -42,6 +57,7 @@ export default function StorePage() {
           body: JSON.stringify({
             query: nextQuery,
             filters: { sizes: nextSize ? [nextSize] : [], inStockOnly: false },
+            ...(sessionId ? { discoverySessionId: sessionId } : {}),
           }),
         });
         if (!response.ok) throw new Error('search_failed');
@@ -63,6 +79,7 @@ export default function StorePage() {
     setMissing(false);
     setError('');
     setStore(undefined);
+    setDiscoverySessionId(undefined);
     setResult(undefined);
     void fetch(`${api}/v1/stores/${encodeURIComponent(slug)}`, {
       signal: controller.signal,
@@ -74,9 +91,28 @@ export default function StorePage() {
         }
         if (!response.ok) throw new Error('store_failed');
         const next = publicStoreSchema.parse((await response.json()).store);
+        if (controller.signal.aborted) return;
+
+        const referrer = document.referrer.trim().slice(0, 2048);
+        const sessionResponse = await fetch(`${api}/discovery-session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            surface: 'brand_widget',
+            merchant: next.id,
+            ...(campaign ? { campaign } : {}),
+            ...(referrer ? { referrer } : {}),
+          }),
+        });
+        if (!sessionResponse.ok) throw new Error('discovery_session_failed');
+        const session = discoverySessionSchema.parse(
+          await sessionResponse.json(),
+        );
         if (!controller.signal.aborted) {
           setStore(next);
-          await search(next.id);
+          setDiscoverySessionId(session.id);
+          await search(next.id, '', '', session.id);
         }
       })
       .catch(() => {
@@ -92,11 +128,12 @@ export default function StorePage() {
       controller.abort();
       requestSequence.current += 1;
     };
-  }, [search, slug]);
+  }, [campaign, search, slug]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (store) void search(store.id, query, size);
+    if (store && discoverySessionId)
+      void search(store.id, query, size, discoverySessionId);
   }
 
   if (loading)
@@ -115,7 +152,7 @@ export default function StorePage() {
         <p>Bağlantı değişmiş veya mağaza henüz paylaşımda olmayabilir.</p>
       </main>
     );
-  if (!store)
+  if (!store || !discoverySessionId)
     return (
       <main className="store-shell store-message">
         <h1>Mağaza yüklenemedi.</h1>
@@ -165,7 +202,9 @@ export default function StorePage() {
           <p>{error}</p>
           <button
             type="button"
-            onClick={() => void search(store.id, query, size)}
+            onClick={() =>
+              void search(store.id, query, size, discoverySessionId)
+            }
           >
             Yeniden dene
           </button>
@@ -197,6 +236,11 @@ export default function StorePage() {
                 key={item.offerId}
                 item={item}
                 demo={result.mode === 'demo'}
+                detailHref={buildProductDetailHref({
+                  productId: item.productId,
+                  searchId: result.searchId,
+                  discoverySessionId,
+                })}
               />
             ))}
           </ul>

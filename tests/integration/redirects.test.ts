@@ -44,6 +44,8 @@ describe('signed redirects', () => {
     );
     expect(payload).not.toHaveProperty('url');
     expect(payload).not.toHaveProperty('merchantId');
+    expect(payload).not.toHaveProperty('productId');
+    expect(payload).not.toHaveProperty('campaign');
     expect(payload).not.toHaveProperty('email');
   });
 
@@ -95,7 +97,8 @@ describe('signed redirects', () => {
       });
       expect(search.statusCode).toBe(200);
       expect(repository.clicks).toHaveLength(0);
-      const link = new URL(search.json().products[0].checkoutUrl);
+      const item = search.json().products[0];
+      const link = new URL(item.checkoutUrl);
       expect(link.pathname).toMatch(/^\/r\//u);
       expect(link.searchParams.size).toBe(0);
 
@@ -108,6 +111,7 @@ describe('signed redirects', () => {
       expect(opened.headers.location).toBe('https://example.com/products/1');
       expect(repository.clicks).toHaveLength(1);
       expect(repository.clicks[0]).toMatchObject({
+        productId: item.productId,
         classification: 'human',
         claims: { transport: 'rest', surface: 'web' },
       });
@@ -119,6 +123,7 @@ describe('signed redirects', () => {
 
   it('separates bot previews and blocks inactive offers', async () => {
     const offerId = randomUUID();
+    const productId = randomUUID();
     const repository = new MemoryRedirectRepository(
       new Map([
         [
@@ -126,6 +131,7 @@ describe('signed redirects', () => {
           {
             url: 'https://merchant.example/product',
             merchantId: randomUUID(),
+            productId,
             active: true,
           },
         ],
@@ -144,13 +150,20 @@ describe('signed redirects', () => {
     });
     const opened = await service.open(
       new URL(link).pathname.slice('/r/'.length),
-      'Slackbot-LinkExpanding 1.0',
+      {
+        userAgent: 'Mozilla/5.0',
+        purpose: 'preview',
+      },
     );
     expect(opened?.classification).toBe('bot');
     expect(repository.clicks[0]).toMatchObject({
+      productId,
       classification: 'bot',
       claims: { transport: 'mcp', surface: 'chatgpt' },
     });
+    expect(
+      repository.clicks.filter((click) => click.classification === 'human'),
+    ).toHaveLength(0);
 
     const inactiveRepository = new MemoryRedirectRepository(
       new Map([
@@ -159,6 +172,7 @@ describe('signed redirects', () => {
           {
             url: 'https://evil.example/client-selected',
             merchantId: randomUUID(),
+            productId,
             active: false,
           },
         ],

@@ -72,6 +72,20 @@ export async function registerAnalyticsRoutes(
           .from(redirectClicks)
           .where(and(range, eq(redirectClicks.classification, 'human')))
           .groupBy(redirectClicks.surface);
+        const byCampaign = await tx
+          .select({
+            campaign: redirectClicks.campaign,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(redirectClicks)
+          .where(
+            and(
+              range,
+              eq(redirectClicks.classification, 'human'),
+              isNotNull(redirectClicks.campaign),
+            ),
+          )
+          .groupBy(redirectClicks.campaign);
         const searchRange = and(
           eq(searchEvents.merchantId, merchantId),
           gte(searchEvents.occurredAt, from),
@@ -140,6 +154,11 @@ export async function registerAnalyticsRoutes(
         const redirectSurfaceCounts = Object.fromEntries(
           bySurface.map((row) => [row.surface, row.count]),
         );
+        const redirectCampaignCounts = Object.fromEntries(
+          byCampaign.flatMap((row) =>
+            row.campaign ? ([[row.campaign, row.count]] as const) : [],
+          ),
+        );
         return {
           range: {
             from: from.toISOString(),
@@ -168,6 +187,7 @@ export async function registerAnalyticsRoutes(
             botPreviews: clicks?.bots ?? 0,
             redirectsBySurface: redirectSurfaceCounts,
             redirectsByChannel: redirectSurfaceCounts,
+            redirectsByCampaign: redirectCampaignCounts,
             attributedSales,
             netRevenueMinor: measured ? Number(sales?.netMinor ?? 0) : null,
             conversionRate,
@@ -185,6 +205,8 @@ export async function registerAnalyticsRoutes(
               'web, chatgpt, gemini ve brand_widget kullanıcı yüzeyleridir; REST, MCP ve UCP transport olarak ayrı tutulur. Ham sorgu metni kaydedilmez.',
             channelScope:
               'Geriye dönük API uyumluluğu için tutulan alias; değerleri artık surface kırılımını temsil eder.',
+            campaignScope:
+              'Discovery session kampanya etiketi insan checkout yönlendirmelerine taşınır; örneğin instagram_bio.',
             productInteractions:
               'İnsan olarak sınıflandırılmış ürün yönlendirmesi.',
             conversionRate:
