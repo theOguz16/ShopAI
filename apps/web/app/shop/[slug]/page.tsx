@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { buildProductDetailHref } from '../../../lib/product-detail-href';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -317,6 +318,11 @@ export default function BrandedStorefrontPage() {
                 key={item.offerId}
                 item={item}
                 demo={result.mode === 'demo'}
+                detailHref={buildProductDetailHref({
+                  productId: item.productId,
+                  searchId: result.searchId,
+                  discoverySessionId,
+                })}
               />
             ))}
           </ul>
