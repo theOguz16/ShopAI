@@ -61,11 +61,7 @@ function initialCustomRange() {
   return { from: toDateInput(from), to: toDateInput(to) };
 }
 
-function buildRange(
-  preset: RangePreset,
-  customFrom: string,
-  customTo: string,
-) {
+function buildRange(preset: RangePreset, customFrom: string, customTo: string) {
   if (preset !== 'custom') {
     const to = new Date();
     const from = new Date(to.getTime() - Number(preset) * DAY_MS);
@@ -193,9 +189,7 @@ export default function AnalyticsPage() {
             Tarih aralığı
             <select
               value={preset}
-              onChange={(event) =>
-                setPreset(event.target.value as RangePreset)
-              }
+              onChange={(event) => setPreset(event.target.value as RangePreset)}
             >
               <option value="7">Son 7 gün</option>
               <option value="30">Son 30 gün</option>
@@ -317,7 +311,10 @@ export default function AnalyticsPage() {
             </article>
           </section>
 
-          <section className={styles.surfaceCard} aria-label="Surface breakdown">
+          <section
+            className={styles.surfaceCard}
+            aria-label="Surface breakdown"
+          >
             <div className={styles.sectionHeader}>
               <h2>Surface breakdown</h2>
               <p>İnsan checkout click’lerinin dağılımı</p>
