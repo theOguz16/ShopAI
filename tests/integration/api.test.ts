@@ -201,7 +201,8 @@ describe('API and MCP', () => {
       DATABASE_URL: 'postgresql://shopai:test@db.example/shopai',
       MCP_PUBLIC_ORIGIN: 'https://api.staging.example',
       WIDGET_ORIGIN: 'https://widget.staging.example',
-      MCP_ALLOWED_ORIGINS: 'https://web.staging.example',
+      MCP_ALLOWED_ORIGINS:
+        'https://web.staging.example,https://chatgpt.com,https://chat.openai.com',
       REDIRECT_SIGNING_SECRET: 'staging-redirect-secret-000000000000',
       AUTH_PILOT_CREDENTIALS:
         '{"owner@staging.example":"staging-user-secret-000000000000"}',
