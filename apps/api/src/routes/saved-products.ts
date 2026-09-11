@@ -6,6 +6,8 @@ import {
   savedProductResponseSchema,
   savedProductsResponseSchema,
   saveProductRequestSchema,
+  unsaveProductRequestSchema,
+  unsaveProductResponseSchema,
 } from '@shopai/contracts/saved-products';
 import {
   PostgresSavedProductRepository,
@@ -23,6 +25,10 @@ export interface SavedProductsApi {
     input: SaveProductRequest,
   ): Promise<SavedProduct>;
   list(identity: ShopperIdentity): Promise<SavedProduct[]>;
+  remove(
+    identity: ShopperIdentity,
+    input: SaveProductRequest,
+  ): Promise<{ removed: boolean }>;
 }
 
 class MemorySavedProductsApi implements SavedProductsApi {
@@ -74,6 +80,10 @@ class MemorySavedProductsApi implements SavedProductsApi {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
+  async remove(identity: ShopperIdentity, input: SaveProductRequest) {
+    return { removed: this.rows.delete(this.key(identity, input)) };
+  }
+
   private key(identity: ShopperIdentity, input: SaveProductRequest) {
     return `${this.identityKey(identity)}:${input.productId}:${input.variantId ?? '-'}`;
   }
@@ -95,6 +105,15 @@ export async function resolveShopperIdentity(
   const anonymousUserId = ensureAnonymousUserId(request, reply, env);
   await services.shoppingProfiles.getOrCreate(anonymousUserId);
   return { kind: 'anonymous', anonymousUserId };
+}
+
+export async function findSavedProductById(
+  savedProductsApi: SavedProductsApi,
+  identity: ShopperIdentity,
+  savedId: string,
+) {
+  const items = await savedProductsApi.list(identity);
+  return items.find((item) => item.id === savedId) ?? null;
 }
 
 export async function registerSavedProductRoutes(
@@ -136,6 +155,38 @@ export async function registerSavedProductRoutes(
       );
       const item = await savedProductsApi.save(identity, parsed.data);
       return reply.code(201).send(savedProductResponseSchema.parse({ item }));
+    },
+  );
+
+  app.delete(
+    '/v1/saved-products/:savedId',
+    { preHandler: requireSameOrigin },
+    async (request, reply) => {
+      const parsed = unsaveProductRequestSchema.safeParse(request.params);
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ code: 'INVALID_INPUT', requestId: request.id });
+      const identity = await resolveShopperIdentity(
+        request,
+        reply,
+        services,
+        env,
+      );
+      const saved = await findSavedProductById(
+        savedProductsApi,
+        identity,
+        parsed.data.savedId,
+      );
+      if (!saved)
+        return reply
+          .code(404)
+          .send({ code: 'SAVED_PRODUCT_NOT_FOUND', requestId: request.id });
+      const result = await savedProductsApi.remove(identity, {
+        productId: saved.productId,
+        ...(saved.variantId ? { variantId: saved.variantId } : {}),
+      });
+      return reply.send(unsaveProductResponseSchema.parse(result));
     },
   );
 }
