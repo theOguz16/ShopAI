@@ -8,8 +8,17 @@ const port = Number(process.env.WIDGET_PORT ?? 3001);
 const here = dirname(fileURLToPath(import.meta.url));
 const distRoot = resolve(process.env.WIDGET_DIST_DIR ?? join(here, 'dist'));
 const assetFiles = new Map([
-  ['/assets/widget-v3.js', { file: 'assets/widget-v3.js', type: 'application/javascript; charset=utf-8' }],
-  ['/assets/widget-v3.css', { file: 'assets/widget-v3.css', type: 'text/css; charset=utf-8' }],
+  [
+    '/assets/widget-v3.js',
+    {
+      file: 'assets/widget-v3.js',
+      type: 'application/javascript; charset=utf-8',
+    },
+  ],
+  [
+    '/assets/widget-v3.css',
+    { file: 'assets/widget-v3.css', type: 'text/css; charset=utf-8' },
+  ],
 ]);
 
 async function assetsReady() {
