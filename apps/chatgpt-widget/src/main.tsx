@@ -1,4 +1,5 @@
 import { type CatalogItem, stockStatusLabel } from '@shopai/contracts';
+import { productAlertResponseSchema } from '@shopai/contracts/product-alerts';
 import {
   type ProductDetailResponse,
   productDetailResponseSchema,
@@ -139,6 +140,12 @@ function Widget() {
   const [view, setView] = useState<WidgetView>(WIDGET_VIEWS.PRODUCT_GRID);
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<string>();
+  const [alertEmail, setAlertEmail] = useState('');
+  const [priceAlertTarget, setPriceAlertTarget] = useState('');
+  const [alerting, setAlerting] = useState<
+    'PRICE_BELOW' | 'BACK_IN_STOCK' | null
+  >(null);
+  const [alertNotice, setAlertNotice] = useState('');
   const [loading, setLoading] = useState(bridge.available);
   const [error, setError] = useState('');
   const localHost = ['127.0.0.1', 'localhost'].includes(
@@ -165,8 +172,10 @@ function Widget() {
   const showDetail = useCallback((next: ProductDetailResponse) => {
     setDetail(next);
     const firstSelectable = next.variants.find((variant) => variant.selectable);
-    setSelectedColor(firstSelectable?.color ?? next.variants[0]?.color ?? '');
-    setSelectedVariantId(firstSelectable?.id);
+    const firstVariant = firstSelectable ?? next.variants[0];
+    setSelectedColor(firstVariant?.color ?? '');
+    setSelectedVariantId(firstVariant?.id);
+    setAlertNotice('');
     setView(WIDGET_VIEWS.PRODUCT_DETAIL);
   }, []);
 
@@ -273,6 +282,65 @@ function Widget() {
     }
   }
 
+  async function createProductAlert(
+    conditionType: 'PRICE_BELOW' | 'BACK_IN_STOCK',
+  ) {
+    if (!detail || !alertEmail.trim() || alerting) {
+      if (!alertEmail.trim()) setError('Bildirim için e-posta adresi gerekli.');
+      return;
+    }
+    const targetLira = Number(priceAlertTarget.replace(',', '.'));
+    if (
+      conditionType === 'PRICE_BELOW' &&
+      (!Number.isFinite(targetLira) || targetLira <= 0)
+    ) {
+      setError('Geçerli bir hedef fiyat gir.');
+      return;
+    }
+    if (conditionType === 'BACK_IN_STOCK' && !selectedVariantId) return;
+
+    const request = {
+      productId: detail.product.id,
+      ...(selectedVariantId ? { variantId: selectedVariantId } : {}),
+      conditionType,
+      ...(conditionType === 'PRICE_BELOW'
+        ? { targetValue: Math.round(targetLira * 100) }
+        : {}),
+      email: alertEmail.trim(),
+    } as const;
+
+    setAlerting(conditionType);
+    setError('');
+    setAlertNotice('');
+    try {
+      const alert = bridge.available
+        ? await bridge.callCreateProductAlert(request)
+        : await (async () => {
+            if (!localHost) throw new Error('host_unavailable');
+            const response = await fetch(
+              'http://127.0.0.1:4000/v1/product-alerts',
+              {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request),
+              },
+            );
+            if (!response.ok) throw new Error('alert_failed');
+            return productAlertResponseSchema.parse(await response.json()).alert;
+          })();
+      setAlertNotice(
+        alert.conditionType === 'PRICE_BELOW'
+          ? `🔔 ${formatMoney(alert.targetValue ?? 0)} altına düşünce ${alert.email} adresine haber vereceğiz.`
+          : `🔔 ${selectedVariant?.size ?? 'Seçili varyant'} gelince ${alert.email} adresine haber vereceğiz.`,
+      );
+    } catch {
+      setError('Alert oluşturulamadı. E-posta ve hedef değerini kontrol et.');
+    } finally {
+      setAlerting(null);
+    }
+  }
+
   const selectedColors = selectedAttributeValues(input, 'color');
   const selectedSizes = selectedAttributeValues(input, 'size');
   const colors = mergeValues(
@@ -315,14 +383,17 @@ function Widget() {
 
   function chooseColor(color: string) {
     setSelectedColor(color);
-    const next = detail?.variants.find(
-      (variant) => variant.color === color && variant.selectable,
+    const matching = detail?.variants.filter(
+      (variant) => variant.color === color,
     );
+    const next =
+      matching?.find((variant) => variant.selectable) ?? matching?.[0];
     setSelectedVariantId(next?.id);
   }
 
   function returnToGrid() {
     setDetail(undefined);
+    setAlertNotice('');
     setView(WIDGET_VIEWS.PRODUCT_GRID);
   }
 
@@ -572,24 +643,17 @@ function Widget() {
               <fieldset className="option-group">
                 <legend>Renk</legend>
                 <div className="option-row">
-                  {detailColors.map((color) => {
-                    const selectable = detail.variants.some(
-                      (variant) =>
-                        variant.color === color && variant.selectable,
-                    );
-                    return (
-                      <button
-                        className="option-chip"
-                        key={color}
-                        type="button"
-                        disabled={!selectable}
-                        aria-pressed={selectedColor === color}
-                        onClick={() => chooseColor(color)}
-                      >
-                        {colorLabels[color] ?? color}
-                      </button>
-                    );
-                  })}
+                  {detailColors.map((color) => (
+                    <button
+                      className="option-chip"
+                      key={color}
+                      type="button"
+                      aria-pressed={selectedColor === color}
+                      onClick={() => chooseColor(color)}
+                    >
+                      {colorLabels[color] ?? color}
+                    </button>
+                  ))}
                 </div>
               </fieldset>
 
@@ -601,7 +665,6 @@ function Widget() {
                       className="option-chip"
                       key={variant.id}
                       type="button"
-                      disabled={!variant.selectable}
                       aria-pressed={selectedVariantId === variant.id}
                       onClick={() => setSelectedVariantId(variant.id)}
                     >
@@ -616,6 +679,59 @@ function Widget() {
                   ? `${selectedVariant.size} · ${stockStatusLabel(selectedVariant.availability)}${selectedVariant.selectable ? ' ✓' : ''}`
                   : stockStatusLabel(detail.availability)}
               </p>
+
+              <div className="option-group" aria-label="Fiyat ve stok alarmları">
+                <label htmlFor="alert-email">Bildirim e-postası</label>
+                <input
+                  id="alert-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={alertEmail}
+                  onChange={(event) => setAlertEmail(event.target.value)}
+                  placeholder="sen@example.com"
+                />
+                <div className="option-row">
+                  <input
+                    aria-label="Hedef fiyat (TL)"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={priceAlertTarget}
+                    onChange={(event) => setPriceAlertTarget(event.target.value)}
+                    placeholder={
+                      displayOffer
+                        ? `${Math.max(1, Math.floor(displayOffer.priceMinor / 100) - 1)}`
+                        : '2000'
+                    }
+                  />
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={alerting !== null || !displayOffer || !canInteract}
+                    onClick={() => void createProductAlert('PRICE_BELOW')}
+                  >
+                    {alerting === 'PRICE_BELOW'
+                      ? 'Alarm oluşturuluyor…'
+                      : '🔔 Fiyat düşünce haber ver'}
+                  </button>
+                </div>
+                {selectedVariant &&
+                selectedVariant.availability !== 'in_stock' ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={alerting !== null || !canInteract}
+                    onClick={() => void createProductAlert('BACK_IN_STOCK')}
+                  >
+                    {alerting === 'BACK_IN_STOCK'
+                      ? 'Alarm oluşturuluyor…'
+                      : `🔔 ${selectedVariant.size} beden gelince haber ver`}
+                  </button>
+                ) : null}
+                {alertNotice ? <p role="status">{alertNotice}</p> : null}
+              </div>
 
               {checkoutUrl ? (
                 <button
