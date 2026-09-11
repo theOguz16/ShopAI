@@ -40,7 +40,11 @@ export class PostgresRedirectRepository implements RedirectRepository {
         )
         .innerJoin(
           merchants,
-          and(eq(merchants.id, offers.merchantId), eq(merchants.active, true)),
+          and(
+            eq(merchants.id, offers.merchantId),
+            eq(merchants.active, true),
+            eq(merchants.isPublic, true),
+          ),
         )
         .where(and(eq(offers.id, offerId), eq(offers.active, true)))
         .limit(1);
