@@ -6,15 +6,11 @@ import type {
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { productAttributes } from './category-model.js';
-import {
-  inventory,
-  merchants,
-  offers,
-  products,
-  variants,
-} from './schema.js';
+import { inventory, merchants, offers, products, variants } from './schema.js';
 
-export class PostgresProductDetailRepository implements ProductDetailRepository {
+export class PostgresProductDetailRepository
+  implements ProductDetailRepository
+{
   constructor(private readonly db: Database) {}
 
   async findProductDetail(
