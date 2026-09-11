@@ -20,7 +20,11 @@ import {
   toInternalSearchInput,
   toSearchProductsResponse,
 } from '@shopai/commerce/public-search';
-import type { AttributionContext, DiscoverySession } from '@shopai/contracts';
+import type {
+  AttributionContext,
+  DiscoverySession,
+  Surface,
+} from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import {
   DemoQueryParser,
@@ -36,6 +40,9 @@ import {
   PostgresSearchEventRepository,
 } from '@shopai/db';
 import type { ApiEnv } from './env.js';
+
+const restDiscoverySurfaces = new Set<Surface>(['web', 'brand_widget']);
+
 export function createServices(env: ApiEnv) {
   const database =
     env.CATALOG_MODE === 'postgres'
@@ -68,6 +75,7 @@ export function createServices(env: ApiEnv) {
             {
               url: record.checkoutUrl,
               merchantId: record.merchantId,
+              productId: record.productId,
               active:
                 record.published && record.offerActive && record.merchantActive,
             },
@@ -86,6 +94,33 @@ export function createServices(env: ApiEnv) {
   const searchEventRepository = database
     ? new PostgresSearchEventRepository(database.db)
     : undefined;
+
+  const resolveRestAttribution = async (
+    input: unknown,
+  ): Promise<AttributionContext> => {
+    const requestInput =
+      input && typeof input === 'object'
+        ? (input as { discoverySessionId?: unknown })
+        : {};
+    if (typeof requestInput.discoverySessionId !== 'string')
+      return WEB_ATTRIBUTION;
+    const session = await discoverySessions.require(
+      requestInput.discoverySessionId,
+    );
+    if (
+      session.transport !== 'rest' ||
+      !restDiscoverySurfaces.has(session.surface)
+    )
+      throw Object.assign(
+        new Error('Discovery session REST attribution için geçersiz.'),
+        {
+          statusCode: 400,
+          code: 'DISCOVERY_SESSION_ATTRIBUTION_MISMATCH',
+        },
+      );
+    return { transport: 'rest', surface: session.surface };
+  };
+
   const executeSearch = async (
     input: unknown,
     context: { merchantIds?: string[] } = {},
@@ -101,13 +136,19 @@ export function createServices(env: ApiEnv) {
         : {};
     const requestKind = requestInput.cursor ? 'pagination' : 'initial';
     let scopedContext = context;
-    let discoverySessionId: string | undefined;
+    let discoverySessionId: string;
     if (typeof requestInput.discoverySessionId === 'string') {
       const session = await discoverySessions.require(
         requestInput.discoverySessionId,
       );
       discoverySessions.assertAttribution(session, attribution);
       scopedContext = discoverySessions.applyMerchantScope(session, context);
+      discoverySessionId = session.id;
+    } else {
+      const session = await discoverySessions.create(
+        { surface: attribution.surface },
+        { transport: attribution.transport },
+      );
       discoverySessionId = session.id;
     }
     const explicitMerchantIds = scopedContext.merchantIds?.length
@@ -188,6 +229,7 @@ export function createServices(env: ApiEnv) {
     executeSearch,
     executePublicSearch,
     executeProductDetail,
+    resolveRestAttribution,
     discoverySessions,
     repository,
     redirects: new RedirectService(
@@ -210,13 +252,19 @@ export class MemoryRedirectRepository implements RedirectRepository {
   readonly clicks: Array<{
     claims: RedirectClaims;
     merchantId: string;
+    productId: string;
     classification: 'human' | 'bot';
   }> = [];
 
   constructor(
     private readonly targets: Map<
       string,
-      { url: string; merchantId: string; active: boolean }
+      {
+        url: string;
+        merchantId: string;
+        productId: string;
+        active: boolean;
+      }
     >,
   ) {}
 
