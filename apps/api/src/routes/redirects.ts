@@ -2,6 +2,10 @@ import { RedirectTokenError } from '@shopai/commerce';
 import type { FastifyInstance } from 'fastify';
 import type { Services } from '../services.js';
 
+function firstHeader(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export async function registerRedirectRoutes(
   app: FastifyInstance,
   services: Services,
@@ -11,8 +15,8 @@ export async function registerRedirectRoutes(
     try {
       const resolved = await services.redirects.open(token, {
         userAgent: request.headers['user-agent'],
-        purpose: request.headers.purpose,
-        secPurpose: request.headers['sec-purpose'],
+        purpose: firstHeader(request.headers.purpose),
+        secPurpose: firstHeader(request.headers['sec-purpose']),
       });
       if (!resolved)
         return reply.code(404).send({
