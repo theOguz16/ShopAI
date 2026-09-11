@@ -34,7 +34,7 @@ const createProductAlertRequestObject = z
 export const createProductAlertRequestShape =
   createProductAlertRequestObject.shape;
 
-export const createProductAlertRequestSchema =
+const refinedCreateProductAlertRequestSchema =
   createProductAlertRequestObject.superRefine((value, ctx) => {
     if (value.conditionType === 'PRICE_BELOW' && value.targetValue == null) {
       ctx.addIssue({
@@ -60,8 +60,13 @@ export const createProductAlertRequestSchema =
       }
     }
   });
+
+export const createProductAlertRequestSchema = Object.assign(
+  refinedCreateProductAlertRequestSchema,
+  { shape: createProductAlertRequestShape },
+);
 export type CreateProductAlertRequest = z.infer<
-  typeof createProductAlertRequestSchema
+  typeof refinedCreateProductAlertRequestSchema
 >;
 
 export const productAlertSchema = z
