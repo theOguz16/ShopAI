@@ -38,7 +38,8 @@ describe('public product detail transport', () => {
       ]),
     );
     const unavailableRestOffer = restDetail.offers.find(
-      (offer: { availability: string }) => offer.availability === 'out_of_stock',
+      (offer: { availability: string }) =>
+        offer.availability === 'out_of_stock',
     );
     expect(unavailableRestOffer).toMatchObject({
       checkoutAvailable: false,
