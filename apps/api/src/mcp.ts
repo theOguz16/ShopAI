@@ -469,7 +469,8 @@ export function createMcpServer(
           shopper.identity,
           input.alertId,
         );
-        const structuredContent = cancelProductAlertResponseSchema.parse(result);
+        const structuredContent =
+          cancelProductAlertResponseSchema.parse(result);
         return {
           content: [
             {
