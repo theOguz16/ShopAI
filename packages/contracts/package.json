@@ -23,6 +23,10 @@
     "./product-detail": {
       "types": "./dist/product-detail.d.ts",
       "import": "./dist/product-detail.js"
+    },
+    "./merchant-conversions": {
+      "types": "./dist/merchant-conversions.d.ts",
+      "import": "./dist/merchant-conversions.js"
     }
   },
   "dependencies": {
