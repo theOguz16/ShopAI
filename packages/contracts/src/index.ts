@@ -101,27 +101,126 @@ export const catalogItemSchema = z.object({
   checkoutUrl: publicLinkSchema,
 });
 export type CatalogItem = z.infer<typeof catalogItemSchema>;
-export const facetValueSchema = z.object({ value: z.string().min(1), count: z.number().int().nonnegative() });
-export const searchFacetsSchema = z.object({ categories: z.array(facetValueSchema), sizes: z.array(facetValueSchema), colors: z.array(facetValueSchema) });
+export const facetValueSchema = z.object({
+  value: z.string().min(1),
+  count: z.number().int().nonnegative(),
+});
+export const searchFacetsSchema = z.object({
+  categories: z.array(facetValueSchema),
+  sizes: z.array(facetValueSchema),
+  colors: z.array(facetValueSchema),
+});
 export type SearchFacets = z.infer<typeof searchFacetsSchema>;
-export const parserTelemetrySchema = z.object({ provider: z.string().min(1), model: z.string().min(1), promptVersion: z.string().min(1), latencyMs: z.number().nonnegative(), estimatedCostUsd: z.number().nonnegative(), inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(), fallback: z.boolean(), fallbackReason: z.string().optional() });
+export const parserTelemetrySchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  promptVersion: z.string().min(1),
+  latencyMs: z.number().nonnegative(),
+  estimatedCostUsd: z.number().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  fallback: z.boolean(),
+  fallbackReason: z.string().optional(),
+});
 export type ParserTelemetry = z.infer<typeof parserTelemetrySchema>;
-export const modelSearchIntentSchema = z.object({ category: z.string().min(1).max(80).nullable(), colors: z.array(z.string().min(1).max(40)).max(20), excludedColors: z.array(z.string().min(1).max(40)).max(20), sizes: z.array(z.string().min(1).max(20)).max(20), excludedSizes: z.array(z.string().min(1).max(20)).max(20), excludedCategories: z.array(z.string().min(1).max(80)).max(20), minPriceMinor: moneySchema.nullable(), maxPriceMinor: moneySchema.nullable(), inStockOnly: z.boolean().nullable(), ambiguous: z.boolean(), unsupported: z.array(z.string().min(1).max(160)).max(10) }).strict().refine((intent) => intent.minPriceMinor === null || intent.maxPriceMinor === null || intent.minPriceMinor <= intent.maxPriceMinor, { message: 'Alt fiyat üst fiyattan büyük olamaz.' });
+export const modelSearchIntentSchema = z
+  .object({
+    category: z.string().min(1).max(80).nullable(),
+    colors: z.array(z.string().min(1).max(40)).max(20),
+    excludedColors: z.array(z.string().min(1).max(40)).max(20),
+    sizes: z.array(z.string().min(1).max(20)).max(20),
+    excludedSizes: z.array(z.string().min(1).max(20)).max(20),
+    excludedCategories: z.array(z.string().min(1).max(80)).max(20),
+    minPriceMinor: moneySchema.nullable(),
+    maxPriceMinor: moneySchema.nullable(),
+    inStockOnly: z.boolean().nullable(),
+    ambiguous: z.boolean(),
+    unsupported: z.array(z.string().min(1).max(160)).max(10),
+  })
+  .strict()
+  .refine(
+    (intent) =>
+      intent.minPriceMinor === null ||
+      intent.maxPriceMinor === null ||
+      intent.minPriceMinor <= intent.maxPriceMinor,
+    { message: 'Alt fiyat üst fiyattan büyük olamaz.' },
+  );
 export type ModelSearchIntent = z.infer<typeof modelSearchIntentSchema>;
-export const searchResponseSchema = z.object({ schemaVersion: z.literal(1), searchId: z.string().uuid(), items: z.array(catalogItemSchema), nextCursor: z.string().nullable(), facets: searchFacetsSchema, appliedFilters: searchFiltersSchema, warnings: z.array(z.string()), telemetry: parserTelemetrySchema, mode: z.enum(['demo', 'postgres']) });
+export const searchResponseSchema = z.object({
+  schemaVersion: z.literal(1),
+  searchId: z.string().uuid(),
+  items: z.array(catalogItemSchema),
+  nextCursor: z.string().nullable(),
+  facets: searchFacetsSchema,
+  appliedFilters: searchFiltersSchema,
+  warnings: z.array(z.string()),
+  telemetry: parserTelemetrySchema,
+  mode: z.enum(['demo', 'postgres']),
+});
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
-export const storeSlugSchema = z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
-export const publicStoreSchema = z.object({ id: z.string().uuid(), name: z.string().trim().min(1).max(160), slug: storeSlugSchema }).strict();
+export const storeSlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+export const publicStoreSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1).max(160),
+    slug: storeSlugSchema,
+  })
+  .strict();
 export type PublicStore = z.infer<typeof publicStoreSchema>;
-export const sourceRowSchema = z.object({ externalId: z.string().trim().min(1).max(160), productKey: z.string().trim().min(1).max(160), title: z.string().trim().min(1).max(240), description: z.string().max(5000).default(''), category: z.string().trim().min(1).max(80), imageUrl: z.string().url().refine((v) => new URL(v).protocol === 'https:', 'HTTPS gerekli').optional().nullable(), imageAlt: z.string().trim().max(240).optional().nullable(), size: z.string().trim().min(1).max(20), color: z.string().trim().min(1).max(40), priceMinor: moneySchema, currency: currencySchema, available: z.boolean().nullable(), checkoutUrl: httpsUrlSchema });
+export const sourceRowSchema = z.object({
+  externalId: z.string().trim().min(1).max(160),
+  productKey: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(1).max(240),
+  description: z.string().max(5000).default(''),
+  category: z.string().trim().min(1).max(80),
+  imageUrl: z
+    .string()
+    .url()
+    .refine((v) => new URL(v).protocol === 'https:', 'HTTPS gerekli')
+    .optional()
+    .nullable(),
+  imageAlt: z.string().trim().max(240).optional().nullable(),
+  size: z.string().trim().min(1).max(20),
+  color: z.string().trim().min(1).max(40),
+  priceMinor: moneySchema,
+  currency: currencySchema,
+  available: z.boolean().nullable(),
+  checkoutUrl: httpsUrlSchema,
+});
 export type SourceRow = z.infer<typeof sourceRowSchema>;
-export const importJobSchema = z.object({ schemaVersion: z.literal(1), runId: z.string().uuid(), observedAt: z.string().datetime(), merchantId: z.string().uuid(), connectionId: z.string().uuid(), rows: z.array(sourceRowSchema).min(1).max(1000) }).strict();
+export const importJobSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    runId: z.string().uuid(),
+    observedAt: z.string().datetime(),
+    merchantId: z.string().uuid(),
+    connectionId: z.string().uuid(),
+    rows: z.array(sourceRowSchema).min(1).max(1000),
+  })
+  .strict();
 export type ImportJob = z.infer<typeof importJobSchema>;
-export const publicationChangeSchema = z.object({ published: z.boolean() }).strict();
+export const publicationChangeSchema = z
+  .object({ published: z.boolean() })
+  .strict();
 export type PublicationChange = z.infer<typeof publicationChangeSchema>;
-export const bulkPublicationChangeSchema = z.object({ productIds: z.array(z.string().uuid()).min(1).max(100), published: z.boolean() }).strict();
+export const bulkPublicationChangeSchema = z
+  .object({
+    productIds: z.array(z.string().uuid()).min(1).max(100),
+    published: z.boolean(),
+  })
+  .strict();
 export type BulkPublicationChange = z.infer<typeof bulkPublicationChangeSchema>;
 export const IMPORT_QUEUE = 'catalog-import';
 export const SYNC_QUEUE = 'catalog-sync';
-export const syncJobSchema = z.object({ merchantId: z.string().uuid(), connectionId: z.string().uuid() }).strict();
+export const syncJobSchema = z
+  .object({
+    merchantId: z.string().uuid(),
+    connectionId: z.string().uuid(),
+  })
+  .strict();
 export type SyncJob = z.infer<typeof syncJobSchema>;
