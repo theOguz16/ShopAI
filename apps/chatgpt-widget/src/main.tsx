@@ -172,7 +172,9 @@ function Widget() {
     detail?.offers
       .filter((offer) => offer.variantId === selectedVariantId)
       .sort((left, right) => left.priceMinor - right.priceMinor)[0] ??
-    detail?.offers.slice().sort((left, right) => left.priceMinor - right.priceMinor)[0];
+    detail?.offers
+      .slice()
+      .sort((left, right) => left.priceMinor - right.priceMinor)[0];
 
   function chooseColor(color: string) {
     setSelectedColor(color);
@@ -251,7 +253,12 @@ function Widget() {
             <img
               src={detail.images[0].url}
               alt={detail.images[0].alt ?? detail.product.title}
-              style={{ borderRadius: 16, maxHeight: 280, objectFit: 'cover', width: '100%' }}
+              style={{
+                borderRadius: 16,
+                maxHeight: 280,
+                objectFit: 'cover',
+                width: '100%',
+              }}
             />
           ) : null}
           <div>
