@@ -60,8 +60,7 @@ export async function registerConversionRoutes(
     if (!env.CONVERSION_CALLBACK_SECRET || !merchantConversions)
       return reply.code(404).send({ code: 'CONVERSION_NOT_CONFIGURED' });
     const parsed = merchantConversionRequestSchema.safeParse(request.body);
-    if (!parsed.success)
-      return reply.code(400).send({ code: 'INVALID_EVENT' });
+    if (!parsed.success) return reply.code(400).send({ code: 'INVALID_EVENT' });
 
     const merchantId = headerValue(
       request.headers[MERCHANT_CONVERSION_HEADERS.merchantId],
