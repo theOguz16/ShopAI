@@ -27,10 +27,8 @@ export type SurfaceBreakdown = {
 const ratio = (numerator: number, denominator: number) =>
   denominator > 0 ? numerator / denominator : null;
 
-const countFor = (
-  counts: Partial<Record<Surface, number>>,
-  surface: Surface,
-) => counts[surface] ?? 0;
+const countFor = (counts: Partial<Record<Surface, number>>, surface: Surface) =>
+  counts[surface] ?? 0;
 
 export function buildSurfaceBreakdown(
   counts: Partial<Record<Surface, number>>,
@@ -60,9 +58,7 @@ export function buildMerchantAnalyticsMetrics(
   const attributedGmvMinor = aggregate.measured
     ? aggregate.attributedGmvMinor
     : null;
-  const netRevenueMinor = aggregate.measured
-    ? aggregate.netRevenueMinor
-    : null;
+  const netRevenueMinor = aggregate.measured ? aggregate.netRevenueMinor : null;
 
   return {
     aiSearches: aggregate.aiSearches,
@@ -71,10 +67,7 @@ export function buildMerchantAnalyticsMetrics(
     orders,
     attributedGmvMinor,
     netRevenueMinor,
-    searchToCheckoutRate: ratio(
-      aggregate.checkoutClicks,
-      aggregate.aiSearches,
-    ),
+    searchToCheckoutRate: ratio(aggregate.checkoutClicks, aggregate.aiSearches),
     checkoutToOrderRate:
       aggregate.measured && aggregate.checkoutClicks > 0
         ? aggregate.orders / aggregate.checkoutClicks
