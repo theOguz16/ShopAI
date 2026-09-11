@@ -21,7 +21,7 @@ const targetValueSchema = z
   .positive()
   .max(Number.MAX_SAFE_INTEGER);
 
-export const createProductAlertRequestSchema = z
+const createProductAlertRequestObject = z
   .object({
     productId: z.string().uuid(),
     variantId: z.string().uuid().nullable().optional(),
@@ -29,8 +29,13 @@ export const createProductAlertRequestSchema = z
     targetValue: targetValueSchema.nullable().optional(),
     email: z.string().trim().email().max(254),
   })
-  .strict()
-  .superRefine((value, ctx) => {
+  .strict();
+
+export const createProductAlertRequestShape =
+  createProductAlertRequestObject.shape;
+
+export const createProductAlertRequestSchema =
+  createProductAlertRequestObject.superRefine((value, ctx) => {
     if (value.conditionType === 'PRICE_BELOW' && value.targetValue == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
