@@ -5,6 +5,7 @@ import {
   type ProductDetailResponse,
   productDetailResponseSchema,
 } from '@shopai/contracts/product-detail';
+import { savedProductResponseSchema } from '@shopai/contracts/saved-products';
 import { ProductCard } from '@shopai/ui';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -34,6 +35,8 @@ export default function ProductDetailPage() {
   const [detail, setDetail] = useState<ProductDetailResponse>();
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<string>();
+  const [savedKey, setSavedKey] = useState('');
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState('');
@@ -50,6 +53,7 @@ export default function ProductDetailPage() {
     setLoading(true);
     setMissing(false);
     setError('');
+    setSavedKey('');
     void fetch(
       `${api}/v1/products/${encodeURIComponent(productId)}/detail${suffix}`,
       { signal: controller.signal },
@@ -109,6 +113,8 @@ export default function ProductDetailPage() {
     detail?.offers
       .slice()
       .sort((left, right) => left.priceMinor - right.priceMinor)[0];
+  const currentSavedKey = `${productId}:${selectedVariantId ?? '-'}`;
+  const isSaved = savedKey === currentSavedKey;
 
   function chooseColor(color: string) {
     setSelectedColor(color);
@@ -116,6 +122,30 @@ export default function ProductDetailPage() {
       (variant) => variant.color === color && variant.selectable,
     );
     setSelectedVariantId(next?.id);
+  }
+
+  async function saveProduct() {
+    if (!detail || saving || isSaved) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`${api}/v1/saved-products`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: detail.product.id,
+          ...(selectedVariantId ? { variantId: selectedVariantId } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error('save_product_failed');
+      savedProductResponseSchema.parse(await response.json());
+      setSavedKey(currentSavedKey);
+    } catch {
+      setError('Ürün kaydedilemedi. Yeniden deneyebilirsin.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading)
@@ -148,9 +178,12 @@ export default function ProductDetailPage() {
         <a className="brand" href="/">
           ShopAI<span>●</span>
         </a>
-        <a href={`/shop/${detail.merchant.slug}`}>
-          {detail.merchant.displayName}
-        </a>
+        <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <a href="/saved">♡ Kaydedilenler</a>
+          <a href={`/shop/${detail.merchant.slug}`}>
+            {detail.merchant.displayName}
+          </a>
+        </nav>
       </header>
 
       <section
@@ -243,6 +276,22 @@ export default function ProductDetailPage() {
               : stockStatusLabel(detail.availability)}
             {selectedVariant?.selectable ? ' ✓' : ''}
           </p>
+
+          <button
+            type="button"
+            aria-pressed={isSaved}
+            disabled={saving || isSaved}
+            onClick={() => void saveProduct()}
+            style={{
+              minHeight: 44,
+              borderRadius: 12,
+              border: '1px solid #d7ddd8',
+              background: isSaved ? '#f5e8ec' : '#fff',
+              fontWeight: 700,
+            }}
+          >
+            {saving ? 'Kaydediliyor…' : isSaved ? '♥ Kaydedildi' : '♡ Kaydet'}
+          </button>
 
           {checkoutOffer?.checkoutUrl ? (
             <a
