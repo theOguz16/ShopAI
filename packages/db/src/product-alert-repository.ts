@@ -398,10 +398,7 @@ export class PostgresProductAlertRepository {
         .select()
         .from(productAlertNotifications)
         .where(
-          and(
-            eq(productAlertNotifications.merchantId, merchantId),
-            claimable,
-          ),
+          and(eq(productAlertNotifications.merchantId, merchantId), claimable),
         )
         .orderBy(asc(productAlertNotifications.createdAt))
         .limit(limit);
