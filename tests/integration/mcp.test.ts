@@ -23,7 +23,7 @@ function commerceIdentity(products: Array<Record<string, unknown>>) {
 }
 
 describe('MCP Apps product widget', () => {
-  it('registers a versioned visual-shopping UI resource with CSP and compatibility metadata', async () => {
+  it('registers a versioned visual-shopping UI resource with hosted assets, CSP and compatibility metadata', async () => {
     const listed = await rpc('tools/list');
     const tool = listed
       .json()
@@ -46,8 +46,9 @@ describe('MCP Apps product widget', () => {
     const resource = await rpc('resources/read', { uri: SHOPAI_WIDGET_URI });
     const content = resource.json().result.contents[0];
     expect(content.mimeType).toBe('text/html;profile=mcp-app');
-    expect(content.text).toContain('/assets/widget-v2.js');
-    expect(content._meta['shopai/assetVersion']).toBe('2');
+    expect(content.text).toContain('/assets/widget-v3.js');
+    expect(content.text).toContain('/assets/widget-v3.css');
+    expect(content._meta['shopai/assetVersion']).toBe('3');
     expect(content._meta['openai/widgetDescription']).toContain(
       'visual shopping',
     );
