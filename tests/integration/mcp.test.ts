@@ -23,7 +23,7 @@ function commerceIdentity(products: Array<Record<string, unknown>>) {
 }
 
 describe('MCP Apps product widget', () => {
-  it('registers a versioned UI resource with CSP and compatibility metadata', async () => {
+  it('registers a versioned visual-shopping UI resource with CSP and compatibility metadata', async () => {
     const listed = await rpc('tools/list');
     const tool = listed
       .json()
@@ -35,7 +35,10 @@ describe('MCP Apps product widget', () => {
       visibility: ['model', 'app'],
     });
     expect(tool._meta['openai/outputTemplate']).toBe(SHOPAI_WIDGET_URI);
+    expect(tool._meta['openai/widgetAccessible']).toBe(true);
     expect(tool._meta['shopai/dtoVersion']).toBe(1);
+    expect(tool.description).toContain('visual-shopping');
+    expect(tool.description).toContain('size/sizes');
     expect(tool.inputSchema.properties).toHaveProperty('attributes');
     expect(tool.inputSchema.properties).toHaveProperty('price');
     expect(tool.inputSchema.properties).not.toHaveProperty('filters');
@@ -43,7 +46,11 @@ describe('MCP Apps product widget', () => {
     const resource = await rpc('resources/read', { uri: SHOPAI_WIDGET_URI });
     const content = resource.json().result.contents[0];
     expect(content.mimeType).toBe('text/html;profile=mcp-app');
-    expect(content.text).toContain('/assets/widget-v1.js');
+    expect(content.text).toContain('/assets/widget-v2.js');
+    expect(content._meta['shopai/assetVersion']).toBe('2');
+    expect(content._meta['openai/widgetDescription']).toContain(
+      'visual shopping',
+    );
     expect(content._meta.ui).toMatchObject({
       domain: 'http://127.0.0.1:3001',
       csp: {
@@ -63,6 +70,28 @@ describe('MCP Apps product widget', () => {
     expect(result.content[0].text).toMatch(
       /Minimal Siyah Tişört.*M beden.*http:\/\/127\.0\.0\.1:4000\/r\//s,
     );
+  });
+
+  it('returns structured shopping cards for supported filters while contextual fit stays in query', async () => {
+    const response = await rpc('tools/call', {
+      name: 'search_products',
+      arguments: {
+        query: 'oversize',
+        category: 'tshirt',
+        attributes: { color: ['black'] },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const result = response.json().result;
+    expect(result.structuredContent).toMatchObject({
+      products: expect.any(Array),
+      facets: expect.objectContaining({
+        categories: expect.any(Array),
+        colors: expect.any(Array),
+        sizes: expect.any(Array),
+      }),
+      searchId: expect.any(String),
+    });
   });
 
   it('produces the same commerce result set for the same REST and MCP request', async () => {
