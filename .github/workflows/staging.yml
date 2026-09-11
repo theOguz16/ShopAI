@@ -23,6 +23,7 @@ jobs:
       STAGING_REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
       STAGING_API_ORIGIN: ${{ vars.STAGING_API_ORIGIN }}
       STAGING_WIDGET_ORIGIN: ${{ vars.STAGING_WIDGET_ORIGIN }}
+      STAGING_TLS_EMAIL: ${{ vars.STAGING_TLS_EMAIL }}
       STAGING_MERCHANT_ID: ${{ vars.STAGING_MERCHANT_ID }}
       STAGING_ALLOWED_ORIGINS: ${{ vars.STAGING_ALLOWED_ORIGINS }}
       STAGING_RESOURCE_DOMAINS: ${{ vars.STAGING_RESOURCE_DOMAINS }}
@@ -32,29 +33,96 @@ jobs:
       BACKUP_DIR: ${{ vars.STAGING_BACKUP_DIR }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate staging configuration
+        run: |
+          node <<'NODE'
+          const required = [
+            'STAGING_DATABASE_URL',
+            'STAGING_REDIS_URL',
+            'STAGING_API_ORIGIN',
+            'STAGING_WIDGET_ORIGIN',
+            'STAGING_TLS_EMAIL',
+            'STAGING_ALLOWED_ORIGINS',
+            'STAGING_RESOURCE_DOMAINS',
+            'STAGING_REDIRECT_SIGNING_SECRET',
+            'STAGING_AUTH_PILOT_CREDENTIALS',
+          ];
+          for (const key of required) {
+            if (!process.env[key]) throw new Error(`${key} staging environment içinde tanımlı değil`);
+          }
+          for (const key of ['STAGING_API_ORIGIN', 'STAGING_WIDGET_ORIGIN']) {
+            const value = process.env[key];
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.origin !== value)
+              throw new Error(`${key} origin-only HTTPS URL olmalıdır`);
+          }
+          const allowed = process.env.STAGING_ALLOWED_ORIGINS.split(',').map((value) => value.trim());
+          if (!allowed.includes('https://chatgpt.com'))
+            throw new Error('STAGING_ALLOWED_ORIGINS https://chatgpt.com içermelidir');
+          const resources = process.env.STAGING_RESOURCE_DOMAINS.split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+          for (const value of resources) {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.origin !== value)
+              throw new Error('STAGING_RESOURCE_DOMAINS yalnız origin-only HTTPS URL içermelidir');
+          }
+          NODE
+          docker compose --file infra/staging.compose.yaml config >/dev/null
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and publish immutable release
         if: inputs.release_version == ''
         run: |
           docker build --build-arg NEXT_PUBLIC_API_URL="$STAGING_API_ORIGIN" --build-arg NEXT_PUBLIC_MERCHANT_ID="$STAGING_MERCHANT_ID" --tag "$SHOPAI_IMAGE:$RELEASE_VERSION" --file infra/Dockerfile .
           docker push "$SHOPAI_IMAGE:$RELEASE_VERSION"
+
       - name: Pull selected release
         run: docker pull "$SHOPAI_IMAGE:$RELEASE_VERSION"
+
       - name: Backup before migration
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: infra/backup.sh
+
       - name: Apply reviewed migrations once
         run: docker compose --file infra/staging.compose.yaml --profile migration run --rm migrate
-      - name: Deploy API, worker and web
-        run: docker compose --file infra/staging.compose.yaml up --detach --no-build api worker web
-      - name: Readiness and release verification
+
+      - name: Deploy API, worker, web, widget and HTTPS edge
+        run: docker compose --file infra/staging.compose.yaml up --detach --no-build --remove-orphans api worker web widget edge
+
+      - name: Wait for public HTTPS readiness
         run: |
-          response="$(curl --fail --silent --show-error "$STAGING_API_ORIGIN/health/ready")"
-          node -e 'const body=JSON.parse(process.argv[1]); if(body.status!=="ok"||body.release!==process.env.RELEASE_VERSION) process.exit(1)' "$response"
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "$STAGING_API_ORIGIN/health/ready" >/tmp/shopai-api-ready.json \
+              && curl --fail --silent --show-error "$STAGING_WIDGET_ORIGIN/health/ready" >/tmp/shopai-widget-ready.json; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/shopai-api-ready.json","utf8")); if(body.status!=="ok"||body.release!==process.env.RELEASE_VERSION) process.exit(1)'
+          node -e 'const body=JSON.parse(require("fs").readFileSync("/tmp/shopai-widget-ready.json","utf8")); if(body.status!=="ok") process.exit(1)'
+
+      - name: Hosted MCP and widget acceptance smoke
+        run: node scripts/staging-chatgpt-smoke.mjs
+
       - name: Deployment record
-        run: echo "release=$RELEASE_VERSION commit=${{ github.sha }} actor=${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            echo "### ShopAI staging"
+            echo "- release: \`$RELEASE_VERSION\`"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- MCP: \`$STAGING_API_ORIGIN/mcp\`"
+            echo "- widget: \`$STAGING_WIDGET_ORIGIN/assets/widget-v3.js\`"
+            echo "- automated hosted smoke: PASS"
+            echo "- real ChatGPT developer-mode session: manual evidence still required"
+          } >> "$GITHUB_STEP_SUMMARY"
