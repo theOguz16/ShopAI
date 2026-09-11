@@ -1,6 +1,7 @@
 'use client';
 
 import { stockStatusLabel } from '@shopai/contracts';
+import { productAlertResponseSchema } from '@shopai/contracts/product-alerts';
 import {
   type ProductDetailResponse,
   productDetailResponseSchema,
@@ -46,6 +47,10 @@ export default function ProductDetailPage() {
   const [savedIds, setSavedIds] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [savedStateLoading, setSavedStateLoading] = useState(true);
+  const [alerting, setAlerting] = useState<
+    'PRICE_BELOW' | 'BACK_IN_STOCK' | null
+  >(null);
+  const [alertNotice, setAlertNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState('');
@@ -78,10 +83,9 @@ export default function ProductDetailPage() {
         const firstSelectable = next.variants.find(
           (variant) => variant.selectable,
         );
-        setSelectedColor(
-          firstSelectable?.color ?? next.variants[0]?.color ?? '',
-        );
-        setSelectedVariantId(firstSelectable?.id);
+        const firstVariant = firstSelectable ?? next.variants[0];
+        setSelectedColor(firstVariant?.color ?? '');
+        setSelectedVariantId(firstVariant?.id);
       })
       .catch(() => {
         if (!controller.signal.aborted)
@@ -160,9 +164,11 @@ export default function ProductDetailPage() {
 
   function chooseColor(color: string) {
     setSelectedColor(color);
-    const next = detail?.variants.find(
-      (variant) => variant.color === color && variant.selectable,
+    const matching = detail?.variants.filter(
+      (variant) => variant.color === color,
     );
+    const next =
+      matching?.find((variant) => variant.selectable) ?? matching?.[0];
     setSelectedVariantId(next?.id);
   }
 
@@ -220,6 +226,87 @@ export default function ProductDetailPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  function askEmail() {
+    return window.prompt('Bildirim e-posta adresin:')?.trim() ?? '';
+  }
+
+  async function createPriceAlert() {
+    if (!detail || !displayOffer || alerting) return;
+    const defaultTarget = Math.max(
+      1,
+      Math.floor((displayOffer.priceMinor / 100) * 0.9),
+    ).toString();
+    const target = window.prompt(
+      'Hangi fiyatın altına düşünce haber verelim? (TL)',
+      defaultTarget,
+    );
+    if (target === null) return;
+    const targetLira = Number(target.replace(',', '.'));
+    if (!Number.isFinite(targetLira) || targetLira <= 0) {
+      setError('Geçerli bir hedef fiyat gir.');
+      return;
+    }
+    const email = askEmail();
+    if (!email) return;
+    setAlerting('PRICE_BELOW');
+    setError('');
+    setAlertNotice('');
+    try {
+      const response = await fetch(`${api}/v1/product-alerts`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: detail.product.id,
+          ...(selectedVariantId ? { variantId: selectedVariantId } : {}),
+          conditionType: 'PRICE_BELOW',
+          targetValue: Math.round(targetLira * 100),
+          email,
+        }),
+      });
+      if (!response.ok) throw new Error('price_alert_failed');
+      const result = productAlertResponseSchema.parse(await response.json());
+      setAlertNotice(
+        `🔔 ${money(result.alert.targetValue ?? 0, 'TRY')} altına düşünce ${result.alert.email} adresine haber vereceğiz.`,
+      );
+    } catch {
+      setError('Fiyat alarmı oluşturulamadı. Yeniden deneyebilirsin.');
+    } finally {
+      setAlerting(null);
+    }
+  }
+
+  async function createStockAlert() {
+    if (!detail || !selectedVariant || alerting) return;
+    const email = askEmail();
+    if (!email) return;
+    setAlerting('BACK_IN_STOCK');
+    setError('');
+    setAlertNotice('');
+    try {
+      const response = await fetch(`${api}/v1/product-alerts`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: detail.product.id,
+          variantId: selectedVariant.id,
+          conditionType: 'BACK_IN_STOCK',
+          email,
+        }),
+      });
+      if (!response.ok) throw new Error('stock_alert_failed');
+      const result = productAlertResponseSchema.parse(await response.json());
+      setAlertNotice(
+        `🔔 ${selectedVariant.size} beden gelince ${result.alert.email} adresine haber vereceğiz.`,
+      );
+    } catch {
+      setError('Stok alarmı oluşturulamadı. Yeniden deneyebilirsin.');
+    } finally {
+      setAlerting(null);
     }
   }
 
@@ -305,22 +392,16 @@ export default function ProductDetailPage() {
             <fieldset>
               <legend>Renk</legend>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {colors.map((color) => {
-                  const selectable = detail.variants.some(
-                    (variant) => variant.color === color && variant.selectable,
-                  );
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      disabled={!selectable}
-                      aria-pressed={selectedColor === color}
-                      onClick={() => chooseColor(color)}
-                    >
-                      {colorLabels[color] ?? color}
-                    </button>
-                  );
-                })}
+                {colors.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-pressed={selectedColor === color}
+                    onClick={() => chooseColor(color)}
+                  >
+                    {colorLabels[color] ?? color}
+                  </button>
+                ))}
               </div>
             </fieldset>
           ) : null}
@@ -332,7 +413,6 @@ export default function ProductDetailPage() {
                 <button
                   key={variant.id}
                   type="button"
-                  disabled={!variant.selectable}
                   aria-pressed={selectedVariantId === variant.id}
                   aria-label={`${variant.size} beden, ${stockStatusLabel(variant.availability)}`}
                   onClick={() => setSelectedVariantId(variant.id)}
@@ -376,6 +456,30 @@ export default function ProductDetailPage() {
                   : '♡ Kaydet'}
           </button>
 
+          <button
+            type="button"
+            disabled={!displayOffer || alerting !== null}
+            onClick={() => void createPriceAlert()}
+          >
+            {alerting === 'PRICE_BELOW'
+              ? 'Fiyat alarmı oluşturuluyor…'
+              : '🔔 Fiyat düşünce haber ver'}
+          </button>
+
+          {selectedVariant && selectedVariant.availability !== 'in_stock' ? (
+            <button
+              type="button"
+              disabled={alerting !== null}
+              onClick={() => void createStockAlert()}
+            >
+              {alerting === 'BACK_IN_STOCK'
+                ? 'Stok alarmı oluşturuluyor…'
+                : `🔔 ${selectedVariant.size} beden gelince haber ver`}
+            </button>
+          ) : null}
+
+          {alertNotice ? <p role="status">{alertNotice}</p> : null}
+
           {checkoutOffer?.checkoutUrl ? (
             <a
               className="search-button"
@@ -392,6 +496,7 @@ export default function ProductDetailPage() {
             </button>
           )}
 
+          {error ? <p role="alert">{error}</p> : null}
           {detail.description ? <p>{detail.description}</p> : null}
           {Object.keys(detail.attributes).length ? (
             <dl>
