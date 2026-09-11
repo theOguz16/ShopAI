@@ -1,4 +1,3 @@
-import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import { productDetailRequestSchema } from '@shopai/contracts/product-detail';
 import type { FastifyInstance } from 'fastify';
 import type { Services } from '../services.js';
@@ -25,10 +24,11 @@ export async function registerProductDetailRoutes(
         .code(400)
         .send({ code: 'INVALID_INPUT', requestId: request.id });
 
+    const attribution = await services.resolveRestAttribution(parsed.data);
     const result = await services.executeProductDetail(
       parsed.data,
       {},
-      WEB_ATTRIBUTION,
+      attribution,
     );
     return {
       ...result,
@@ -38,7 +38,7 @@ export async function registerProductDetailRoutes(
           ? services.redirects.createLink({
               offerId: offer.id,
               searchId: result.searchId,
-              ...WEB_ATTRIBUTION,
+              ...attribution,
             })
           : null,
       })),
@@ -47,7 +47,7 @@ export async function registerProductDetailRoutes(
         checkoutUrl: services.redirects.createLink({
           offerId: item.offerId,
           searchId: result.searchId,
-          ...WEB_ATTRIBUTION,
+          ...attribution,
         }),
       })),
     };
