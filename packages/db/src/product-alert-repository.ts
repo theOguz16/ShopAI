@@ -73,7 +73,9 @@ export const productAlerts = pgTable(
       .on(
         sql`coalesce(${t.userId}, ${t.anonymousUserId})`,
         t.productId,
-        sql`coalesce(${t.variantId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+        sql`coalesce(${t.variantId}, ${
+          '00000000-0000-0000-0000-000000000000'
+        }::uuid)`,
         t.conditionType,
         sql`coalesce(${t.targetValue}, -1)`,
       )
