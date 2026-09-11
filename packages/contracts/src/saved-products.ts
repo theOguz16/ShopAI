@@ -19,9 +19,7 @@ export const unsaveProductResponseSchema = z
   .object({ removed: z.boolean() })
   .strict();
 
-export type UnsaveProductResponse = z.infer<
-  typeof unsaveProductResponseSchema
->;
+export type UnsaveProductResponse = z.infer<typeof unsaveProductResponseSchema>;
 
 export const savedProductSchema = z
   .object({
