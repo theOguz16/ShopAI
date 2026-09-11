@@ -14,6 +14,7 @@ import {
   memberships,
   merchants,
   offers,
+  products,
   redirectClicks,
   searchEvents,
   users,
@@ -46,6 +47,7 @@ const connectionB = 'cb000000-0000-4000-8000-000000000002';
 let app: Awaited<ReturnType<typeof buildApp>>;
 let cookie = '';
 let offerId = '';
+let productId = '';
 let webSearchId = '';
 
 function signed(payload: object) {
@@ -125,7 +127,12 @@ beforeAll(async () => {
     .select({ id: offers.id })
     .from(offers)
     .where(eq(offers.merchantId, merchantA));
+  const [product] = await database.db
+    .select({ id: products.id })
+    .from(products)
+    .where(eq(products.merchantId, merchantA));
   offerId = offer?.id ?? '';
+  productId = product?.id ?? '';
   app = await buildApp(services, env);
   const login = await app.inject({
     method: 'POST',
@@ -140,7 +147,8 @@ beforeAll(async () => {
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, 'owner@analytics.test'));
-  if (!user || !offerId) throw new Error('Analytics test kurulumu başarısız.');
+  if (!user || !offerId || !productId)
+    throw new Error('Analytics test kurulumu başarısız.');
   await database.db.insert(memberships).values([
     { userId: user.id, merchantId: merchantA, role: 'owner' },
     { userId: user.id, merchantId: merchantCsv, role: 'owner' },
@@ -148,18 +156,22 @@ beforeAll(async () => {
   await database.db.insert(redirectClicks).values([
     {
       merchantId: merchantA,
+      productId,
       offerId,
       searchId: randomUUID(),
       transport: 'rest',
       surface: 'web',
+      campaign: 'instagram_bio',
       classification: 'human',
     },
     {
       merchantId: merchantA,
+      productId,
       offerId,
       searchId: randomUUID(),
       transport: 'rest',
       surface: 'web',
+      campaign: 'instagram_bio',
       classification: 'bot',
     },
   ]);
@@ -494,6 +506,7 @@ describe('tenant analytics and signed conversions', () => {
         humanRedirects: 1,
         botPreviews: 1,
         redirectsBySurface: { web: 1 },
+        redirectsByCampaign: { instagram_bio: 1 },
         attributedSales: 1,
         netRevenueMinor: 6000,
         conversionRate: 1,
