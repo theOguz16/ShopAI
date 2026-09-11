@@ -11,8 +11,7 @@ export function buildProductDetailHref({
 }: ProductDetailHrefInput) {
   const params = new URLSearchParams();
   if (searchId) params.set('searchId', searchId);
-  if (discoverySessionId)
-    params.set('discoverySessionId', discoverySessionId);
+  if (discoverySessionId) params.set('discoverySessionId', discoverySessionId);
 
   const pathname = `/products/${encodeURIComponent(productId)}`;
   return params.size ? `${pathname}?${params.toString()}` : pathname;
