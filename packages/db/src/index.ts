@@ -2,6 +2,7 @@ export * from './client.js';
 export * from './schema.js';
 export * from './category-model.js';
 export * from './catalog-repository.js';
+export * from './product-detail-repository.js';
 export * from './import-catalog.js';
 export * from './tenant-context.js';
 export * from './redirect-repository.js';

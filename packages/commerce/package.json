@@ -27,6 +27,10 @@
     "./category-facets": {
       "types": "./dist/category-facets.d.ts",
       "import": "./dist/category-facets.js"
+    },
+    "./product-detail": {
+      "types": "./dist/product-detail.d.ts",
+      "import": "./dist/product-detail.js"
     }
   },
   "dependencies": {

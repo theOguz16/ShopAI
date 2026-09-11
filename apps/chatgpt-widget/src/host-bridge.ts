@@ -1,4 +1,10 @@
 import {
+  type ProductDetailRequest,
+  type ProductDetailResponse,
+  productDetailRequestSchema,
+  productDetailResponseSchema,
+} from '@shopai/contracts/product-detail';
+import {
   type SearchProductsRequest,
   type SearchProductsResponse,
   searchProductsRequestSchema,
@@ -20,13 +26,14 @@ type JsonRpcMessage = {
 };
 
 export type WidgetSearchInput = SearchProductsRequest;
+type WidgetToolInput = WidgetSearchInput | ProductDetailRequest;
 
 type OpenAiHost = {
   toolInput?: WidgetSearchInput;
   toolOutput?: unknown;
   callTool?: (
     name: string,
-    args: WidgetSearchInput,
+    args: WidgetToolInput,
   ) => Promise<{ structuredContent?: unknown }>;
 };
 
@@ -65,6 +72,9 @@ export type HostBridge = {
   snapshot(): HostSnapshot;
   subscribe(listener: (snapshot: HostSnapshot) => void): () => void;
   callSearch(input: WidgetSearchInput): Promise<SearchProductsResponse>;
+  callProductDetail(
+    input: ProductDetailRequest,
+  ): Promise<ProductDetailResponse>;
   destroy(): void;
 };
 
@@ -97,12 +107,14 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
     const message = event.data;
     if (message?.jsonrpc !== '2.0') return;
     if (message.id !== undefined && pending.has(message.id)) {
-      const request = pending.get(message.id);
+      const pendingRequest = pending.get(message.id);
       pending.delete(message.id);
-      if (request) clearTimeout(request.timeout);
+      if (pendingRequest) clearTimeout(pendingRequest.timeout);
       if (message.error)
-        request?.reject(new Error(message.error.message ?? 'Host tool hatası'));
-      else request?.resolve(message.result);
+        pendingRequest?.reject(
+          new Error(message.error.message ?? 'Host tool hatası'),
+        );
+      else pendingRequest?.resolve(message.result);
       return;
     }
     if (message.method === 'ui/notifications/tool-input') {
@@ -152,6 +164,19 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
     : Promise.resolve();
   void initialized.catch(() => undefined);
 
+  async function callTool(name: string, args: WidgetToolInput) {
+    const result = framed
+      ? ((await initialized.then(() =>
+          request('tools/call', {
+            name,
+            arguments: args,
+          }),
+        )) as { structuredContent?: unknown })
+      : await hostWindow.openai?.callTool?.(name, args);
+    if (!result) throw new Error('Uyumlu MCP Apps host köprüsü bulunamadı.');
+    return result.structuredContent;
+  }
+
   return {
     available: framed || Boolean(hostWindow.openai?.callTool),
     snapshot: () => current,
@@ -163,25 +188,25 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
     async callSearch(input) {
       if (destroyed) throw new Error('Host köprüsü kapatıldı.');
       const arguments_ = searchProductsRequestSchema.parse(input);
-      const result = framed
-        ? ((await initialized.then(() =>
-            request('tools/call', {
-              name: 'search_products',
-              arguments: arguments_,
-            }),
-          )) as { structuredContent?: unknown })
-        : await hostWindow.openai?.callTool?.('search_products', arguments_);
-      if (!result) throw new Error('Uyumlu MCP Apps host köprüsü bulunamadı.');
-      return searchProductsResponseSchema.parse(result.structuredContent);
+      return searchProductsResponseSchema.parse(
+        await callTool('search_products', arguments_),
+      );
+    },
+    async callProductDetail(input) {
+      if (destroyed) throw new Error('Host köprüsü kapatıldı.');
+      const arguments_ = productDetailRequestSchema.parse(input);
+      return productDetailResponseSchema.parse(
+        await callTool('get_product_detail', arguments_),
+      );
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       hostWindow.removeEventListener('message', onMessage);
       listeners.clear();
-      for (const request of pending.values()) {
-        clearTimeout(request.timeout);
-        request.reject(new Error('Host köprüsü kapatıldı.'));
+      for (const pendingRequest of pending.values()) {
+        clearTimeout(pendingRequest.timeout);
+        pendingRequest.reject(new Error('Host köprüsü kapatıldı.'));
       }
       pending.clear();
     },
