@@ -1,6 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CHATGPT_ATTRIBUTION } from '@shopai/contracts';
 import {
+  productDetailRequestSchema,
+  productDetailResponseSchema,
+} from '@shopai/contracts/product-detail';
+import {
   searchProductsRequestSchema,
   searchProductsResponseSchema,
 } from '@shopai/contracts/search-products';
@@ -33,7 +37,7 @@ function widgetDocument(origin: string) {
 </html>`;
 }
 
-function textResult(
+function searchTextResult(
   result: Awaited<ReturnType<Services['executePublicSearch']>>,
 ) {
   if (!result.products.length)
@@ -45,6 +49,18 @@ function textResult(
     )
     .join('\n');
   return `ShopAI araması (${result.searchId}) ${result.products.length} yayımlanmış sonuç döndürdü:\n${products}`;
+}
+
+function detailTextResult(
+  result: Awaited<ReturnType<Services['executeProductDetail']>>,
+) {
+  const variants = result.variants
+    .map(
+      (variant) =>
+        `${variant.color}/${variant.size}: ${variant.availability}${variant.selectable ? ' (seçilebilir)' : ''}`,
+    )
+    .join(', ');
+  return `${result.product.title} — ${result.merchant.displayName}. Varyantlar: ${variants}. Satın alma ${result.checkoutAvailable ? 'uygun' : 'uygun değil'}.`;
 }
 
 export function createMcpServer(
@@ -81,7 +97,7 @@ export function createMcpServer(
               csp: { connectDomains: [], resourceDomains },
             },
             'openai/widgetDescription':
-              'ShopAI yayımlanmış ürün sonuçlarını görsel kartlarla ve beden filtresiyle gösterir.',
+              'ShopAI yayımlanmış ürün sonuçlarını ve ürün detayını varyant/stok seçimiyle gösterir.',
             'openai/widgetPrefersBorder': true,
             'openai/widgetDomain': widget.origin,
             'openai/widgetCSP': {
@@ -135,7 +151,66 @@ export function createMcpServer(
         })),
       };
       return {
-        content: [{ type: 'text' as const, text: textResult(linkedResult) }],
+        content: [
+          { type: 'text' as const, text: searchTextResult(linkedResult) },
+        ],
+        structuredContent: linkedResult,
+      };
+    },
+  );
+  server.registerTool(
+    'get_product_detail',
+    {
+      title: 'ShopAI ürün detayı',
+      description:
+        'Yayımlanmış bir ürünün varyantlarını, tekliflerini, güncel stok durumunu, niteliklerini ve benzer ürünlerini döndürür.',
+      inputSchema: productDetailRequestSchema.shape,
+      outputSchema: productDetailResponseSchema.shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: { resourceUri: SHOPAI_WIDGET_URI, visibility: ['model', 'app'] },
+        'openai/outputTemplate': SHOPAI_WIDGET_URI,
+        'openai/widgetAccessible': true,
+        'openai/toolInvocation/invoking': 'Ürün detayı yükleniyor…',
+        'openai/toolInvocation/invoked': 'Ürün detayı hazır',
+        'shopai/dtoVersion': 1,
+      },
+    },
+    async (input) => {
+      const result = await services.executeProductDetail(
+        input,
+        {},
+        CHATGPT_ATTRIBUTION,
+      );
+      const linkedResult = {
+        ...result,
+        offers: result.offers.map((offer) => ({
+          ...offer,
+          checkoutUrl: offer.checkoutUrl
+            ? services.redirects.createLink({
+                offerId: offer.id,
+                searchId: result.searchId,
+                ...CHATGPT_ATTRIBUTION,
+              })
+            : null,
+        })),
+        similarProducts: result.similarProducts.map((item) => ({
+          ...item,
+          checkoutUrl: services.redirects.createLink({
+            offerId: item.offerId,
+            searchId: result.searchId,
+            ...CHATGPT_ATTRIBUTION,
+          }),
+        })),
+      };
+      return {
+        content: [
+          { type: 'text' as const, text: detailTextResult(linkedResult) },
+        ],
         structuredContent: linkedResult,
       };
     },
