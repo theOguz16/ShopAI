@@ -20,154 +20,153 @@ import {
 } from '../../packages/db/src/schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl)
-  throw new Error(
-    'merchant analytics dashboard test için DATABASE_URL gerekli.',
-  );
+const describeWithDatabase = databaseUrl ? describe : describe.skip;
 
-const env = parseApiEnv({
-  CATALOG_MODE: 'postgres',
-  DATABASE_URL: databaseUrl,
-  MCP_PUBLIC_ORIGIN: 'https://api.test.example',
-  WIDGET_ORIGIN: 'https://widget.test.example',
-  REDIRECT_SIGNING_SECRET: 'dashboard-redirect-secret-00000000000000000',
-  CONVERSION_CALLBACK_SECRET: 'dashboard-conversion-secret-0000000000000000',
-  AUTH_PILOT_CREDENTIALS: JSON.stringify({
-    'owner@dashboard.test': 'dashboard-owner-pilot-token',
-  }),
-  UPLOAD_DIR: '/tmp/shopai-dashboard-uploads',
-});
+describeWithDatabase('merchant analytics dashboard', () => {
+  if (!databaseUrl) return;
 
-const database = createDatabase(databaseUrl);
-const services = createServices(env);
-const merchantA = 'ea000000-0000-4000-8000-000000000001';
-const merchantB = 'eb000000-0000-4000-8000-000000000001';
-const connectionA = 'ea000000-0000-4000-8000-000000000002';
-const connectionB = 'eb000000-0000-4000-8000-000000000002';
-const DAY_MS = 86_400_000;
+  const env = parseApiEnv({
+    CATALOG_MODE: 'postgres',
+    DATABASE_URL: databaseUrl,
+    MCP_PUBLIC_ORIGIN: 'https://api.test.example',
+    WIDGET_ORIGIN: 'https://widget.test.example',
+    REDIRECT_SIGNING_SECRET: 'dashboard-redirect-secret-00000000000000000',
+    CONVERSION_CALLBACK_SECRET: 'dashboard-conversion-secret-0000000000000000',
+    AUTH_PILOT_CREDENTIALS: JSON.stringify({
+      'owner@dashboard.test': 'dashboard-owner-pilot-token',
+    }),
+    UPLOAD_DIR: '/tmp/shopai-dashboard-uploads',
+  });
 
-let app: Awaited<ReturnType<typeof buildApp>>;
-let cookie = '';
-let productA = '';
-let productB = '';
-let offerA = '';
-let offerB = '';
-let detailSearchId = '';
+  const database = createDatabase(databaseUrl);
+  const services = createServices(env);
+  const merchantA = 'ea000000-0000-4000-8000-000000000001';
+  const merchantB = 'eb000000-0000-4000-8000-000000000001';
+  const connectionA = 'ea000000-0000-4000-8000-000000000002';
+  const connectionB = 'eb000000-0000-4000-8000-000000000002';
+  const DAY_MS = 86_400_000;
 
-beforeAll(async () => {
-  await database.db.execute(
-    sql`truncate table ${conversionOrders}, ${productViewEvents}, ${redirectClicks}, ${searchEvents}, ${connections}, ${memberships}, ${users}, ${merchants} cascade`,
-  );
-  await database.db.insert(merchants).values([
-    {
-      id: merchantA,
-      name: 'Dashboard A',
-      slug: `dashboard-a-${randomUUID()}`,
-      active: true,
-      isPublic: true,
-    },
-    {
-      id: merchantB,
-      name: 'Dashboard B',
-      slug: `dashboard-b-${randomUUID()}`,
-      active: true,
-      isPublic: true,
-    },
-  ]);
-  await database.db.insert(connections).values([
-    {
-      id: connectionA,
-      merchantId: merchantA,
-      provider: 'csv',
-      conversionTrackingEnabled: true,
-    },
-    {
-      id: connectionB,
-      merchantId: merchantB,
-      provider: 'csv',
-      conversionTrackingEnabled: true,
-    },
-  ]);
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let cookie = '';
+  let productA = '';
+  let productB = '';
+  let offerA = '';
+  let offerB = '';
+  let detailSearchId = '';
 
-  for (const [merchantId, connectionId, suffix] of [
-    [merchantA, connectionA, 'a'],
-    [merchantB, connectionB, 'b'],
-  ] as const) {
-    await importCatalog(database.db, {
-      schemaVersion: 1,
-      runId: randomUUID(),
-      merchantId,
-      connectionId,
-      observedAt: new Date().toISOString(),
-      rows: [
-        {
-          externalId: `dashboard-offer-${suffix}`,
-          productKey: `dashboard-product-${suffix}`,
-          title: `Dashboard Product ${suffix.toUpperCase()}`,
-          description: '',
-          category: 'dashboard',
-          size: 'M',
-          color: 'Siyah',
-          priceMinor: 10_000,
-          currency: 'TRY',
-          available: true,
-          checkoutUrl: `https://merchant.example/${suffix}`,
-        },
-      ],
+  beforeAll(async () => {
+    await database.db.execute(
+      sql`truncate table ${conversionOrders}, ${productViewEvents}, ${redirectClicks}, ${searchEvents}, ${connections}, ${memberships}, ${users}, ${merchants} cascade`,
+    );
+    await database.db.insert(merchants).values([
+      {
+        id: merchantA,
+        name: 'Dashboard A',
+        slug: `dashboard-a-${randomUUID()}`,
+        active: true,
+        isPublic: true,
+      },
+      {
+        id: merchantB,
+        name: 'Dashboard B',
+        slug: `dashboard-b-${randomUUID()}`,
+        active: true,
+        isPublic: true,
+      },
+    ]);
+    await database.db.insert(connections).values([
+      {
+        id: connectionA,
+        merchantId: merchantA,
+        provider: 'csv',
+        conversionTrackingEnabled: true,
+      },
+      {
+        id: connectionB,
+        merchantId: merchantB,
+        provider: 'csv',
+        conversionTrackingEnabled: true,
+      },
+    ]);
+
+    for (const [merchantId, connectionId, suffix] of [
+      [merchantA, connectionA, 'a'],
+      [merchantB, connectionB, 'b'],
+    ] as const) {
+      await importCatalog(database.db, {
+        schemaVersion: 1,
+        runId: randomUUID(),
+        merchantId,
+        connectionId,
+        observedAt: new Date().toISOString(),
+        rows: [
+          {
+            externalId: `dashboard-offer-${suffix}`,
+            productKey: `dashboard-product-${suffix}`,
+            title: `Dashboard Product ${suffix.toUpperCase()}`,
+            description: '',
+            category: 'dashboard',
+            size: 'M',
+            color: 'Siyah',
+            priceMinor: 10_000,
+            currency: 'TRY',
+            available: true,
+            checkoutUrl: `https://merchant.example/${suffix}`,
+          },
+        ],
+      });
+    }
+
+    const [aProduct] = await database.db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.merchantId, merchantA));
+    const [bProduct] = await database.db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.merchantId, merchantB));
+    const [aOffer] = await database.db
+      .select({ id: offers.id })
+      .from(offers)
+      .where(eq(offers.merchantId, merchantA));
+    const [bOffer] = await database.db
+      .select({ id: offers.id })
+      .from(offers)
+      .where(eq(offers.merchantId, merchantB));
+    productA = aProduct?.id ?? '';
+    productB = bProduct?.id ?? '';
+    offerA = aOffer?.id ?? '';
+    offerB = bOffer?.id ?? '';
+    if (!productA || !productB || !offerA || !offerB)
+      throw new Error('Dashboard katalog fixture oluşturulamadı.');
+
+    app = await buildApp(services, env);
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: 'owner@dashboard.test',
+        token: 'dashboard-owner-pilot-token',
+      },
     });
-  }
-
-  const [aProduct] = await database.db
-    .select({ id: products.id })
-    .from(products)
-    .where(eq(products.merchantId, merchantA));
-  const [bProduct] = await database.db
-    .select({ id: products.id })
-    .from(products)
-    .where(eq(products.merchantId, merchantB));
-  const [aOffer] = await database.db
-    .select({ id: offers.id })
-    .from(offers)
-    .where(eq(offers.merchantId, merchantA));
-  const [bOffer] = await database.db
-    .select({ id: offers.id })
-    .from(offers)
-    .where(eq(offers.merchantId, merchantB));
-  productA = aProduct?.id ?? '';
-  productB = bProduct?.id ?? '';
-  offerA = aOffer?.id ?? '';
-  offerB = bOffer?.id ?? '';
-  if (!productA || !productB || !offerA || !offerB)
-    throw new Error('Dashboard katalog fixture oluşturulamadı.');
-
-  app = await buildApp(services, env);
-  const login = await app.inject({
-    method: 'POST',
-    url: '/v1/auth/login',
-    payload: {
-      email: 'owner@dashboard.test',
-      token: 'dashboard-owner-pilot-token',
-    },
+    cookie = login.headers['set-cookie']?.split(';')[0] ?? '';
+    const [user] = await database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, 'owner@dashboard.test'));
+    if (!user) throw new Error('Dashboard test kullanıcısı oluşturulamadı.');
+    await database.db.insert(memberships).values({
+      userId: user.id,
+      merchantId: merchantA,
+      role: 'owner',
+    });
   });
-  cookie = login.headers['set-cookie']?.split(';')[0] ?? '';
-  const [user] = await database.db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, 'owner@dashboard.test'));
-  if (!user) throw new Error('Dashboard test kullanıcısı oluşturulamadı.');
-  await database.db.insert(memberships).values({
-    userId: user.id,
-    merchantId: merchantA,
-    role: 'owner',
+
+  afterAll(async () => {
+    await app.close();
+    await database.close();
   });
-});
 
-afterAll(async () => {
-  await app.close();
-  await database.close();
-});
-
-describe('merchant analytics dashboard', () => {
   it('records successful product detail opens as product view events', async () => {
     detailSearchId = randomUUID();
     const response = await app.inject({
