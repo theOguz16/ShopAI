@@ -37,5 +37,6 @@ CREATE POLICY public_insert_redirect_clicks ON redirect_clicks FOR INSERT TO sho
         AND o.active = true
         AND p.published = true
         AND m.active = true
+        AND m.is_public = true
     )
   );
