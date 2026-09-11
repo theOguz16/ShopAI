@@ -72,7 +72,9 @@ export type HostBridge = {
   snapshot(): HostSnapshot;
   subscribe(listener: (snapshot: HostSnapshot) => void): () => void;
   callSearch(input: WidgetSearchInput): Promise<SearchProductsResponse>;
-  callProductDetail(input: ProductDetailRequest): Promise<ProductDetailResponse>;
+  callProductDetail(
+    input: ProductDetailRequest,
+  ): Promise<ProductDetailResponse>;
   destroy(): void;
 };
 
