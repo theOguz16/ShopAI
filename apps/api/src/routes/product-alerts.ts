@@ -16,8 +16,8 @@ import {
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
 import { requireSameOrigin } from '../plugins/auth.js';
-import { resolveShopperIdentity } from './saved-products.js';
 import type { Services } from '../services.js';
+import { resolveShopperIdentity } from './saved-products.js';
 
 export interface ProductAlertsApi {
   create(
@@ -68,7 +68,9 @@ class MemoryProductAlertsApi implements ProductAlertsApi {
       variantId: input.variantId ?? null,
       conditionType: input.conditionType,
       targetValue:
-        input.conditionType === 'PRICE_BELOW' ? (input.targetValue ?? null) : null,
+        input.conditionType === 'PRICE_BELOW'
+          ? (input.targetValue ?? null)
+          : null,
       status: 'ACTIVE',
       channel: 'email',
       email: input.email.toLowerCase(),
@@ -137,9 +139,7 @@ export async function registerProductAlertRoutes(
         env,
       );
       const alert = await productAlertsApi.create(identity, parsed.data);
-      return reply
-        .code(201)
-        .send(productAlertResponseSchema.parse({ alert }));
+      return reply.code(201).send(productAlertResponseSchema.parse({ alert }));
     },
   );
 
