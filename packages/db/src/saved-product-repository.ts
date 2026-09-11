@@ -126,6 +126,20 @@ export class PostgresSavedProductRepository {
     });
   }
 
+  async remove(
+    identity: ShopperIdentity,
+    input: SaveProductRequest,
+  ): Promise<{ removed: boolean }> {
+    return this.db.transaction(async (tx) => {
+      await this.scope(tx, identity);
+      const deleted = await tx
+        .delete(savedProducts)
+        .where(savedProductWhere(identity, input))
+        .returning({ id: savedProducts.id });
+      return { removed: deleted.length > 0 };
+    });
+  }
+
   private async requirePublicTarget(tx: Tx, input: SaveProductRequest) {
     const [product] = await tx
       .select({ id: products.id })
