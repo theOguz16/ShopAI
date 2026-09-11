@@ -53,7 +53,7 @@ export class PostgresRedirectRepository implements RedirectRepository {
   }
 
   async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
-    await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
       const attributionResult = await tx.execute(
         sql`
@@ -74,17 +74,22 @@ export class PostgresRedirectRepository implements RedirectRepository {
             .where(eq(discoverySessions.id, discoverySessionId))
             .limit(1)
         : [];
-      await tx.insert(redirectClicks).values({
-        searchId: input.claims.searchId,
-        discoverySessionId,
-        offerId: input.claims.offerId,
-        productId: input.productId,
-        merchantId: input.merchantId,
-        transport: input.claims.transport,
-        surface: input.claims.surface,
-        campaign: session?.campaign ?? null,
-        classification: input.classification,
-      });
+      const [click] = await tx
+        .insert(redirectClicks)
+        .values({
+          searchId: input.claims.searchId,
+          discoverySessionId,
+          offerId: input.claims.offerId,
+          productId: input.productId,
+          merchantId: input.merchantId,
+          transport: input.claims.transport,
+          surface: input.claims.surface,
+          campaign: session?.campaign ?? null,
+          classification: input.classification,
+        })
+        .returning({ id: redirectClicks.id });
+      if (!click) throw new Error('Redirect click kaydedilemedi.');
+      return click.id;
     });
   }
 }
