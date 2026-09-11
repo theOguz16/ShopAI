@@ -3,6 +3,7 @@ export * from './discovery.js';
 export * from './onboarding.js';
 export * from './storefront.js';
 export * from './anonymous-shopping-profile.js';
+export * from './saved-products.js';
 
 import { z } from 'zod';
 

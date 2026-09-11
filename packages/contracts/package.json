@@ -31,6 +31,10 @@
     "./anonymous-shopping-profile": {
       "types": "./dist/anonymous-shopping-profile.d.ts",
       "import": "./dist/anonymous-shopping-profile.js"
+    },
+    "./saved-products": {
+      "types": "./dist/saved-products.d.ts",
+      "import": "./dist/saved-products.js"
     }
   },
   "dependencies": {

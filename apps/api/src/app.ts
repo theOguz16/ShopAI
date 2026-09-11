@@ -23,6 +23,10 @@ import {
 import { registerProductDetailRoutes } from './routes/product-detail.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
+import {
+  registerSavedProductRoutes,
+  resolveShopperIdentity,
+} from './routes/saved-products.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { registerSyncStatusRoutes } from './routes/sync-status.js';
 import { createServices, type Services } from './services.js';
@@ -122,6 +126,7 @@ export async function buildApp(
   await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
   await registerSyncStatusRoutes(app);
   await registerStorefrontRoutes(app);
+  await registerSavedProductRoutes(app, resolvedServices, env);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
   await registerProductDetailRoutes(app, resolvedServices);
@@ -277,11 +282,21 @@ export async function buildApp(
     if (origin && !env.MCP_ALLOWED_ORIGINS.includes(origin)) {
       return reply.code(403).send({ code: 'FORBIDDEN' });
     }
-    const server = createMcpServer(resolvedServices, {
-      origin: env.WIDGET_ORIGIN,
-      resourceDomains: env.WIDGET_RESOURCE_DOMAINS,
-      redirectOrigin: env.MCP_PUBLIC_ORIGIN,
-    });
+    const shopperIdentity = await resolveShopperIdentity(
+      request,
+      reply,
+      resolvedServices,
+      env,
+    );
+    const server = createMcpServer(
+      resolvedServices,
+      {
+        origin: env.WIDGET_ORIGIN,
+        resourceDomains: env.WIDGET_RESOURCE_DOMAINS,
+        redirectOrigin: env.MCP_PUBLIC_ORIGIN,
+      },
+      { savedProducts: app.savedProductsApi, identity: shopperIdentity },
+    );
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
