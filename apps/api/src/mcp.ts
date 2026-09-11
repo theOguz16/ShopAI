@@ -16,6 +16,7 @@ export const SHOPAI_WIDGET_ASSET_VERSION = '2';
 export type WidgetConfig = {
   origin: string;
   resourceDomains: string[];
+  redirectOrigin: string;
 };
 
 function widgetDocument(origin: string) {
@@ -68,6 +69,7 @@ export function createMcpServer(
   widget: WidgetConfig = {
     origin: 'http://127.0.0.1:3001',
     resourceDomains: ['https://example.com'],
+    redirectOrigin: 'http://127.0.0.1:4000',
   },
 ) {
   const server = new McpServer(
@@ -103,6 +105,7 @@ export function createMcpServer(
             'openai/widgetCSP': {
               connect_domains: [],
               resource_domains: resourceDomains,
+              redirect_domains: [widget.redirectOrigin],
             },
             'shopai/assetVersion': SHOPAI_WIDGET_ASSET_VERSION,
             'shopai/dtoVersion': 1,
