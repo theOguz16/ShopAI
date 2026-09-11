@@ -124,7 +124,7 @@ export default function ProductDetailPage() {
         if (!controller.signal.aborted) setSavedStateLoading(false);
       });
     return () => controller.abort();
-  }, [productId]);
+  }, []);
 
   const colors = useMemo(
     () => [...new Set(detail?.variants.map((variant) => variant.color) ?? [])],
