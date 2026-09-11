@@ -8,7 +8,13 @@ import {
   searchProductsResponseSchema,
 } from '@shopai/contracts/search-products';
 import { ProductCard } from '@shopai/ui';
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHostBridge, type WidgetSearchInput } from './host-bridge.js';
 
@@ -32,12 +38,12 @@ function Widget() {
   const [loading, setLoading] = useState(bridge.available);
   const [error, setError] = useState('');
 
-  function showDetail(next: ProductDetailResponse) {
+  const showDetail = useCallback((next: ProductDetailResponse) => {
     setDetail(next);
     const firstSelectable = next.variants.find((variant) => variant.selectable);
     setSelectedColor(firstSelectable?.color ?? next.variants[0]?.color ?? '');
     setSelectedVariantId(firstSelectable?.id);
-  }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = bridge.subscribe((snapshot) => {
@@ -68,7 +74,7 @@ function Widget() {
       unsubscribe();
       bridge.destroy();
     };
-  }, [bridge]);
+  }, [bridge, showDetail]);
 
   async function changeSize(event: ChangeEvent<HTMLSelectElement>) {
     const size = event.target.value;
