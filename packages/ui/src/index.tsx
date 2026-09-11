@@ -34,9 +34,13 @@ function ProductImage({ item }: { item: CatalogItem }) {
 export function ProductCard({
   item,
   demo = false,
+  detailHref,
+  onDetail,
 }: {
   item: CatalogItem;
   demo?: boolean;
+  detailHref?: string;
+  onDetail?: (item: CatalogItem) => void;
 }) {
   const stockText = stockStatusLabel(item.stockStatus);
   return (
@@ -61,6 +65,20 @@ export function ProductCard({
             ? 'Bu bilgi yalnız deneyim testi içindir.'
             : `Son kontrol: ${new Date(item.observedAt).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })}`}
         </p>
+        {detailHref ? (
+          <a className="product-link" href={detailHref}>
+            Ürün detayları →
+          </a>
+        ) : null}
+        {onDetail ? (
+          <button
+            className="product-link"
+            type="button"
+            onClick={() => onDetail(item)}
+          >
+            Ürün detayları →
+          </button>
+        ) : null}
         <a
           className="product-link"
           href={item.checkoutUrl}
