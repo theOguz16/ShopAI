@@ -67,7 +67,7 @@ services:
       RELEASE_VERSION: "${RELEASE_VERSION}"
       WIDGET_HOST: 0.0.0.0
       WIDGET_PORT: 3001
-    expose: ["3001"]
+    ports: ["127.0.0.1:4500:3001"]
     healthcheck:
       test:
         [
@@ -80,27 +80,6 @@ services:
       timeout: 5s
       retries: 5
 
-  edge:
-    image: caddy:2.10-alpine
-    restart: unless-stopped
-    environment:
-      STAGING_API_ORIGIN: "${STAGING_API_ORIGIN:?Staging API origin gerekli}"
-      STAGING_WIDGET_ORIGIN: "${STAGING_WIDGET_ORIGIN:?Staging widget origin gerekli}"
-      STAGING_TLS_EMAIL: "${STAGING_TLS_EMAIL:?ACME e-posta adresi gerekli}"
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./staging.Caddyfile:/etc/caddy/Caddyfile:ro
-      - staging-caddy-data:/data
-      - staging-caddy-config:/config
-    depends_on:
-      api:
-        condition: service_healthy
-      widget:
-        condition: service_healthy
-
   migrate:
     <<: *app
     restart: "no"
@@ -112,7 +91,3 @@ services:
 volumes:
   staging-private-uploads:
     name: shopai-staging-private-uploads
-  staging-caddy-data:
-    name: shopai-staging-caddy-data
-  staging-caddy-config:
-    name: shopai-staging-caddy-config

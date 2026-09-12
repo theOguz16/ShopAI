@@ -22,7 +22,6 @@ jobs:
       STAGING_REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
       STAGING_API_ORIGIN: ${{ vars.STAGING_API_ORIGIN }}
       STAGING_WIDGET_ORIGIN: ${{ vars.STAGING_WIDGET_ORIGIN }}
-      STAGING_TLS_EMAIL: ${{ vars.STAGING_TLS_EMAIL }}
       STAGING_MERCHANT_ID: ${{ vars.STAGING_MERCHANT_ID }}
       STAGING_ALLOWED_ORIGINS: ${{ vars.STAGING_ALLOWED_ORIGINS }}
       STAGING_RESOURCE_DOMAINS: ${{ vars.STAGING_RESOURCE_DOMAINS }}
@@ -45,7 +44,6 @@ jobs:
             'STAGING_REDIS_URL',
             'STAGING_API_ORIGIN',
             'STAGING_WIDGET_ORIGIN',
-            'STAGING_TLS_EMAIL',
             'STAGING_ALLOWED_ORIGINS',
             'STAGING_RESOURCE_DOMAINS',
             'STAGING_REDIRECT_SIGNING_SECRET',
@@ -109,8 +107,8 @@ jobs:
       - name: Apply reviewed migrations once
         run: docker compose --file infra/staging.compose.yaml --profile migration run --rm migrate
 
-      - name: Deploy API, worker, web, widget and HTTPS edge
-        run: docker compose --file infra/staging.compose.yaml up --detach --no-build --remove-orphans api worker web widget edge
+      - name: Deploy API, worker, web and widget
+        run: docker compose --file infra/staging.compose.yaml up --detach --no-build --remove-orphans api worker web widget
 
       - name: Wait for public HTTPS readiness
         run: |
