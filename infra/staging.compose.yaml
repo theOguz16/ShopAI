@@ -1,24 +1,26 @@
 name: shopai-staging
+
 x-app: &app
   image: "${SHOPAI_IMAGE:?SHOPAI_IMAGE gerekli}:${RELEASE_VERSION:?RELEASE_VERSION gerekli}"
   restart: unless-stopped
-  environment: &runtime
-    DEPLOY_ENV: staging
-    RELEASE_VERSION: "${RELEASE_VERSION}"
-    CATALOG_MODE: postgres
-    DATABASE_URL: "${STAGING_DATABASE_URL:?Ayrı staging DB gerekli}"
-    REDIS_URL: "${STAGING_REDIS_URL:?Ayrı staging Redis gerekli}"
-    MCP_PUBLIC_ORIGIN: "${STAGING_API_ORIGIN:?Staging API origin gerekli}"
-    WIDGET_ORIGIN: "${STAGING_WIDGET_ORIGIN:?Staging widget origin gerekli}"
-    MCP_ALLOWED_ORIGINS: "${STAGING_ALLOWED_ORIGINS:?Origin listesi gerekli}"
-    WIDGET_RESOURCE_DOMAINS: "${STAGING_RESOURCE_DOMAINS:?Asset origin listesi gerekli}"
-    REDIRECT_SIGNING_SECRET: "${STAGING_REDIRECT_SIGNING_SECRET:?Secret gerekli}"
-    AUTH_PILOT_CREDENTIALS: "${STAGING_AUTH_PILOT_CREDENTIALS:?E-postaya bağlı kimlik secretı gerekli}"
-    LOGIN_RATE_LIMIT_MAX: "${STAGING_LOGIN_RATE_LIMIT_MAX:-5}"
-    # Empty means disabled and is normalized to undefined by the API env schema.
-    CONVERSION_CALLBACK_SECRET: "${STAGING_CONVERSION_CALLBACK_SECRET:-}"
-    UPLOAD_DIR: /var/lib/shopai/uploads
-    LOG_LEVEL: info
+
+x-runtime: &runtime
+  DEPLOY_ENV: staging
+  RELEASE_VERSION: "${RELEASE_VERSION}"
+  CATALOG_MODE: postgres
+  DATABASE_URL: "${STAGING_DATABASE_URL:?Ayrı staging DB gerekli}"
+  REDIS_URL: "${STAGING_REDIS_URL:?Ayrı staging Redis gerekli}"
+  MCP_PUBLIC_ORIGIN: "${STAGING_API_ORIGIN:?Staging API origin gerekli}"
+  WIDGET_ORIGIN: "${STAGING_WIDGET_ORIGIN:?Staging widget origin gerekli}"
+  MCP_ALLOWED_ORIGINS: "${STAGING_ALLOWED_ORIGINS:?Origin listesi gerekli}"
+  WIDGET_RESOURCE_DOMAINS: "${STAGING_RESOURCE_DOMAINS:?Asset origin listesi gerekli}"
+  REDIRECT_SIGNING_SECRET: "${STAGING_REDIRECT_SIGNING_SECRET:?Secret gerekli}"
+  AUTH_PILOT_CREDENTIALS: "${STAGING_AUTH_PILOT_CREDENTIALS:?E-postaya bağlı kimlik secretı gerekli}"
+  LOGIN_RATE_LIMIT_MAX: "${STAGING_LOGIN_RATE_LIMIT_MAX:-5}"
+  CONVERSION_CALLBACK_SECRET: "${STAGING_CONVERSION_CALLBACK_SECRET:-}"
+  UPLOAD_DIR: /var/lib/shopai/uploads
+  LOG_LEVEL: info
+
 services:
   api:
     <<: *app
@@ -30,16 +32,24 @@ services:
     ports: ["127.0.0.1:4400:4000"]
     volumes: ["staging-private-uploads:/var/lib/shopai/uploads"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)})"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
+
   worker:
     <<: *app
     environment:
       <<: *runtime
       SHOPAI_ROLE: worker
     volumes: ["staging-private-uploads:/var/lib/shopai/uploads"]
+
   web:
     <<: *app
     environment:
@@ -48,6 +58,28 @@ services:
       RELEASE_VERSION: "${RELEASE_VERSION}"
       HOSTNAME: 0.0.0.0
     ports: ["127.0.0.1:4300:3000"]
+
+  widget:
+    <<: *app
+    environment:
+      SHOPAI_ROLE: widget
+      DEPLOY_ENV: staging
+      RELEASE_VERSION: "${RELEASE_VERSION}"
+      WIDGET_HOST: 0.0.0.0
+      WIDGET_PORT: 3001
+    ports: ["127.0.0.1:4500:3001"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   migrate:
     <<: *app
     restart: "no"
@@ -55,6 +87,7 @@ services:
     environment:
       <<: *runtime
       SHOPAI_ROLE: migrate
+
 volumes:
   staging-private-uploads:
     name: shopai-staging-private-uploads

@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { parseApiEnv } from '../apps/api/src/env.js';
 import { parseWorkerEnv } from '../apps/worker/src/env.js';
 
+const hostedStagingEnv = {
+  DEPLOY_ENV: 'staging',
+  RELEASE_VERSION: 'abcdef123',
+  CATALOG_MODE: 'postgres',
+  DATABASE_URL: 'postgresql://shopai:local@db.example/shopai',
+  MCP_PUBLIC_ORIGIN: 'https://api.staging.shopai.example',
+  WIDGET_ORIGIN: 'https://widget.staging.shopai.example',
+  MCP_ALLOWED_ORIGINS: 'https://chatgpt.com,https://chat.openai.com',
+  WIDGET_RESOURCE_DOMAINS:
+    'https://widget.staging.shopai.example,https://images.staging.shopai.example',
+  REDIRECT_SIGNING_SECRET: 'staging-redirect-signing-secret-000000000000',
+  AUTH_PILOT_CREDENTIALS:
+    '{"pilot@shopai.example":"staging-pilot-credential-0001"}',
+} as const;
+
 describe('startup environment validation', () => {
   it('defaults the API to credential-free demo mode', () => {
     expect(parseApiEnv({}).CATALOG_MODE).toBe('demo');
@@ -66,6 +81,41 @@ describe('startup environment validation', () => {
         DATABASE_URL: 'postgresql://shopai:local@127.0.0.1:5432/shopai',
       }),
     ).toThrow(/MCP_PUBLIC_ORIGIN.*WIDGET_ORIGIN/);
+  });
+
+  it('accepts production-style ChatGPT staging origins', () => {
+    expect(parseApiEnv(hostedStagingEnv)).toMatchObject({
+      DEPLOY_ENV: 'staging',
+      MCP_PUBLIC_ORIGIN: 'https://api.staging.shopai.example',
+      WIDGET_ORIGIN: 'https://widget.staging.shopai.example',
+    });
+  });
+
+  it('rejects pathful hosted origins', () => {
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        MCP_PUBLIC_ORIGIN: 'https://api.staging.shopai.example/mcp',
+      }),
+    ).toThrow(/origin-only/);
+  });
+
+  it('requires the ChatGPT origin in hosted MCP allowlists', () => {
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        MCP_ALLOWED_ORIGINS: 'https://chat.openai.com',
+      }),
+    ).toThrow(/chatgpt\.com/);
+  });
+
+  it('rejects non-HTTPS hosted widget resource domains', () => {
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        WIDGET_RESOURCE_DOMAINS: 'http://images.staging.shopai.example',
+      }),
+    ).toThrow(/origin-only HTTPS/);
   });
 
   it('treats an empty optional conversion secret as disabled', () => {
