@@ -24,6 +24,10 @@ import {
 } from '@shopai/db';
 import { and, eq, isNull, lte, notInArray, or } from 'drizzle-orm';
 import { collectCatalogSnapshot } from './catalog-sync-progress.js';
+import {
+  type AlertEmailSender,
+  evaluateAndDeliverProductAlerts,
+} from './product-alerts.js';
 
 export interface SecretResolver {
   resolve(reference: string): Promise<unknown>;
@@ -64,6 +68,7 @@ export async function syncCatalogConnection(
   secrets: SecretResolver,
   factory: ConnectorFactory = createConnector,
   now: () => Date = () => new Date(),
+  alertEmailSender?: AlertEmailSender,
 ) {
   const job = syncJobSchema.parse(input);
   const startedAt = now();
@@ -226,7 +231,6 @@ export async function syncCatalogConnection(
     };
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
-      // Only a successfully completed full snapshot may deactivate missing offers.
       if (connection.effectiveSyncMode === 'full') {
         const scope = and(
           eq(offers.connectionId, job.connectionId),
@@ -269,12 +273,32 @@ export async function syncCatalogConnection(
       },
       completedAt,
     );
+
+    let alertEvaluation:
+      | Awaited<ReturnType<typeof evaluateAndDeliverProductAlerts>>
+      | { error: string };
+    try {
+      alertEvaluation = await evaluateAndDeliverProductAlerts(
+        db,
+        job.merchantId,
+        alertEmailSender,
+      );
+    } catch (error) {
+      alertEvaluation = {
+        error:
+          error instanceof Error
+            ? error.message.slice(0, 1000)
+            : 'Alert evaluation failed',
+      };
+    }
+
     return {
       skipped: false,
       imported: snapshot.rows.length,
       complete: snapshot.complete,
       mode: connection.effectiveSyncMode,
       progress,
+      alertEvaluation,
     } as const;
   } catch (error) {
     const message =

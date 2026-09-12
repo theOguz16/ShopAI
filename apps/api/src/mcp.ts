@@ -1,6 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CHATGPT_ATTRIBUTION } from '@shopai/contracts';
 import {
+  cancelProductAlertResponseSchema,
+  createProductAlertRequestSchema,
+  productAlertIdParamsSchema,
+  productAlertResponseSchema,
+  productAlertsResponseSchema,
+} from '@shopai/contracts/product-alerts';
+import {
   productDetailRequestSchema,
   productDetailResponseSchema,
 } from '@shopai/contracts/product-detail';
@@ -16,6 +23,7 @@ import {
   searchProductsResponseSchema,
 } from '@shopai/contracts/search-products';
 import type { ShopperIdentity } from '@shopai/db';
+import type { ProductAlertsApi } from './routes/product-alerts.js';
 import type { SavedProductsApi } from './routes/saved-products.js';
 import type { Services } from './services.js';
 
@@ -30,6 +38,7 @@ export type WidgetConfig = {
 
 export type McpShopperContext = {
   savedProducts: SavedProductsApi;
+  productAlerts: ProductAlertsApi;
   identity: ShopperIdentity;
 };
 
@@ -88,10 +97,10 @@ export function createMcpServer(
   shopper?: McpShopperContext,
 ) {
   const server = new McpServer(
-    { name: 'shopai', version: '0.4.0' },
+    { name: 'shopai', version: '0.5.0' },
     {
       instructions:
-        'Ürün keşfi isteklerinde search_products kullanın. category, price, size ve color gibi desteklenen filtreleri canonical alanlara taşıyın; attributes içinde yalnız size/sizes ve color/colors kullanın. Fit/oversized/sleeve gibi henüz structured public-search filtresi olmayan nitelikleri query metninde koruyun, unsupported attribute üretmeyin. Uyumlu ChatGPT yüzeyinde structuredContent CATEGORY_SELECT → PRODUCT_GRID → PRODUCT_DETAIL visual-shopping widget akışında gösterilir; widget yoksa tool metnindeki yayımlanmış katalog bilgisini kullanıcıya sunun. Kullanıcı bir ürünü daha sonra bulmak için kaydetmek isterse save_product, kaydettiklerini görmek isterse list_saved_products, kayıttan çıkarmak isterse unsave_product kullanın.',
+        'Ürün keşfi isteklerinde search_products kullanın. category, price, size ve color gibi desteklenen filtreleri canonical alanlara taşıyın; attributes içinde yalnız size/sizes ve color/colors kullanın. Fit/oversized/sleeve gibi henüz structured public-search filtresi olmayan nitelikleri query metninde koruyun, unsupported attribute üretmeyin. Uyumlu ChatGPT yüzeyinde structuredContent CATEGORY_SELECT → PRODUCT_GRID → PRODUCT_DETAIL visual-shopping widget akışında gösterilir; widget yoksa tool metnindeki yayımlanmış katalog bilgisini kullanıcıya sunun. Kullanıcı bir ürünü daha sonra bulmak için kaydetmek isterse save_product, kaydettiklerini görmek isterse list_saved_products, kayıttan çıkarmak isterse unsave_product kullanın. Kullanıcı fiyat düşünce veya seçili varyant tekrar stokta olduğunda e-posta ile haber verilmesini isterse create_product_alert kullanın. Bildirim teslimatı ShopAI worker/email kanalıyla yapılır; ChatGPT notification mekanizmasına bağlı değildir.',
     },
   );
   const resourceDomains = [
@@ -114,7 +123,7 @@ export function createMcpServer(
               csp: { connectDomains: [], resourceDomains },
             },
             'openai/widgetDescription':
-              'ShopAI visual shopping: kategori seçimi, ürün görsel kartları, hızlı renk/beden/fiyat chip filtreleri, kaydetme ve varyant/stok kontrollü ürün detayı. Filtre chipleri yeni search_products çağrısı yapabilir.',
+              'ShopAI visual shopping: kategori seçimi, ürün görsel kartları, hızlı renk/beden/fiyat chip filtreleri, kaydetme, fiyat/stok e-posta alertleri ve varyant/stok kontrollü ürün detayı.',
             'openai/widgetPrefersBorder': true,
             'openai/widgetDomain': widget.origin,
             'openai/widgetCSP': {
@@ -356,6 +365,119 @@ export function createMcpServer(
                     )
                     .join('\n')
                 : 'Henüz kaydedilmiş ürün yok.',
+            },
+          ],
+          structuredContent,
+        };
+      },
+    );
+
+    server.registerTool(
+      'create_product_alert',
+      {
+        title: 'Fiyat / stok alarmı oluştur',
+        description:
+          'Bir ürünün fiyatı belirlenen kuruş değerinin altına düştüğünde veya seçili varyant yeniden stokta olduğunda ShopAI tarafından e-posta ile tek seferlik haber verilmesi için alert oluşturur. PRICE_BELOW için targetValue, BACK_IN_STOCK için variantId gerekir.',
+        inputSchema: createProductAlertRequestSchema.shape,
+        outputSchema: productAlertResponseSchema.shape,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          openWorldHint: false,
+        },
+        _meta: {
+          ui: { resourceUri: SHOPAI_WIDGET_URI, visibility: ['model', 'app'] },
+          'openai/outputTemplate': SHOPAI_WIDGET_URI,
+          'openai/widgetAccessible': true,
+          'openai/toolInvocation/invoking': 'Alert oluşturuluyor…',
+          'openai/toolInvocation/invoked': 'Alert oluşturuldu',
+          'shopai/dtoVersion': 1,
+        },
+      },
+      async (input) => {
+        const alert = await shopper.productAlerts.create(
+          shopper.identity,
+          input,
+        );
+        const structuredContent = productAlertResponseSchema.parse({ alert });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text:
+                alert.conditionType === 'PRICE_BELOW'
+                  ? `Fiyat ${(alert.targetValue ?? 0) / 100} TL altına düştüğünde ${alert.email} adresine haber verilecek.`
+                  : `Seçili varyant tekrar stokta olduğunda ${alert.email} adresine haber verilecek.`,
+            },
+          ],
+          structuredContent,
+        };
+      },
+    );
+
+    server.registerTool(
+      'list_product_alerts',
+      {
+        title: 'Ürün alarmlarını listele',
+        description:
+          'Kullanıcının fiyat ve stok alarmlarını ACTIVE, TRIGGERED ve CANCELLED durumlarıyla listeler.',
+        inputSchema: {},
+        outputSchema: productAlertsResponseSchema.shape,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
+        },
+      },
+      async () => {
+        const alerts = await shopper.productAlerts.list(shopper.identity);
+        const structuredContent = productAlertsResponseSchema.parse({ alerts });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: alerts.length
+                ? alerts
+                    .map(
+                      (alert) =>
+                        `- ${alert.conditionType} / ${alert.status} / ${alert.productId}`,
+                    )
+                    .join('\n')
+                : 'Aktif veya geçmiş ürün alarmı yok.',
+            },
+          ],
+          structuredContent,
+        };
+      },
+    );
+
+    server.registerTool(
+      'cancel_product_alert',
+      {
+        title: 'Ürün alarmını kapat',
+        description: 'Kullanıcının kendi ACTIVE ürün alarmını iptal eder.',
+        inputSchema: productAlertIdParamsSchema.shape,
+        outputSchema: cancelProductAlertResponseSchema.shape,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        const result = await shopper.productAlerts.cancel(
+          shopper.identity,
+          input.alertId,
+        );
+        const structuredContent =
+          cancelProductAlertResponseSchema.parse(result);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: result.cancelled
+                ? 'Ürün alarmı kapatıldı.'
+                : 'Aktif alarm bulunamadı.',
             },
           ],
           structuredContent,

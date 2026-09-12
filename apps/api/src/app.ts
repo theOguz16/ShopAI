@@ -20,6 +20,7 @@ import {
   type OnboardingConnectorFactory,
   registerOnboardingRoutes,
 } from './routes/onboarding.js';
+import { registerProductAlertRoutes } from './routes/product-alerts.js';
 import { registerProductDetailRoutes } from './routes/product-detail.js';
 import { registerProductRoutes } from './routes/products.js';
 import { registerRedirectRoutes } from './routes/redirects.js';
@@ -65,6 +66,7 @@ export async function buildApp(
         'req.body.consumerSecret',
         'req.body.token',
         'req.body.AUTH_PILOT_CREDENTIALS',
+        'req.body.email',
       ],
     },
     bodyLimit: 2 * 1024 * 1024 + 16384,
@@ -127,6 +129,7 @@ export async function buildApp(
   await registerSyncStatusRoutes(app);
   await registerStorefrontRoutes(app);
   await registerSavedProductRoutes(app, resolvedServices, env);
+  await registerProductAlertRoutes(app, resolvedServices, env);
   await registerImportRoutes(app, env);
   await registerProductRoutes(app);
   await registerProductDetailRoutes(app, resolvedServices);
@@ -295,7 +298,11 @@ export async function buildApp(
         resourceDomains: env.WIDGET_RESOURCE_DOMAINS,
         redirectOrigin: env.MCP_PUBLIC_ORIGIN,
       },
-      { savedProducts: app.savedProductsApi, identity: shopperIdentity },
+      {
+        savedProducts: app.savedProductsApi,
+        productAlerts: app.productAlertsApi,
+        identity: shopperIdentity,
+      },
     );
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

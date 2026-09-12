@@ -35,6 +35,10 @@
     "./saved-products": {
       "types": "./dist/saved-products.d.ts",
       "import": "./dist/saved-products.js"
+    },
+    "./product-alerts": {
+      "types": "./dist/product-alerts.d.ts",
+      "import": "./dist/product-alerts.js"
     }
   },
   "dependencies": {

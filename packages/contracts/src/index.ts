@@ -4,6 +4,7 @@ export * from './onboarding.js';
 export * from './storefront.js';
 export * from './anonymous-shopping-profile.js';
 export * from './saved-products.js';
+export * from './product-alerts.js';
 
 import { z } from 'zod';
 

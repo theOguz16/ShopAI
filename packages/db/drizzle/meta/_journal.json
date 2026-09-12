@@ -2,159 +2,28 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1788781191205,
-      "tag": "0000_damp_yellow_claw",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1788782677913,
-      "tag": "0001_wide_hellcat",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788783322614,
-      "tag": "0002_graceful_bloodscream",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1788785000000,
-      "tag": "0003_tenant_rls",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1788784072957,
-      "tag": "0004_cute_radioactive_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1788785210090,
-      "tag": "0005_amused_ironclad",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1788802934475,
-      "tag": "0006_elite_proteus",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1788803516524,
-      "tag": "0007_fixed_prowler",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1788804296728,
-      "tag": "0008_futuristic_plazm",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1788864000000,
-      "tag": "0009_tenant_route_hardening",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1788892942156,
-      "tag": "0011_wild_venus",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1788954622192,
-      "tag": "0012_absurd_kat_farrell",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1788966000000,
-      "tag": "0013_surface_transport",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1788974400000,
-      "tag": "0014_discovery_sessions",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1788984600000,
-      "tag": "0015_branded_storefront_context",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "7",
-      "when": 1789039500000,
-      "tag": "0016_catalog_sync_progress",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1789049760000,
-      "tag": "0017_category_facets_mvp",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1789130000000,
-      "tag": "0018_checkout_click_attribution",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "7",
-      "when": 1789132200000,
-      "tag": "0019_merchant_conversion_callback",
-      "breakpoints": true
-    },
-    {
-      "idx": 19,
-      "version": "7",
-      "when": 1789134600000,
-      "tag": "0020_product_view_events",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1789164000000,
-      "tag": "0021_anonymous_shopping_profile",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1789167600000,
-      "tag": "0022_saved_products",
-      "breakpoints": true
-    }
+    { "idx": 0, "version": "7", "when": 1788781191205, "tag": "0000_damp_yellow_claw", "breakpoints": true },
+    { "idx": 1, "version": "7", "when": 1788782677913, "tag": "0001_wide_hellcat", "breakpoints": true },
+    { "idx": 2, "version": "7", "when": 1788783322614, "tag": "0002_graceful_bloodscream", "breakpoints": true },
+    { "idx": 3, "version": "7", "when": 1788785000000, "tag": "0003_tenant_rls", "breakpoints": true },
+    { "idx": 4, "version": "7", "when": 1788784072957, "tag": "0004_cute_radioactive_man", "breakpoints": true },
+    { "idx": 5, "version": "7", "when": 1788785210090, "tag": "0005_amused_ironclad", "breakpoints": true },
+    { "idx": 6, "version": "7", "when": 1788802934475, "tag": "0006_elite_proteus", "breakpoints": true },
+    { "idx": 7, "version": "7", "when": 1788803516524, "tag": "0007_fixed_prowler", "breakpoints": true },
+    { "idx": 8, "version": "7", "when": 1788804296728, "tag": "0008_futuristic_plazm", "breakpoints": true },
+    { "idx": 9, "version": "7", "when": 1788864000000, "tag": "0009_tenant_route_hardening", "breakpoints": true },
+    { "idx": 10, "version": "7", "when": 1788892942156, "tag": "0011_wild_venus", "breakpoints": true },
+    { "idx": 11, "version": "7", "when": 1788954622192, "tag": "0012_absurd_kat_farrell", "breakpoints": true },
+    { "idx": 12, "version": "7", "when": 1788966000000, "tag": "0013_surface_transport", "breakpoints": true },
+    { "idx": 13, "version": "7", "when": 1788974400000, "tag": "0014_discovery_sessions", "breakpoints": true },
+    { "idx": 14, "version": "7", "when": 1788984600000, "tag": "0015_branded_storefront_context", "breakpoints": true },
+    { "idx": 15, "version": "7", "when": 1789039500000, "tag": "0016_catalog_sync_progress", "breakpoints": true },
+    { "idx": 16, "version": "7", "when": 1789049760000, "tag": "0017_category_facets_mvp", "breakpoints": true },
+    { "idx": 17, "version": "7", "when": 1789130000000, "tag": "0018_checkout_click_attribution", "breakpoints": true },
+    { "idx": 18, "version": "7", "when": 1789132200000, "tag": "0019_merchant_conversion_callback", "breakpoints": true },
+    { "idx": 19, "version": "7", "when": 1789134600000, "tag": "0020_product_view_events", "breakpoints": true },
+    { "idx": 20, "version": "7", "when": 1789164000000, "tag": "0021_anonymous_shopping_profile", "breakpoints": true },
+    { "idx": 21, "version": "7", "when": 1789167600000, "tag": "0022_saved_products", "breakpoints": true },
+    { "idx": 22, "version": "7", "when": 1789171200000, "tag": "0023_product_alerts", "breakpoints": true }
   ]
 }

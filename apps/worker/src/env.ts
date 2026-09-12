@@ -14,6 +14,8 @@ const workerEnvSchema = z
         const protocol = new URL(value).protocol;
         return protocol === 'redis:' || protocol === 'rediss:';
       }, 'redis:// veya rediss:// adresi olmalı'),
+    RESEND_API_KEY: z.string().min(8).optional(),
+    ALERT_FROM_EMAIL: z.string().email().optional(),
   })
   .superRefine((env, context) => {
     if (env.DEPLOY_ENV !== 'local' && env.RELEASE_VERSION === 'development')
@@ -21,6 +23,13 @@ const workerEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['RELEASE_VERSION'],
         message: 'local dışı ortamda immutable sürüm kimliği zorunludur',
+      });
+    if (Boolean(env.RESEND_API_KEY) !== Boolean(env.ALERT_FROM_EMAIL))
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_API_KEY'],
+        message:
+          'Alert email delivery için RESEND_API_KEY ve ALERT_FROM_EMAIL birlikte ayarlanmalıdır',
       });
   });
 
