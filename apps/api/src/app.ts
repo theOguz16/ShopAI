@@ -309,6 +309,11 @@ export async function buildApp(
       enableJsonResponse: true,
     });
     await server.connect(transport);
+    if (origin) {
+      reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+      reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      reply.raw.setHeader('Vary', 'Origin');
+    }
     reply.hijack();
     reply.raw.on('close', () => {
       void transport.close();

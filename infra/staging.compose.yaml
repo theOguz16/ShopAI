@@ -3,6 +3,8 @@ name: shopai-staging
 x-app: &app
   image: "${SHOPAI_IMAGE:?SHOPAI_IMAGE gerekli}:${RELEASE_VERSION:?RELEASE_VERSION gerekli}"
   restart: unless-stopped
+  networks:
+    - shopai-staging-net
 
 x-runtime: &runtime
   DEPLOY_ENV: staging
@@ -91,3 +93,8 @@ services:
 volumes:
   staging-private-uploads:
     name: shopai-staging-private-uploads
+
+networks:
+  shopai-staging-net:
+    external: true
+    name: shopai-staging-net
