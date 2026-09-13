@@ -1,0 +1,39 @@
+{
+  email {$STAGING_TLS_EMAIL}
+  admin off
+}
+
+{$STAGING_API_ORIGIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    -Server
+  }
+  reverse_proxy api:4000
+}
+
+{$STAGING_WIDGET_ORIGIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    -Server
+  }
+
+  @widgetAssets path /assets/*
+  handle @widgetAssets {
+    reverse_proxy widget:3001
+  }
+
+  @widgetHealth path /health/*
+  handle @widgetHealth {
+    reverse_proxy widget:3001
+  }
+
+  handle {
+    respond 404
+  }
+}

@@ -27,8 +27,8 @@ import type { ProductAlertsApi } from './routes/product-alerts.js';
 import type { SavedProductsApi } from './routes/saved-products.js';
 import type { Services } from './services.js';
 
-export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-shopping-v2.html';
-export const SHOPAI_WIDGET_ASSET_VERSION = '2';
+export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-shopping-v3.html';
+export const SHOPAI_WIDGET_ASSET_VERSION = '3';
 
 export type WidgetConfig = {
   origin: string;
@@ -43,8 +43,12 @@ export type McpShopperContext = {
 };
 
 function widgetDocument(origin: string) {
-  const assetUrl = new URL(
+  const scriptUrl = new URL(
     `/assets/widget-v${SHOPAI_WIDGET_ASSET_VERSION}.js`,
+    origin,
+  ).toString();
+  const styleUrl = new URL(
+    `/assets/widget-v${SHOPAI_WIDGET_ASSET_VERSION}.css`,
     origin,
   ).toString();
   return `<!doctype html>
@@ -53,10 +57,11 @@ function widgetDocument(origin: string) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ShopAI visual shopping</title>
+    <link rel="stylesheet" href="${styleUrl}" crossorigin="anonymous" />
   </head>
   <body>
     <div id="root" data-dto-version="1"></div>
-    <script type="module" src="${assetUrl}"></script>
+    <script type="module" src="${scriptUrl}" crossorigin="anonymous"></script>
   </body>
 </html>`;
 }

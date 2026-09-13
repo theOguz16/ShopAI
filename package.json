@@ -27,6 +27,7 @@
     "db:seed": "pnpm build:packages && pnpm --filter @shopai/db db:seed",
     "infra:up": "docker compose -f infra/compose.yaml up -d",
     "infra:down": "docker compose -f infra/compose.yaml down",
+    "staging:smoke": "node scripts/staging-chatgpt-smoke.mjs",
     "rehearsal:woocommerce": "bash scripts/woocommerce-rehearsal.sh",
     "import:csv": "pnpm build:packages && pnpm --filter @shopai/worker import:csv"
   },
