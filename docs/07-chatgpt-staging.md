@@ -103,7 +103,7 @@ ChatGPT-origin CORS
   -> merchant redirect
 ```
 
-Release `53b51a157d81be36446d4c5078d68073b0db56b9` üzerinde hosted smoke PASS vermiştir.
+Deploy edilen runtime release üzerinde hosted smoke PASS vermiştir.
 
 GitHub Actions üzerinden production-like deployment otomasyonu TASK-021 Production Readiness kapsamında standardize edilecektir.
 
@@ -134,7 +134,7 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 
 | Kanıt | Sonuç |
 | --- | --- |
-| Release SHA | `53b51a157d81be36446d4c5078d68073b0db56b9` |
+| Release SHA | Runtime smoke çıktısında ve PR evidence kaydında immutable SHA olarak tutulur. |
 | Public API health | PASS |
 | Public widget health | PASS |
 | Public MCP `/mcp` | PASS |
@@ -154,7 +154,7 @@ Hosted smoke sonucu:
 ```json
 {
   "status": "ok",
-  "release": "53b51a157d81be36446d4c5078d68073b0db56b9",
+  "release": "<deployed-release-sha>",
   "mcpUrl": "https://shop.fizyoflow.com/mcp",
   "resourceUri": "ui://widget/shopai-shopping-v3.html",
   "searchTool": true,
