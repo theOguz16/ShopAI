@@ -82,6 +82,13 @@ services:
       timeout: 5s
       retries: 5
 
+  staging-demo-refresh:
+    <<: *app
+    environment:
+      SHOPAI_ROLE: staging-demo-refresh
+      DEPLOY_ENV: staging
+      DATABASE_URL: "${STAGING_DATABASE_URL:?Ayrı staging DB gerekli}"
+
   migrate:
     <<: *app
     restart: "no"
