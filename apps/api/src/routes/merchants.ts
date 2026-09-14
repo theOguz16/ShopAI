@@ -235,6 +235,7 @@ export async function registerMerchantRoutes(
             authorizationStatus: connections.authorizationStatus,
             syncMode: connections.syncMode,
             lastSyncStartedAt: connections.lastSyncStartedAt,
+            lastSourceWatermarkAt: connections.lastSourceWatermarkAt,
             lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
             lastFetchedAt: connections.lastFetchedAt,
             lastSyncError: connections.lastSyncError,

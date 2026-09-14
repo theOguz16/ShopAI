@@ -189,7 +189,7 @@ const monitorOperations = async () => {
       .select({
         id: connections.id,
         merchantId: connections.merchantId,
-        lastFetchedAt: connections.lastFetchedAt,
+        lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
       })
       .from(connections)
       .where(
@@ -201,18 +201,20 @@ const monitorOperations = async () => {
   )) as {
     id: string;
     merchantId: string;
-    lastFetchedAt: Date | null;
+    lastSuccessfulSyncAt: Date | null;
   }[];
   for (const connection of activeConnections)
     if (
-      !connection.lastFetchedAt ||
-      Date.now() - connection.lastFetchedAt.getTime() > 30 * 60_000
+      !connection.lastSuccessfulSyncAt ||
+      Date.now() - connection.lastSuccessfulSyncAt.getTime() > 30 * 60_000
     )
       operationalLog('warn', 'catalog_stale', {
         connectionId: connection.id,
         merchantId: connection.merchantId,
-        ageSeconds: connection.lastFetchedAt
-          ? Math.floor((Date.now() - connection.lastFetchedAt.getTime()) / 1000)
+        ageSeconds: connection.lastSuccessfulSyncAt
+          ? Math.floor(
+              (Date.now() - connection.lastSuccessfulSyncAt.getTime()) / 1000,
+            )
           : null,
       });
 };

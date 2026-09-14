@@ -19,6 +19,7 @@ import {
   STOCK_STALE_AFTER_MS,
   stockStatus,
 } from '../../packages/commerce/src/index.js';
+import { catalogConnectionHealth } from '../../packages/commerce/src/catalog-health.js';
 import {
   type LiveCatalogConnector,
   parseCatalogCsv,
@@ -211,6 +212,156 @@ describe('catalog import integrity on PostgreSQL', () => {
     expect(factory).not.toHaveBeenCalled();
   });
 
+  it('advances successful-sync freshness without moving an empty incremental source watermark', async () => {
+    const sourceWatermark = new Date('2026-09-13T13:13:04.000Z');
+    const fetchedAt = new Date('2026-09-14T10:03:20.000Z');
+    const completedAt = new Date('2026-09-14T10:03:21.000Z');
+    await database.db
+      .update(connections)
+      .set({
+        provider: 'woocommerce',
+        credentialsRef: 'secret://PILOT_WOO',
+        authorizationStatus: 'active',
+        syncMode: 'incremental',
+        lastSourceWatermarkAt: sourceWatermark,
+        lastSuccessfulSyncAt: new Date('2026-09-13T13:14:00.000Z'),
+        lastFetchedAt: new Date('2026-09-13T13:14:00.000Z'),
+        lastSyncError: 'old failure',
+      })
+      .where(eq(connections.id, connectionA));
+    await importCatalog(database.db, job());
+    const connector: LiveCatalogConnector = {
+      provider: 'woocommerce',
+      capabilities: { liveInventory: true, incrementalSync: true },
+      validate: async () => undefined,
+      readPage: async (input) => {
+        expect(input).toMatchObject({
+          mode: 'incremental',
+          modifiedAfter: sourceWatermark.toISOString(),
+        });
+        return {
+          rows: [],
+          nextCursor: null,
+          sourceObservedAt: sourceWatermark.toISOString(),
+          fetchedAt: fetchedAt.toISOString(),
+          complete: true,
+        };
+      },
+    };
+
+    await expect(
+      syncCatalogConnection(
+        database.db,
+        { merchantId: merchantA, connectionId: connectionA },
+        { resolve: async () => ({}) },
+        () => connector,
+        () => completedAt,
+      ),
+    ).resolves.toMatchObject({ imported: 0, mode: 'incremental' });
+
+    const [connection] = await database.db
+      .select({
+        active: connections.active,
+        authorizationStatus: connections.authorizationStatus,
+        lastSourceWatermarkAt: connections.lastSourceWatermarkAt,
+        lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
+        lastFetchedAt: connections.lastFetchedAt,
+        lastSyncError: connections.lastSyncError,
+      })
+      .from(connections)
+      .where(eq(connections.id, connectionA));
+    expect(connection).toEqual({
+      active: true,
+      authorizationStatus: 'active',
+      lastSourceWatermarkAt: sourceWatermark,
+      lastSuccessfulSyncAt: completedAt,
+      lastFetchedAt: fetchedAt,
+      lastSyncError: null,
+    });
+    expect(catalogConnectionHealth(connection, completedAt.getTime())).toBe(
+      'healthy',
+    );
+    expect(await counts()).toEqual({ products: 1, variants: 1, offers: 1 });
+    expect(
+      await database.db.select({ active: offers.active }).from(offers),
+    ).toEqual([{ active: true }]);
+  });
+
+  it('advances both timestamps on changed incremental sync and preserves them on failure', async () => {
+    const oldWatermark = new Date('2026-09-13T13:13:04.000Z');
+    const newWatermark = new Date('2026-09-14T09:58:00.000Z');
+    const completedAt = new Date('2026-09-14T10:03:21.000Z');
+    await database.db
+      .update(connections)
+      .set({
+        provider: 'woocommerce',
+        credentialsRef: 'secret://PILOT_WOO',
+        authorizationStatus: 'active',
+        syncMode: 'incremental',
+        lastSourceWatermarkAt: oldWatermark,
+        lastSuccessfulSyncAt: new Date('2026-09-13T13:14:00.000Z'),
+      })
+      .where(eq(connections.id, connectionA));
+    const connector: LiveCatalogConnector = {
+      provider: 'woocommerce',
+      capabilities: { liveInventory: true, incrementalSync: true },
+      validate: async () => undefined,
+      readPage: async () => ({
+        rows: [row({ priceMinor: 11000 })],
+        nextCursor: null,
+        sourceObservedAt: newWatermark.toISOString(),
+        fetchedAt: completedAt.toISOString(),
+        complete: true,
+      }),
+    };
+    await syncCatalogConnection(
+      database.db,
+      { merchantId: merchantA, connectionId: connectionA },
+      { resolve: async () => ({}) },
+      () => connector,
+      () => completedAt,
+    );
+
+    const timestamps = {
+      lastSourceWatermarkAt: newWatermark,
+      lastSuccessfulSyncAt: completedAt,
+    };
+    expect(
+      await database.db
+        .select({
+          lastSourceWatermarkAt: connections.lastSourceWatermarkAt,
+          lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
+        })
+        .from(connections)
+        .where(eq(connections.id, connectionA)),
+    ).toEqual([timestamps]);
+
+    const failedConnector: LiveCatalogConnector = {
+      ...connector,
+      readPage: async () => {
+        throw new Error('source unavailable');
+      },
+    };
+    await expect(
+      syncCatalogConnection(
+        database.db,
+        { merchantId: merchantA, connectionId: connectionA },
+        { resolve: async () => ({}) },
+        () => failedConnector,
+        () => new Date('2026-09-14T10:08:21.000Z'),
+      ),
+    ).rejects.toThrow('source unavailable');
+    expect(
+      await database.db
+        .select({
+          lastSourceWatermarkAt: connections.lastSourceWatermarkAt,
+          lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
+        })
+        .from(connections)
+        .where(eq(connections.id, connectionA)),
+    ).toEqual([timestamps]);
+  });
+
   it('revalidates unchanged inventory with a verified full read before it becomes stale', async () => {
     const initialTime = new Date();
     let currentTime = initialTime;
@@ -221,6 +372,7 @@ describe('catalog import integrity on PostgreSQL', () => {
         credentialsRef: 'secret://PILOT_WOO',
         authorizationStatus: 'active',
         syncMode: 'incremental',
+        lastSourceWatermarkAt: new Date('2026-01-02T12:00:00.000Z'),
         lastSuccessfulSyncAt: new Date('2026-01-02T12:00:00.000Z'),
       })
       .where(eq(connections.id, connectionA));
@@ -309,6 +461,7 @@ describe('catalog import integrity on PostgreSQL', () => {
         credentialsRef: 'secret://PILOT_WOO',
         authorizationStatus: 'active',
         syncMode: 'incremental',
+        lastSourceWatermarkAt: new Date('2026-01-02T12:00:00.000Z'),
         lastSuccessfulSyncAt: new Date('2026-01-02T12:00:00.000Z'),
       })
       .where(eq(connections.id, connectionA));
