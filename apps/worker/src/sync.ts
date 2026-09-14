@@ -124,7 +124,7 @@ export async function syncCatalogConnection(
           ),
         )
         .limit(1);
-      if (!row.lastSuccessfulSyncAt || unverifiedOffer)
+      if (!row.lastSourceWatermarkAt || unverifiedOffer)
         effectiveSyncMode = 'full';
     }
     await tx
@@ -163,7 +163,7 @@ export async function syncCatalogConnection(
       mode: connection.effectiveSyncMode,
       modifiedAfter:
         connection.effectiveSyncMode === 'incremental'
-          ? (connection.lastSuccessfulSyncAt?.toISOString() ?? null)
+          ? (connection.lastSourceWatermarkAt?.toISOString() ?? null)
           : null,
       onProgress: async (nextProgress) => {
         progress = nextProgress;
@@ -253,9 +253,10 @@ export async function syncCatalogConnection(
         .set({
           authorizationStatus: 'active',
           syncCursor: null,
-          lastSuccessfulSyncAt: new Date(
-            snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
-          ),
+          lastSourceWatermarkAt: snapshot.latestSourceTime
+            ? new Date(snapshot.latestSourceTime)
+            : connection.lastSourceWatermarkAt,
+          lastSuccessfulSyncAt: completedAt,
           lastFetchedAt: new Date(snapshot.latestFetchedAt),
           lastSyncError: null,
         })

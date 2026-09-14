@@ -2,6 +2,22 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('database migrations', () => {
+  it('separates and backfills the source sync watermark', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0024_source_sync_watermark.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "last_source_watermark_at" timestamp with time zone',
+    );
+    expect(migration).toContain(
+      'SET "last_source_watermark_at" = "last_successful_sync_at"',
+    );
+  });
+
   it('casts legacy membership user ids explicitly when switching to uuid', async () => {
     const migration = await readFile(
       new URL(

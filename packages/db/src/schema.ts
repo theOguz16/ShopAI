@@ -120,6 +120,7 @@ export const connections = pgTable(
     syncMode: text('sync_mode').notNull().default('incremental'),
     syncCursor: text('sync_cursor'),
     lastSyncStartedAt: at('last_sync_started_at'),
+    lastSourceWatermarkAt: at('last_source_watermark_at'),
     lastSuccessfulSyncAt: at('last_successful_sync_at'),
     lastFetchedAt: at('last_fetched_at'),
     lastSyncError: text('last_sync_error'),
