@@ -29,11 +29,21 @@ export interface LiveCatalogConnector {
   }): Promise<ConnectorPage>;
 }
 
+export type ConnectorHttpDiagnostics = {
+  contentType?: string;
+  upstreamServer?: string;
+  retryAfter?: string;
+  cfRay?: string;
+  requestId?: string;
+  responseBodySnippet?: string;
+};
+
 export class ConnectorHttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
     readonly retryAfterMs?: number,
+    readonly diagnostics?: ConnectorHttpDiagnostics,
   ) {
     super(message);
   }
