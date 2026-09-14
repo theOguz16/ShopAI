@@ -1,6 +1,7 @@
 import { type SourceRow, sourceRowSchema } from '@shopai/contracts';
 import {
   ConnectorHttpError,
+  type ConnectorHttpDiagnostics,
   type ConnectorPage,
   type LiveCatalogConnector,
 } from '../index.js';
@@ -39,6 +40,7 @@ type WooVariation = {
 type FetchLike = typeof fetch;
 type Sleep = (milliseconds: number) => Promise<void>;
 const safeConnectorFetch = createPublicConnectorFetch();
+const DIAGNOSTIC_BODY_LIMIT = 1024;
 
 export class WooCommerceConnector implements LiveCatalogConnector {
   readonly provider = 'woocommerce' as const;
@@ -190,12 +192,17 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       }
       if (response.ok) return response;
       const retryAfter = Number(response.headers.get('retry-after'));
+      const diagnostics = await collectHttpDiagnostics(
+        response,
+        this.credentials,
+      );
       const error = new ConnectorHttpError(
         response.status,
         `WooCommerce HTTP ${response.status}`,
         Number.isFinite(retryAfter)
           ? Math.min(30_000, retryAfter * 1000)
           : undefined,
+        diagnostics,
       );
       if (!error.retryable || attempt === this.maxAttempts) throw error;
       await this.sleep(
@@ -278,6 +285,74 @@ function toVariationSourceRow(
           : null,
     checkoutUrl: product.permalink,
   });
+}
+
+async function collectHttpDiagnostics(
+  response: Response,
+  credentials: WooCommerceCredentials,
+): Promise<ConnectorHttpDiagnostics> {
+  const body = await response.text().catch(() => '');
+  return compactDiagnostics({
+    contentType: cleanDiagnosticValue(response.headers.get('content-type')),
+    upstreamServer: cleanDiagnosticValue(response.headers.get('server')),
+    retryAfter: cleanDiagnosticValue(response.headers.get('retry-after'), 64),
+    cfRay: cleanDiagnosticValue(response.headers.get('cf-ray'), 128),
+    requestId: firstDiagnosticHeader(response.headers, [
+      'x-request-id',
+      'request-id',
+      'x-correlation-id',
+      'x-amzn-requestid',
+      'x-amz-cf-id',
+    ]),
+    responseBodySnippet: sanitizeDiagnosticBody(body, credentials),
+  });
+}
+
+function compactDiagnostics(
+  value: ConnectorHttpDiagnostics,
+): ConnectorHttpDiagnostics {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined),
+  ) as ConnectorHttpDiagnostics;
+}
+
+function firstDiagnosticHeader(headers: Headers, names: string[]) {
+  for (const name of names) {
+    const value = cleanDiagnosticValue(headers.get(name));
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function cleanDiagnosticValue(value: string | null, limit = 256) {
+  if (!value) return undefined;
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim();
+  return cleaned ? cleaned.slice(0, limit) : undefined;
+}
+
+function sanitizeDiagnosticBody(
+  value: string,
+  credentials: WooCommerceCredentials,
+) {
+  let sanitized = value;
+  const basicCredential = Buffer.from(
+    `${credentials.consumerKey}:${credentials.consumerSecret}`,
+  ).toString('base64');
+  const sensitiveValues = [
+    credentials.consumerKey,
+    credentials.consumerSecret,
+    encodeURIComponent(credentials.consumerKey),
+    encodeURIComponent(credentials.consumerSecret),
+    basicCredential,
+  ].filter(Boolean);
+  for (const secret of sensitiveValues)
+    sanitized = sanitized.split(secret).join('[REDACTED]');
+  sanitized = sanitized
+    .replace(/Basic\s+[A-Za-z0-9+/=]+/giu, 'Basic [REDACTED]')
+    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return sanitized ? sanitized.slice(0, DIAGNOSTIC_BODY_LIMIT) : undefined;
 }
 
 function isoUtc(value: string) {
