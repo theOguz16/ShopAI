@@ -1,3 +1,4 @@
+import { ConnectorHttpError } from '@shopai/connectors';
 import { IMPORT_QUEUE, SYNC_QUEUE } from '@shopai/contracts';
 import {
   connections,
@@ -34,6 +35,14 @@ const operationalLog = (
   else if (level === 'warn') console.warn(entry);
   else console.info(entry);
 };
+const connectorFailureFields = (error: Error) =>
+  error instanceof ConnectorHttpError
+    ? {
+        httpStatus: error.status,
+        retryAfterMs: error.retryAfterMs,
+        ...error.diagnostics,
+      }
+    : {};
 const worker = new Worker(
   IMPORT_QUEUE,
   (job) => processImportReference(database.db, job.data),
@@ -259,6 +268,7 @@ syncWorker.on('failed', (job, error) =>
     connectionId: job?.data?.connectionId,
     merchantId: job?.data?.merchantId,
     error: error.message,
+    ...connectorFailureFields(error),
   }),
 );
 syncWorker.on('error', (error) =>
