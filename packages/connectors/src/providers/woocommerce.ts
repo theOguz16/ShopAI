@@ -86,7 +86,15 @@ export class WooCommerceConnector implements LiveCatalogConnector {
     const products = (await response.json()) as WooProduct[];
     const totalPagesHeader = response.headers.get('x-wp-totalpages');
     const totalPages = Number(totalPagesHeader ?? '1');
-    if (!Number.isSafeInteger(totalPages) || totalPages < 1)
+    const isEmptyIncrementalResult =
+      input.mode === 'incremental' &&
+      page === 1 &&
+      products.length === 0 &&
+      totalPagesHeader === '0';
+    if (
+      !Number.isSafeInteger(totalPages) ||
+      (totalPages < 1 && !isEmptyIncrementalResult)
+    )
       throw new Error('WooCommerce geçersiz sayfalama bilgisi döndürdü.');
     const rows: SourceRow[] = [];
     let variationPagesComplete = true;

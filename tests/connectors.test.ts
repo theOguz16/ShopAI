@@ -71,6 +71,81 @@ describe('WooCommerce pilot connector', () => {
     );
   });
 
+  it('completes an empty incremental result with zero total pages', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: {
+            'x-wp-total': '0',
+            'x-wp-totalpages': '0',
+          },
+        }),
+    );
+    const connector = new WooCommerceConnector(
+      credentials,
+      fetcher as typeof fetch,
+    );
+
+    const page = await connector.readPage({
+      mode: 'incremental',
+      modifiedAfter: '2026-09-07T12:00:00.000Z',
+    });
+
+    expect(page).toMatchObject({
+      rows: [],
+      nextCursor: null,
+      sourceObservedAt: '2026-09-07T12:00:00.000Z',
+      complete: true,
+    });
+  });
+
+  it('completes a normal single-page response', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([product(1)]), {
+          status: 200,
+          headers: { 'x-wp-totalpages': '1' },
+        }),
+    );
+    const connector = new WooCommerceConnector(
+      credentials,
+      fetcher as typeof fetch,
+    );
+
+    const page = await connector.readPage({ mode: 'full' });
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.nextCursor).toBeNull();
+    expect(page.complete).toBe(true);
+  });
+
+  it.each([
+    ['text', 'not-a-number', []],
+    ['negative', '-1', []],
+    ['fractional', '1.5', []],
+    ['zero with a non-empty page', '0', [product(1)]],
+  ])(
+    'rejects malformed product pagination: %s',
+    async (_case, totalPages, body) => {
+      const fetcher = vi.fn(
+        async () =>
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'x-wp-totalpages': totalPages },
+          }),
+      );
+      const connector = new WooCommerceConnector(
+        credentials,
+        fetcher as typeof fetch,
+      );
+
+      await expect(connector.readPage({ mode: 'incremental' })).rejects.toThrow(
+        'WooCommerce geçersiz sayfalama bilgisi döndürdü.',
+      );
+    },
+  );
+
   it('bounds 429 retries and honors a capped retry-after', async () => {
     const sleep = vi.fn(async () => undefined);
     const fetcher = vi.fn(
