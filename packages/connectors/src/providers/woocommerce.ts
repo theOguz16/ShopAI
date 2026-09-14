@@ -326,7 +326,7 @@ function firstDiagnosticHeader(headers: Headers, names: string[]) {
 
 function cleanDiagnosticValue(value: string | null, limit = 256) {
   if (!value) return undefined;
-  const cleaned = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim();
+  const cleaned = replaceControlCharacters(value).trim();
   return cleaned ? cleaned.slice(0, limit) : undefined;
 }
 
@@ -347,12 +347,23 @@ function sanitizeDiagnosticBody(
   ].filter(Boolean);
   for (const secret of sensitiveValues)
     sanitized = sanitized.split(secret).join('[REDACTED]');
-  sanitized = sanitized
+  sanitized = replaceControlCharacters(sanitized)
     .replace(/Basic\s+[A-Za-z0-9+/=]+/giu, 'Basic [REDACTED]')
-    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
   return sanitized ? sanitized.slice(0, DIAGNOSTIC_BODY_LIMIT) : undefined;
+}
+
+function replaceControlCharacters(value: string) {
+  let output = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    output +=
+      codePoint !== undefined && (codePoint < 32 || codePoint === 127)
+        ? ' '
+        : character;
+  }
+  return output;
 }
 
 function isoUtc(value: string) {
