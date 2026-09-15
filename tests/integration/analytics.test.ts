@@ -73,6 +73,7 @@ beforeAll(async () => {
       name: 'Analytics A',
       slug: `analytics-a-${randomUUID()}`,
       active: true,
+      isPublic: true,
     },
     {
       id: merchantB,

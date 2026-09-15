@@ -7,6 +7,18 @@ const redisUrlSchema = z
     message: 'redis:// veya rediss:// adresi olmalı',
   });
 
+const optionalConnectorEncryptionKeySchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z
+    .string()
+    .refine(
+      (value) => Buffer.from(value.trim(), 'base64').length === 32,
+      'base64 encoded 32-byte key olmalıdır',
+    )
+    .optional(),
+);
+
 const baseSchema = z.object({
   DEPLOY_ENV: z
     .enum(['local', 'test', 'staging', 'production'])
@@ -48,6 +60,7 @@ const baseSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
+  CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
   REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
   AI_PROVIDER: z.enum(['rules', 'openai']).default('rules'),
   OPENAI_API_KEY: z.string().min(1).optional(),
@@ -168,6 +181,12 @@ const apiEnvSchema = z
         });
     }
     if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {
+      if (!env.CONNECTOR_SECRET_ENCRYPTION_KEY)
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_ENCRYPTION_KEY'],
+          message: 'hosted ortamda connector secret encryption key zorunludur',
+        });
       if (!env.MCP_ALLOWED_ORIGINS.includes('https://chatgpt.com'))
         context.addIssue({
           code: z.ZodIssueCode.custom,

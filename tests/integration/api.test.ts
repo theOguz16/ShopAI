@@ -206,6 +206,7 @@ describe('API and MCP', () => {
       REDIRECT_SIGNING_SECRET: 'staging-redirect-secret-000000000000',
       AUTH_PILOT_CREDENTIALS:
         '{"owner@staging.example":"staging-user-secret-000000000000"}',
+      CONNECTOR_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
       CONVERSION_CALLBACK_SECRET: '',
     });
     const localServices = createServices(parseApiEnv({}));

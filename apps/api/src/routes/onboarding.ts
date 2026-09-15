@@ -44,7 +44,10 @@ export async function registerOnboardingRoutes(
   env: ApiEnv,
   connectorFactory: OnboardingConnectorFactory = createOnboardingConnector,
 ) {
-  const secretStore = new ManagedConnectorSecretStore(env.UPLOAD_DIR);
+  const secretStore = new ManagedConnectorSecretStore(
+    env.UPLOAD_DIR,
+    env.CONNECTOR_SECRET_ENCRYPTION_KEY,
+  );
   let syncQueue: Queue | undefined;
   const getSyncQueue = () => {
     syncQueue ??= new Queue(SYNC_QUEUE, {

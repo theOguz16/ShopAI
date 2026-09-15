@@ -86,6 +86,7 @@ beforeAll(async () => {
       name: 'Management A',
       slug: merchantASlug,
       active: true,
+      isPublic: true,
     },
     {
       id: merchantB,

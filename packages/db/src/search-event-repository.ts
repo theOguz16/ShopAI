@@ -1,7 +1,7 @@
 import type { Surface, Transport } from '@shopai/contracts';
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
-import { searchEvents } from './schema.js';
+import { merchants, searchEvents } from './schema.js';
 
 export type SearchEventInput = {
   merchantId: string;
@@ -20,7 +20,19 @@ export class PostgresSearchEventRepository {
     if (!events.length) return;
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
-      await tx.insert(searchEvents).values(events);
+      const merchantIds = [...new Set(events.map((event) => event.merchantId))];
+      const visibleMerchants = await tx
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(inArray(merchants.id, merchantIds));
+      const visibleIds = new Set(
+        visibleMerchants.map((merchant) => merchant.id),
+      );
+      const visibleEvents = events.filter((event) =>
+        visibleIds.has(event.merchantId),
+      );
+      if (!visibleEvents.length) return;
+      await tx.insert(searchEvents).values(visibleEvents);
     });
   }
 }

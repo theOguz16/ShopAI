@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { DiscoverySessionRepository } from '@shopai/commerce/discovery';
 import { discoverySessionSchema } from '@shopai/contracts';
 import { and, eq, sql } from 'drizzle-orm';
@@ -34,11 +35,15 @@ export class PostgresDiscoverySessionRepository
   }
 
   async create(input: Parameters<DiscoverySessionRepository['create']>[0]) {
+    const id = randomUUID();
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
+      await tx.execute(
+        sql`select set_config('app.discovery_session_id', ${id}, true)`,
+      );
       const [row] = await tx
         .insert(discoverySessions)
-        .values(input)
+        .values({ id, ...input })
         .returning();
       if (!row) throw new Error('Discovery session oluşturulamadı.');
       return discoverySessionSchema.parse({
@@ -50,8 +55,12 @@ export class PostgresDiscoverySessionRepository
   }
 
   async findById(id: string) {
+    if (!uuid.test(id)) return null;
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
+      await tx.execute(
+        sql`select set_config('app.discovery_session_id', ${id}, true)`,
+      );
       const [row] = await tx
         .select()
         .from(discoverySessions)
