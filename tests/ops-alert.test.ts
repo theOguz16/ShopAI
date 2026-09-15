@@ -54,7 +54,7 @@ describe('ops alert webhook', () => {
   });
 
   it('uses the same signed contract for worker alerts', async () => {
-    const fetcher = vi.fn(async () => new Response('{}', { status: 204 }));
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
     const sender = createWorkerOpsAlertSender(
       {
         OPS_ALERT_WEBHOOK_URL: webhookUrl,
@@ -71,7 +71,7 @@ describe('ops alert webhook', () => {
   });
 
   it('is a no-op when an alert sink is not configured', async () => {
-    const fetcher = vi.fn(async () => new Response('{}', { status: 204 }));
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
     const sender = createApiOpsAlertSender(
       {
         OPS_ALERT_WEBHOOK_URL: undefined,
