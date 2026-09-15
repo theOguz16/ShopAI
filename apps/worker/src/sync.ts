@@ -45,6 +45,7 @@ export class EnvironmentSecretResolver implements SecretResolver {
     if (ManagedConnectorSecretStore.supports(reference))
       return new ManagedConnectorSecretStore(
         this.environment.UPLOAD_DIR ?? 'private/uploads',
+        this.environment.CONNECTOR_SECRET_ENCRYPTION_KEY,
       ).resolve(reference);
     throw new Error(`Secret çözülemedi: ${key}`);
   }
