@@ -70,6 +70,9 @@ export function toInternalSearchInput(
     ...(Object.keys(filters).length ? { filters } : {}),
     ...(request.cursor !== undefined ? { cursor: request.cursor } : {}),
     ...(request.limit !== undefined ? { limit: request.limit } : {}),
+    ...(request.analyticsIntent
+      ? { analyticsIntent: request.analyticsIntent }
+      : {}),
   };
 }
 
