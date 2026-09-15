@@ -37,11 +37,7 @@ const operationalLog = (
   else if (level === 'warn') console.warn(entry);
   else console.info(entry);
   if (level !== 'info')
-    void opsAlerts.send(
-      event,
-      level === 'error' ? 'error' : 'warning',
-      fields,
-    );
+    void opsAlerts.send(event, level === 'error' ? 'error' : 'warning', fields);
 };
 const connectorFailureFields = (error: Error) =>
   error instanceof ConnectorHttpError
