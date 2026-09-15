@@ -43,6 +43,14 @@ export type TrendyolOnboardingCredentials = z.infer<
   typeof trendyolOnboardingCredentialsSchema
 >;
 
+export const connectorOnboardingCredentialsSchema = z.union([
+  woocommerceOnboardingCredentialsSchema,
+  trendyolOnboardingCredentialsSchema,
+]);
+export type ConnectorOnboardingCredentials = z.infer<
+  typeof connectorOnboardingCredentialsSchema
+>;
+
 export const connectorTestResponseSchema = z
   .object({
     status: z.enum(['success', 'failed']),
