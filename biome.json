@@ -10,6 +10,7 @@
       "!playwright-report",
       "!playwright-shopping-report",
       "!test-results",
+      "!artifacts",
       "!**/drizzle/meta",
       "!apps/web/next-env.d.ts",
       "!pnpm-lock.yaml"
