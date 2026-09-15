@@ -1,4 +1,8 @@
-import type { Surface, Transport } from '@shopai/contracts';
+import type {
+  RecordedSearchIntent,
+  Surface,
+  Transport,
+} from '@shopai/contracts';
 import { inArray, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { merchants, searchEvents } from './schema.js';
@@ -10,6 +14,7 @@ export type SearchEventInput = {
   transport: Transport;
   surface: Surface;
   requestKind: 'initial' | 'pagination';
+  intent: RecordedSearchIntent;
   outcome: 'results' | 'empty' | 'error';
 };
 
