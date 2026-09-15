@@ -61,8 +61,11 @@ export async function registerOnboardingRoutes(
     { preHandler: [requireSameOrigin, requireRole('owner', 'editor')] },
     async (request, reply) => {
       const provider = parseProvider(request.params);
-      if (!provider) return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
-      const parsed = onboardingCredentialSchemas[provider].safeParse(request.body);
+      if (!provider)
+        return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
+      const parsed = onboardingCredentialSchemas[provider].safeParse(
+        request.body,
+      );
       if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       try {
@@ -87,8 +90,11 @@ export async function registerOnboardingRoutes(
     { preHandler: [requireSameOrigin, requireRole('owner', 'editor')] },
     async (request, reply) => {
       const provider = parseProvider(request.params);
-      if (!provider) return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
-      const parsed = onboardingCredentialSchemas[provider].safeParse(request.body);
+      if (!provider)
+        return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
+      const parsed = onboardingCredentialSchemas[provider].safeParse(
+        request.body,
+      );
       if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       const { merchantId } = request.params as { merchantId: string };
