@@ -1,6 +1,10 @@
 ALTER TABLE "search_events"
 ADD COLUMN "intent" text DEFAULT 'explicit_search' NOT NULL;
 --> statement-breakpoint
+UPDATE "search_events"
+SET "intent" = 'pagination'
+WHERE "request_kind" = 'pagination';
+--> statement-breakpoint
 ALTER TABLE "search_events"
 ADD CONSTRAINT "search_event_intent"
 CHECK ("intent" in ('catalog_load','explicit_search','refinement','pagination'));
