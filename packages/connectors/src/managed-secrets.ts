@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { woocommerceOnboardingCredentialsSchema } from '@shopai/contracts';
+import { connectorOnboardingCredentialsSchema } from '@shopai/contracts';
 
 const managedKeyPattern = /^ONBOARDING_[A-F0-9]{32}$/u;
 const prefix = 'secret://';
@@ -10,7 +10,7 @@ export class ManagedConnectorSecretStore {
   constructor(private readonly privateRoot: string) {}
 
   async create(credentials: unknown) {
-    const parsed = woocommerceOnboardingCredentialsSchema.parse(credentials);
+    const parsed = connectorOnboardingCredentialsSchema.parse(credentials);
     const key = `ONBOARDING_${randomBytes(16).toString('hex').toUpperCase()}`;
     const directory = join(this.privateRoot, 'connector-secrets');
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -28,7 +28,7 @@ export class ManagedConnectorSecretStore {
       join(this.privateRoot, 'connector-secrets', `${key}.json`),
       'utf8',
     );
-    return woocommerceOnboardingCredentialsSchema.parse(JSON.parse(content));
+    return connectorOnboardingCredentialsSchema.parse(JSON.parse(content));
   }
 
   async remove(reference: string) {

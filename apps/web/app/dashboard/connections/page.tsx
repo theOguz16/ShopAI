@@ -5,6 +5,8 @@ import { useActiveMerchant } from '../merchant-context';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
+type Provider = 'woocommerce' | 'trendyol';
+type TrendyolEnvironment = 'production' | 'stage';
 type Connection = {
   id: string;
   provider: string;
@@ -29,6 +31,11 @@ const wizardSteps = [
   'Sonuç',
 ] as const;
 
+const providerLabels: Record<Provider, string> = {
+  woocommerce: 'WooCommerce',
+  trendyol: 'Trendyol',
+};
+
 const freshnessLabel = (value: string | null) => {
   if (!value) return 'Henüz veri alınmadı';
   const ageMinutes = (Date.now() - new Date(value).getTime()) / 60_000;
@@ -41,9 +48,15 @@ export default function ConnectionsPage() {
   const canRevoke = activeMerchant.role === 'owner';
   const [connections, setConnections] = useState<Connection[]>([]);
   const [step, setStep] = useState<WizardStep>(1);
+  const [provider, setProvider] = useState<Provider>('woocommerce');
   const [storeUrl, setStoreUrl] = useState('');
   const [consumerKey, setConsumerKey] = useState('');
   const [consumerSecret, setConsumerSecret] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [apiSecret, setApiSecret] = useState('');
+  const [trendyolEnvironment, setTrendyolEnvironment] =
+    useState<TrendyolEnvironment>('production');
   const [testState, setTestState] = useState<TestState>('idle');
   const [onboardedConnectionId, setOnboardedConnectionId] = useState('');
   const [message, setMessage] = useState('');
@@ -66,9 +79,14 @@ export default function ConnectionsPage() {
     const controller = new AbortController();
     setConnections([]);
     setStep(1);
+    setProvider('woocommerce');
     setStoreUrl('');
     setConsumerKey('');
     setConsumerSecret('');
+    setSellerId('');
+    setApiKey('');
+    setApiSecret('');
+    setTrendyolEnvironment('production');
     setTestState('idle');
     setOnboardedConnectionId('');
     setMessage('');
@@ -91,14 +109,48 @@ export default function ConnectionsPage() {
     () => connections.find((item) => item.id === onboardedConnectionId),
     [connections, onboardedConnectionId],
   );
-  const hasActiveWoo = connections.some(
-    (connection) =>
-      connection.provider === 'woocommerce' &&
-      connection.authorizationStatus !== 'revoked',
+  const activeProviders = useMemo(
+    () =>
+      new Set(
+        connections
+          .filter((connection) => connection.authorizationStatus !== 'revoked')
+          .map((connection) => connection.provider),
+      ),
+    [connections],
   );
+  const allProvidersConnected =
+    activeProviders.has('woocommerce') && activeProviders.has('trendyol');
+
+  function chooseProvider(nextProvider: Provider) {
+    if (activeProviders.has(nextProvider)) return;
+    setProvider(nextProvider);
+    setTestState('idle');
+    setMessage('');
+    setStep(3);
+  }
 
   function credentialsPayload() {
-    return { storeUrl: storeUrl.trim(), consumerKey, consumerSecret };
+    return provider === 'woocommerce'
+      ? {
+          storeUrl: storeUrl.trim(),
+          consumerKey,
+          consumerSecret,
+        }
+      : {
+          sellerId: sellerId.trim(),
+          apiKey,
+          apiSecret,
+          environment: trendyolEnvironment,
+        };
+  }
+
+  function clearCredentials() {
+    setStoreUrl('');
+    setConsumerKey('');
+    setConsumerSecret('');
+    setSellerId('');
+    setApiKey('');
+    setApiSecret('');
   }
 
   async function testConnection() {
@@ -108,7 +160,7 @@ export default function ConnectionsPage() {
     setMessage('');
     try {
       const response = await fetch(
-        `${api}/v1/merchants/${merchantId}/onboarding/woocommerce/test`,
+        `${api}/v1/merchants/${merchantId}/onboarding/${provider}/test`,
         {
           method: 'POST',
           credentials: 'include',
@@ -118,14 +170,14 @@ export default function ConnectionsPage() {
       );
       if (response.ok) {
         setTestState('success');
-        setMessage('Bağlantı başarılı ✓');
+        setMessage(`${providerLabels[provider]} bağlantısı başarılı ✓`);
       } else {
         setTestState('failed');
-        setMessage('Bağlantı kurulamadı');
+        setMessage(`${providerLabels[provider]} bağlantısı kurulamadı`);
       }
     } catch {
       setTestState('failed');
-      setMessage('Bağlantı kurulamadı');
+      setMessage(`${providerLabels[provider]} bağlantısı kurulamadı`);
     } finally {
       setBusy(false);
     }
@@ -136,11 +188,11 @@ export default function ConnectionsPage() {
     setBusy(true);
     setStep(5);
     setMessage(
-      'WooCommerce bağlantısı oluşturuluyor ve ilk sync başlatılıyor…',
+      `${providerLabels[provider]} bağlantısı oluşturuluyor ve ilk sync başlatılıyor…`,
     );
     try {
       const response = await fetch(
-        `${api}/v1/merchants/${merchantId}/onboarding/woocommerce/connect`,
+        `${api}/v1/merchants/${merchantId}/onboarding/${provider}/connect`,
         {
           method: 'POST',
           credentials: 'include',
@@ -153,7 +205,7 @@ export default function ConnectionsPage() {
         setTestState('failed');
         setMessage(
           response.status === 409
-            ? 'Bu mağazada zaten aktif bir WooCommerce bağlantısı var.'
+            ? `Bu mağazada zaten aktif bir ${providerLabels[provider]} bağlantısı var.`
             : 'Bağlantı kurulamadı',
         );
         return;
@@ -163,9 +215,7 @@ export default function ConnectionsPage() {
         sync: { status: 'queued' | 'pending_retry' };
       };
       setOnboardedConnectionId(body.connection.id);
-      setConsumerKey('');
-      setConsumerSecret('');
-      setStoreUrl('');
+      clearCredentials();
       setStep(6);
       setMessage(
         body.sync.status === 'queued'
@@ -214,9 +264,9 @@ export default function ConnectionsPage() {
         <p className="eyebrow">Merchant onboarding</p>
         <h1>Mağazanı bağla</h1>
         <p>
-          WooCommerce bilgilerini gir; ShopAI bağlantıyı doğrulasın ve ilk ürün
-          senkronunu başlatsın. Consumer Secret daha sonra tarayıcıya geri
-          gönderilmez.
+          WooCommerce veya Trendyol&apos;u seç; ShopAI erişimi doğrulasın ve ilk
+          ürün senkronunu otomatik başlatsın. Credential değerleri daha sonra
+          tarayıcıya geri gönderilmez.
         </p>
       </header>
 
@@ -248,7 +298,7 @@ export default function ConnectionsPage() {
         </p>
       ) : null}
 
-      {canConnect && (!hasActiveWoo || step === 6) ? (
+      {canConnect && (!allProvidersConnected || step === 6) ? (
         <section className="connector-wizard-card">
           {step === 1 ? (
             <>
@@ -269,17 +319,31 @@ export default function ConnectionsPage() {
               <p className="eyebrow">2 · Ürün kaynağı seç</p>
               <h2>Ürünlerin nerede?</h2>
               <button
-                className="connector-choice selected"
+                className="connector-choice"
                 type="button"
-                onClick={() => setStep(3)}
+                disabled={activeProviders.has('woocommerce')}
+                onClick={() => chooseProvider('woocommerce')}
               >
                 <strong>WooCommerce</strong>
-                <span>Canlı katalog ve stok senkronu</span>
+                <span>
+                  {activeProviders.has('woocommerce')
+                    ? 'Zaten bağlı'
+                    : 'Canlı katalog ve stok senkronu'}
+                </span>
               </button>
-              <p className="panel-empty">
-                MVP’de yalnızca production-ready WooCommerce connector
-                gösteriliyor.
-              </p>
+              <button
+                className="connector-choice"
+                type="button"
+                disabled={activeProviders.has('trendyol')}
+                onClick={() => chooseProvider('trendyol')}
+              >
+                <strong>Trendyol</strong>
+                <span>
+                  {activeProviders.has('trendyol')
+                    ? 'Zaten bağlı'
+                    : 'Product V2 katalog, fiyat ve stok senkronu'}
+                </span>
+              </button>
             </>
           ) : null}
 
@@ -293,37 +357,96 @@ export default function ConnectionsPage() {
               }}
             >
               <p className="eyebrow">3 · Connector bilgileri</p>
-              <h2>WooCommerce bilgilerini gir</h2>
-              <label>
-                Store URL
-                <input
-                  required
-                  type="url"
-                  inputMode="url"
-                  placeholder="https://magazam.com"
-                  value={storeUrl}
-                  onChange={(event) => setStoreUrl(event.target.value)}
-                />
-              </label>
-              <label>
-                Consumer Key
-                <input
-                  required
-                  autoComplete="off"
-                  value={consumerKey}
-                  onChange={(event) => setConsumerKey(event.target.value)}
-                />
-              </label>
-              <label>
-                Consumer Secret
-                <input
-                  required
-                  type="password"
-                  autoComplete="new-password"
-                  value={consumerSecret}
-                  onChange={(event) => setConsumerSecret(event.target.value)}
-                />
-              </label>
+              <h2>{providerLabels[provider]} bilgilerini gir</h2>
+              {provider === 'woocommerce' ? (
+                <>
+                  <label>
+                    Store URL
+                    <input
+                      required
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://magazam.com"
+                      value={storeUrl}
+                      onChange={(event) => setStoreUrl(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Consumer Key
+                    <input
+                      required
+                      autoComplete="off"
+                      value={consumerKey}
+                      onChange={(event) => setConsumerKey(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Consumer Secret
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      value={consumerSecret}
+                      onChange={(event) =>
+                        setConsumerSecret(event.target.value)
+                      }
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    Seller ID
+                    <input
+                      required
+                      inputMode="numeric"
+                      pattern="[0-9]+"
+                      placeholder="123456"
+                      value={sellerId}
+                      onChange={(event) => setSellerId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    API Key
+                    <input
+                      required
+                      autoComplete="off"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    API Secret
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      value={apiSecret}
+                      onChange={(event) => setApiSecret(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Ortam
+                    <select
+                      value={trendyolEnvironment}
+                      onChange={(event) =>
+                        setTrendyolEnvironment(
+                          event.target.value as TrendyolEnvironment,
+                        )
+                      }
+                    >
+                      <option value="production">Production</option>
+                      <option value="stage">Stage / test</option>
+                    </select>
+                  </label>
+                  {trendyolEnvironment === 'stage' ? (
+                    <p className="role-note">
+                      Stage kullanımı için Trendyol test erişimi ve gerekli IP
+                      yetkilendirmesi hesabında hazır olmalı.
+                    </p>
+                  ) : null}
+                </>
+              )}
               <button type="submit">Bağlantıyı test etmeye geç</button>
             </form>
           ) : null}
@@ -333,8 +456,8 @@ export default function ConnectionsPage() {
               <p className="eyebrow">4 · Bağlantıyı test et</p>
               <h2>ShopAI erişimi doğrulasın</h2>
               <p>
-                Store URL ve API anahtarları WooCommerce’e sunucu tarafından
-                doğrulanır; credential içeriği response’a eklenmez.
+                {providerLabels[provider]} credential&apos;ları yalnızca sunucu
+                tarafından doğrulanır; secret içeriği response&apos;a eklenmez.
               </p>
               <div className="connection-actions">
                 <button
@@ -405,21 +528,26 @@ export default function ConnectionsPage() {
                 <p role="status">{message}</p>
               )}
               {onboardingConnection?.lastSuccessfulSyncAt ? (
-                <a className="button-link" href="/dashboard/products">
-                  Ürünleri kontrol et
-                </a>
+                <div className="connection-actions">
+                  <a className="button-link" href="/dashboard/products">
+                    Ürünleri kontrol et
+                  </a>
+                  <a className="button-link" href="/dashboard">
+                    Catalog Health&apos;ı aç
+                  </a>
+                </div>
               ) : null}
             </>
           ) : null}
         </section>
       ) : null}
 
-      {canConnect && hasActiveWoo && step !== 6 ? (
+      {canConnect && allProvidersConnected && step !== 6 ? (
         <section className="connector-wizard-card">
-          <h2>WooCommerce bağlı ✓</h2>
+          <h2>WooCommerce ve Trendyol bağlı ✓</h2>
           <p>
-            Bu mağazada aktif bir WooCommerce bağlantısı zaten var. Aşağıdan
-            senkron durumunu görebilirsin.
+            Bu mağazada desteklenen iki canlı katalog connector&apos;ı da aktif.
+            Senkron durumlarını aşağıdan takip edebilirsin.
           </p>
         </section>
       ) : null}
@@ -435,7 +563,13 @@ export default function ConnectionsPage() {
         ) : null}
         {connections.map((connection) => (
           <article key={connection.id}>
-            <h3>{connection.provider}</h3>
+            <h3>
+              {connection.provider === 'woocommerce'
+                ? providerLabels.woocommerce
+                : connection.provider === 'trendyol'
+                  ? providerLabels.trendyol
+                  : connection.provider}
+            </h3>
             <p>
               Yetki: {connection.authorizationStatus} · mod:{' '}
               {connection.syncMode}
@@ -466,7 +600,7 @@ export default function ConnectionsPage() {
             ) : null}
             {connection.authorizationStatus === 'reauthorization_required' ? (
               <p className="role-note">
-                WooCommerce yetkisi yenilenmeli. Teknik secret referansı yerine
+                Connector yetkisi yenilenmeli. Teknik secret referansı yerine
                 bağlantıyı iptal edip onboarding ile yeni credential gir.
               </p>
             ) : null}

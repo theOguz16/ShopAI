@@ -12,6 +12,14 @@ const httpsStoreUrlSchema = z
     return !url.username && !url.password && !url.hash;
   }, 'Store URL kullanıcı bilgisi veya fragment içeremez');
 
+export const connectorOnboardingProviderSchema = z.enum([
+  'woocommerce',
+  'trendyol',
+]);
+export type ConnectorOnboardingProvider = z.infer<
+  typeof connectorOnboardingProviderSchema
+>;
+
 export const woocommerceOnboardingCredentialsSchema = z
   .object({
     storeUrl: httpsStoreUrlSchema,
@@ -21,6 +29,26 @@ export const woocommerceOnboardingCredentialsSchema = z
   .strict();
 export type WooCommerceOnboardingCredentials = z.infer<
   typeof woocommerceOnboardingCredentialsSchema
+>;
+
+export const trendyolOnboardingCredentialsSchema = z
+  .object({
+    sellerId: z.string().trim().regex(/^\d+$/u).max(32),
+    apiKey: z.string().trim().min(3).max(256),
+    apiSecret: z.string().trim().min(3).max(256),
+    environment: z.enum(['production', 'stage']).default('production'),
+  })
+  .strict();
+export type TrendyolOnboardingCredentials = z.infer<
+  typeof trendyolOnboardingCredentialsSchema
+>;
+
+export const connectorOnboardingCredentialsSchema = z.union([
+  woocommerceOnboardingCredentialsSchema,
+  trendyolOnboardingCredentialsSchema,
+]);
+export type ConnectorOnboardingCredentials = z.infer<
+  typeof connectorOnboardingCredentialsSchema
 >;
 
 export const connectorTestResponseSchema = z
@@ -36,7 +64,7 @@ export const connectorOnboardingResponseSchema = z
     connection: z
       .object({
         id: z.string().uuid(),
-        provider: z.literal('woocommerce'),
+        provider: connectorOnboardingProviderSchema,
         authorizationStatus: z.literal('pending'),
         syncMode: z.enum(['full', 'incremental']),
       })

@@ -1,12 +1,15 @@
 import {
+  createLiveCatalogConnector,
+  type LiveCatalogConnector,
   ManagedConnectorSecretStore,
-  WooCommerceConnector,
-  type WooCommerceCredentials,
 } from '@shopai/connectors';
 import {
+  connectorOnboardingProviderSchema,
   connectorOnboardingResponseSchema,
   connectorTestResponseSchema,
+  type ConnectorOnboardingProvider,
   SYNC_QUEUE,
+  trendyolOnboardingCredentialsSchema,
   woocommerceOnboardingCredentialsSchema,
 } from '@shopai/contracts';
 import {
@@ -22,16 +25,24 @@ import type { ApiEnv } from '../env.js';
 import { requireRole, requireSameOrigin } from '../plugins/auth.js';
 
 export type OnboardingConnectorFactory = (
-  credentials: WooCommerceCredentials,
-) => Pick<WooCommerceConnector, 'validate'>;
+  provider: ConnectorOnboardingProvider,
+  credentials: unknown,
+) => Pick<LiveCatalogConnector, 'validate'>;
 
-const createWooCommerceConnector: OnboardingConnectorFactory = (credentials) =>
-  new WooCommerceConnector(credentials);
+const createOnboardingConnector: OnboardingConnectorFactory = (
+  provider,
+  credentials,
+) => createLiveCatalogConnector(provider, credentials);
+
+const onboardingCredentialSchemas = {
+  woocommerce: woocommerceOnboardingCredentialsSchema,
+  trendyol: trendyolOnboardingCredentialsSchema,
+} as const;
 
 export async function registerOnboardingRoutes(
   app: FastifyInstance,
   env: ApiEnv,
-  connectorFactory: OnboardingConnectorFactory = createWooCommerceConnector,
+  connectorFactory: OnboardingConnectorFactory = createOnboardingConnector,
 ) {
   const secretStore = new ManagedConnectorSecretStore(env.UPLOAD_DIR);
   let syncQueue: Queue | undefined;
@@ -46,16 +57,19 @@ export async function registerOnboardingRoutes(
   });
 
   app.post(
-    '/v1/merchants/:merchantId/onboarding/woocommerce/test',
+    '/v1/merchants/:merchantId/onboarding/:provider/test',
     { preHandler: [requireSameOrigin, requireRole('owner', 'editor')] },
     async (request, reply) => {
-      const parsed = woocommerceOnboardingCredentialsSchema.safeParse(
+      const provider = parseProvider(request.params);
+      if (!provider)
+        return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
+      const parsed = onboardingCredentialSchemas[provider].safeParse(
         request.body,
       );
       if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       try {
-        await validateWooCommerce(parsed.data, connectorFactory);
+        await validateConnector(provider, parsed.data, connectorFactory);
         return connectorTestResponseSchema.parse({
           status: 'success',
           code: 'CONNECTION_OK',
@@ -72,10 +86,13 @@ export async function registerOnboardingRoutes(
   );
 
   app.post(
-    '/v1/merchants/:merchantId/onboarding/woocommerce/connect',
+    '/v1/merchants/:merchantId/onboarding/:provider/connect',
     { preHandler: [requireSameOrigin, requireRole('owner', 'editor')] },
     async (request, reply) => {
-      const parsed = woocommerceOnboardingCredentialsSchema.safeParse(
+      const provider = parseProvider(request.params);
+      if (!provider)
+        return reply.code(404).send({ code: 'PROVIDER_NOT_FOUND' });
+      const parsed = onboardingCredentialSchemas[provider].safeParse(
         request.body,
       );
       if (!parsed.success)
@@ -85,7 +102,7 @@ export async function registerOnboardingRoutes(
       if (!db) return reply.code(503).send({ code: 'ONBOARDING_UNAVAILABLE' });
 
       try {
-        await validateWooCommerce(parsed.data, connectorFactory);
+        await validateConnector(provider, parsed.data, connectorFactory);
       } catch {
         return reply.code(422).send({
           status: 'failed',
@@ -98,7 +115,7 @@ export async function registerOnboardingRoutes(
         | 'exists'
         | {
             id: string;
-            provider: 'woocommerce';
+            provider: ConnectorOnboardingProvider;
             authorizationStatus: 'pending';
             syncMode: 'full' | 'incremental';
           };
@@ -113,7 +130,7 @@ export async function registerOnboardingRoutes(
             .where(
               and(
                 eq(connections.merchantId, merchantId),
-                eq(connections.provider, 'woocommerce'),
+                eq(connections.provider, provider),
                 eq(connections.active, true),
               ),
             )
@@ -122,14 +139,14 @@ export async function registerOnboardingRoutes(
 
           await tx.insert(merchantCredentialOwnerships).values({
             merchantId,
-            provider: 'woocommerce',
+            provider,
             credentialsRef,
           });
           const [connection] = await tx
             .insert(connections)
             .values({
               merchantId,
-              provider: 'woocommerce',
+              provider,
               credentialsRef,
               syncMode: 'incremental',
               authorizationStatus: 'pending',
@@ -139,12 +156,10 @@ export async function registerOnboardingRoutes(
             })
             .returning({
               id: connections.id,
-              provider: connections.provider,
-              authorizationStatus: connections.authorizationStatus,
               syncMode: connections.syncMode,
             });
           if (!connection)
-            throw new Error('WooCommerce bağlantısı oluşturulamadı.');
+            throw new Error(`${provider} bağlantısı oluşturulamadı.`);
           await tx.insert(connectionSyncProgress).values({
             connectionId: connection.id,
             merchantId,
@@ -159,7 +174,7 @@ export async function registerOnboardingRoutes(
           });
           return {
             id: connection.id,
-            provider: 'woocommerce' as const,
+            provider,
             authorizationStatus: 'pending' as const,
             syncMode: connection.syncMode as 'full' | 'incremental',
           };
@@ -177,7 +192,7 @@ export async function registerOnboardingRoutes(
       let syncStatus: 'queued' | 'pending_retry' = 'queued';
       try {
         await getSyncQueue().add(
-          'woocommerce-sync',
+          'catalog-sync',
           { merchantId, connectionId: created.id },
           {
             jobId: `onboarding-${created.id}`,
@@ -194,6 +209,7 @@ export async function registerOnboardingRoutes(
             event: 'onboarding_sync_enqueue_failed',
             merchantId,
             connectionId: created.id,
+            provider,
             error: error instanceof Error ? error.message : 'unknown',
           },
           'First connector sync will be retried by the scheduler',
@@ -210,13 +226,18 @@ export async function registerOnboardingRoutes(
   );
 }
 
-async function validateWooCommerce(
-  credentials: WooCommerceCredentials,
+function parseProvider(params: unknown) {
+  const value = params as { provider?: unknown };
+  const parsed = connectorOnboardingProviderSchema.safeParse(value.provider);
+  return parsed.success ? parsed.data : null;
+}
+
+async function validateConnector(
+  provider: ConnectorOnboardingProvider,
+  credentials: unknown,
   connectorFactory: OnboardingConnectorFactory,
 ) {
-  // The production factory uses WooCommerceConnector's default HTTP transport,
-  // which validates DNS and connects TLS directly to that same resolved IP.
-  await connectorFactory(credentials).validate();
+  await connectorFactory(provider, credentials).validate();
 }
 
 function redisConnection(value: string) {

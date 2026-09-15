@@ -19,6 +19,8 @@ import {
 } from '../../apps/worker/src/sync.js';
 import {
   ManagedConnectorSecretStore,
+  TrendyolConnector,
+  type TrendyolCredentials,
   WooCommerceConnector,
   type WooCommerceCredentials,
 } from '../../packages/connectors/src/index.js';
@@ -37,16 +39,18 @@ const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
 
 if (!databaseUrl || !redisUrl) {
-  describe.skip('merchant WooCommerce onboarding', () => {
+  describe.skip('merchant connector onboarding', () => {
     it('requires PostgreSQL and Redis integration services', () => {});
   });
 } else {
   const uploadDir = `/tmp/shopai-onboarding-${process.pid}`;
   const email = 'merchant-onboarding@test.example';
   const loginToken = 'merchant-onboarding-test-token';
-  const consumerKey = 'ck_onboarding_secret_value';
-  const consumerSecret = 'cs_onboarding_secret_value';
+  const consumerKey = 'ck_onboarding_test_value';
+  const consumerSecret = 'cs_onboarding_test_value';
   const storeUrl = 'https://8.8.8.8';
+  const trendyolApiKey = 'trendyol_key_test_value';
+  const trendyolApiSecret = 'trendyol_credential_test_value';
   const env = parseApiEnv({
     CATALOG_MODE: 'postgres',
     DATABASE_URL: databaseUrl,
@@ -81,10 +85,22 @@ if (!databaseUrl || !redisUrl) {
       sql`truncate table ${connections}, ${merchantCredentialOwnerships}, ${memberships}, ${sessions}, ${users}, ${merchants} cascade`,
     );
     app = await buildApp(undefined, env, {
-      onboardingConnectorFactory: (credentials) =>
-        credentials.storeUrl.includes('127.0.0.1')
-          ? new WooCommerceConnector(credentials)
-          : new WooCommerceConnector(credentials, connectorFetcher),
+      onboardingConnectorFactory: (provider, credentials) => {
+        if (provider === 'woocommerce') {
+          const value = credentials as WooCommerceCredentials;
+          return value.storeUrl.includes('127.0.0.1')
+            ? new WooCommerceConnector(value)
+            : new WooCommerceConnector(value, connectorFetcher);
+        }
+        return new TrendyolConnector(
+          credentials as TrendyolCredentials,
+          connectorFetcher,
+          async () => undefined,
+          3,
+          () => Date.now(),
+          0,
+        );
+      },
     });
     const login = await app.inject({
       method: 'POST',
@@ -116,18 +132,26 @@ if (!databaseUrl || !redisUrl) {
     await rm(uploadDir, { recursive: true, force: true });
   });
 
-  const endpoint = (action: 'test' | 'connect') =>
-    `/v1/merchants/${merchantId}/onboarding/woocommerce/${action}`;
-  const payload = () => ({ storeUrl, consumerKey, consumerSecret });
+  const endpoint = (
+    provider: 'woocommerce' | 'trendyol',
+    action: 'test' | 'connect',
+  ) => `/v1/merchants/${merchantId}/onboarding/${provider}/${action}`;
+  const wooPayload = () => ({ storeUrl, consumerKey, consumerSecret });
+  const trendyolPayload = () => ({
+    sellerId: '2748',
+    apiKey: trendyolApiKey,
+    apiSecret: trendyolApiSecret,
+    environment: 'stage' as const,
+  });
 
-  describe.sequential('merchant WooCommerce onboarding', () => {
-    it('rejects private connector targets before making an HTTP request', async () => {
+  describe.sequential('merchant connector onboarding', () => {
+    it('rejects private WooCommerce connector targets before making an HTTP request', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: endpoint('test'),
+        url: endpoint('woocommerce', 'test'),
         headers: { cookie },
         payload: {
-          ...payload(),
+          ...wooPayload(),
           storeUrl: 'https://127.0.0.1',
         },
       });
@@ -143,9 +167,9 @@ if (!databaseUrl || !redisUrl) {
       connectorFetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
       const response = await app.inject({
         method: 'POST',
-        url: endpoint('test'),
+        url: endpoint('woocommerce', 'test'),
         headers: { cookie },
-        payload: payload(),
+        payload: wooPayload(),
       });
       expect(response.statusCode).toBe(422);
       expect(response.json()).toEqual({
@@ -156,13 +180,13 @@ if (!databaseUrl || !redisUrl) {
       expect(response.body).not.toContain(consumerSecret);
     });
 
-    it('confirms valid credentials without echoing them to the browser', async () => {
+    it('confirms valid WooCommerce credentials without echoing them', async () => {
       connectorFetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
       const response = await app.inject({
         method: 'POST',
-        url: endpoint('test'),
+        url: endpoint('woocommerce', 'test'),
         headers: { cookie },
-        payload: payload(),
+        payload: wooPayload(),
       });
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
@@ -172,12 +196,9 @@ if (!databaseUrl || !redisUrl) {
       expect(response.body).not.toContain(consumerKey);
       expect(response.body).not.toContain(consumerSecret);
       expect(connectorFetchMock).toHaveBeenCalledTimes(1);
-      expect(connectorFetchMock.mock.calls[0]?.[1]).toMatchObject({
-        redirect: 'manual',
-      });
     });
 
-    it('creates a managed connector and queues the first sync without returning secret material', async () => {
+    it('creates WooCommerce connector, stores secret material out of DB and queues first sync', async () => {
       connectorFetchMock.mockResolvedValue(
         new Response('[]', {
           status: 200,
@@ -186,9 +207,9 @@ if (!databaseUrl || !redisUrl) {
       );
       const response = await app.inject({
         method: 'POST',
-        url: endpoint('connect'),
+        url: endpoint('woocommerce', 'connect'),
         headers: { cookie },
-        payload: payload(),
+        payload: wooPayload(),
       });
       expect(response.statusCode).toBe(201);
       const body = response.json<{
@@ -224,30 +245,22 @@ if (!databaseUrl || !redisUrl) {
       const resolved = await new ManagedConnectorSecretStore(uploadDir).resolve(
         stored.credentialsRef,
       );
-      expect(resolved).toEqual(payload());
+      expect(resolved).toEqual(wooPayload());
 
       const queued = await queue.getJob(`onboarding-${body.connection.id}`);
+      expect(queued?.name).toBe('catalog-sync');
       expect(queued?.data).toEqual({
         merchantId,
         connectionId: body.connection.id,
       });
 
-      const listed = await app.inject({
-        method: 'GET',
-        url: `/v1/merchants/${merchantId}/connections`,
-        headers: { cookie },
-      });
-      expect(listed.statusCode).toBe(200);
-      expect(listed.body).not.toContain(consumerKey);
-      expect(listed.body).not.toContain(consumerSecret);
-      expect(listed.body).not.toContain(stored.credentialsRef);
-
       await syncCatalogConnection(
         database.db,
         { merchantId, connectionId: body.connection.id },
         new EnvironmentSecretResolver({ UPLOAD_DIR: uploadDir }),
-        (_provider, credentials) => {
-          expect(credentials).toEqual(payload());
+        (provider, credentials) => {
+          expect(provider).toBe('woocommerce');
+          expect(credentials).toEqual(wooPayload());
           return new WooCommerceConnector(
             credentials as WooCommerceCredentials,
             connectorFetcher,
@@ -263,6 +276,115 @@ if (!databaseUrl || !redisUrl) {
         .where(eq(connections.id, body.connection.id));
       expect(synced?.authorizationStatus).toBe('active');
       expect(synced?.lastSuccessfulSyncAt).toBeInstanceOf(Date);
+    });
+
+    it('tests Trendyol stage credentials through Product V2 without echoing secrets', async () => {
+      connectorFetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+      const response = await app.inject({
+        method: 'POST',
+        url: endpoint('trendyol', 'test'),
+        headers: { cookie },
+        payload: trendyolPayload(),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        status: 'success',
+        code: 'CONNECTION_OK',
+      });
+      expect(response.body).not.toContain(trendyolApiKey);
+      expect(response.body).not.toContain(trendyolApiSecret);
+      expect(connectorFetchMock).toHaveBeenCalledTimes(1);
+      const requestUrl = new URL(String(connectorFetchMock.mock.calls[0]?.[0]));
+      expect(requestUrl.origin).toBe('https://stageapigw.trendyol.com');
+      expect(requestUrl.pathname).toBe(
+        '/integration/product/sellers/2748/products/approved',
+      );
+      expect(connectorFetchMock.mock.calls[0]?.[1]).toMatchObject({
+        redirect: 'manual',
+        headers: expect.objectContaining({
+          'user-agent': '2748 - ShopAI',
+        }),
+      });
+    });
+
+    it('allows Trendyol beside WooCommerce and automatically queues first sync', async () => {
+      connectorFetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+      const response = await app.inject({
+        method: 'POST',
+        url: endpoint('trendyol', 'connect'),
+        headers: { cookie },
+        payload: trendyolPayload(),
+      });
+      expect(response.statusCode).toBe(201);
+      const body = response.json<{
+        connection: {
+          id: string;
+          provider: string;
+          authorizationStatus: string;
+          syncMode: string;
+        };
+        sync: { status: string };
+      }>();
+      expect(body).toMatchObject({
+        connection: {
+          provider: 'trendyol',
+          authorizationStatus: 'pending',
+          syncMode: 'incremental',
+        },
+        sync: { status: 'queued' },
+      });
+      expect(response.body).not.toContain(trendyolApiKey);
+      expect(response.body).not.toContain(trendyolApiSecret);
+      expect(response.body).not.toContain('credentialsRef');
+
+      const [stored] = await database.db
+        .select({ credentialsRef: connections.credentialsRef })
+        .from(connections)
+        .where(eq(connections.id, body.connection.id));
+      expect(stored?.credentialsRef).toMatch(
+        /^secret:\/\/ONBOARDING_[A-F0-9]{32}$/u,
+      );
+      if (!stored?.credentialsRef)
+        throw new Error('Trendyol managed secret referansı bulunamadı.');
+      const resolved = await new ManagedConnectorSecretStore(uploadDir).resolve(
+        stored.credentialsRef,
+      );
+      expect(resolved).toEqual(trendyolPayload());
+
+      const queued = await queue.getJob(`onboarding-${body.connection.id}`);
+      expect(queued?.name).toBe('catalog-sync');
+      expect(queued?.data).toEqual({
+        merchantId,
+        connectionId: body.connection.id,
+      });
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: `/v1/merchants/${merchantId}/connections`,
+        headers: { cookie },
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.body).not.toContain(trendyolApiKey);
+      expect(listed.body).not.toContain(trendyolApiSecret);
+      expect(listed.body).not.toContain(stored.credentialsRef);
+      const providers = listed
+        .json<Array<{ provider: string; authorizationStatus: string }>>()
+        .filter((item) => item.authorizationStatus !== 'revoked')
+        .map((item) => item.provider);
+      expect(providers).toEqual(
+        expect.arrayContaining(['woocommerce', 'trendyol']),
+      );
+    });
+
+    it('rejects unsupported onboarding providers', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/merchants/${merchantId}/onboarding/unknown/test`,
+        headers: { cookie },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ code: 'PROVIDER_NOT_FOUND' });
     });
   });
 }
