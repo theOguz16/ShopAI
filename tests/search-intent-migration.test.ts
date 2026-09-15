@@ -20,7 +20,7 @@ describe('search analytics intent taxonomy', () => {
     ]);
   });
 
-  it('adds a constrained and indexed search intent column', async () => {
+  it('adds a constrained, indexed intent column and preserves historical pagination', async () => {
     const migration = await readFile(
       new URL(
         '../packages/db/drizzle/0026_search_intent_metrics.sql',
@@ -30,6 +30,9 @@ describe('search analytics intent taxonomy', () => {
     );
     expect(migration).toContain(
       'ADD COLUMN "intent" text DEFAULT \'explicit_search\' NOT NULL',
+    );
+    expect(migration).toContain(
+      'SET "intent" = \'pagination\'\nWHERE "request_kind" = \'pagination\'',
     );
     expect(migration).toContain(
       "CHECK (\"intent\" in ('catalog_load','explicit_search','refinement','pagination'))",
