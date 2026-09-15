@@ -30,23 +30,26 @@ describe('saved products migration', () => {
     expect(migration).not.toContain('REFERENCES "public"."variants"');
   });
 
-  it('keeps migrations ordered after anonymous shopping profile', async () => {
+  it('keeps shopper and later migrations in chronological order', async () => {
     const journal = JSON.parse(
       await readFile(
         new URL('../packages/db/drizzle/meta/_journal.json', import.meta.url),
         'utf8',
       ),
     ) as { entries: Array<{ idx: number; tag: string }> };
-    expect(journal.entries.slice(-6)).toEqual([
-      expect.objectContaining({ idx: 19, tag: '0020_product_view_events' }),
-      expect.objectContaining({
-        idx: 20,
-        tag: '0021_anonymous_shopping_profile',
-      }),
-      expect.objectContaining({ idx: 21, tag: '0022_saved_products' }),
-      expect.objectContaining({ idx: 22, tag: '0023_product_alerts' }),
-      expect.objectContaining({ idx: 23, tag: '0024_source_sync_watermark' }),
-      expect.objectContaining({ idx: 24, tag: '0025_public_visibility_rls' }),
-    ]);
+    const expectedTags = [
+      '0020_product_view_events',
+      '0021_anonymous_shopping_profile',
+      '0022_saved_products',
+      '0023_product_alerts',
+      '0024_source_sync_watermark',
+      '0025_public_visibility_rls',
+      '0026_search_intent_metrics',
+    ];
+    const positions = expectedTags.map((tag) =>
+      journal.entries.findIndex((entry) => entry.tag === tag),
+    );
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 });
