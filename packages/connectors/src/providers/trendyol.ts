@@ -256,7 +256,11 @@ export class TrendyolConnector implements LiveCatalogConnector {
   ): SourceRow {
     const externalId = identifier(variant.variantId ?? variant.barcode);
     const productKey = identifier(content.productMainId ?? content.contentId);
-    const title = requiredText(content.title, 'Trendyol ürün başlığı eksik.', 240);
+    const title = requiredText(
+      content.title,
+      'Trendyol ürün başlığı eksik.',
+      240,
+    );
     const productUrl = requiredHttpsUrl(
       variant.productUrl,
       'Trendyol productUrl eksik veya HTTPS değil.',
@@ -270,13 +274,11 @@ export class TrendyolConnector implements LiveCatalogConnector {
       throw new Error(`Trendyol varyant ${externalId} için fiyat geçersiz.`);
 
     const contentAttribute = (pattern: RegExp) =>
-      content.attributes?.find((item) =>
-        pattern.test(item.attributeName ?? ''),
-      )?.attributeValue;
+      content.attributes?.find((item) => pattern.test(item.attributeName ?? ''))
+        ?.attributeValue;
     const variantAttribute = (pattern: RegExp) =>
-      variant.attributes?.find((item) =>
-        pattern.test(item.attributeName ?? ''),
-      )?.attributeValue;
+      variant.attributes?.find((item) => pattern.test(item.attributeName ?? ''))
+        ?.attributeValue;
     const category =
       cleanText(content.category?.name, 80) ||
       cleanText(identifierOrEmpty(content.category?.id), 80) ||
