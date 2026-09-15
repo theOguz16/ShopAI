@@ -1,8 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { connectorOnboardingCredentialsSchema } from '@shopai/contracts';
@@ -28,7 +24,9 @@ export class ManagedConnectorSecretStore {
     private readonly privateRoot: string,
     encryptionKey = process.env.CONNECTOR_SECRET_ENCRYPTION_KEY,
   ) {
-    this.encryptionKey = encryptionKey ? decodeEncryptionKey(encryptionKey) : null;
+    this.encryptionKey = encryptionKey
+      ? decodeEncryptionKey(encryptionKey)
+      : null;
   }
 
   async create(credentials: unknown) {
