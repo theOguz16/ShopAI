@@ -16,6 +16,11 @@ fail() {
   exit 1
 }
 
+for required_command in docker curl flock python3 pg_dump sha256sum; do
+  command -v "$required_command" >/dev/null 2>&1 ||
+    fail "gerekli command bulunamadı: $required_command"
+done
+
 [[ "$OPERATION" == "deploy" || "$OPERATION" == "rollback" ]] || fail 'OPERATION deploy veya rollback olmalıdır'
 [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]] || fail 'RELEASE_VERSION 40 karakter immutable commit SHA olmalıdır'
 [[ "$SHOPAI_IMAGE" =~ ^[a-z0-9./:_-]+$ ]] || fail 'SHOPAI_IMAGE geçersiz'
@@ -27,23 +32,42 @@ if find "$PRODUCTION_ENV_FILE" -perm /077 -print -quit | grep -q .; then
   fail 'production env dosyası group/world erişimine açık olmamalıdır (chmod 600)'
 fi
 
+read_env_value() {
+  python3 - "$PRODUCTION_ENV_FILE" "$1" <<'PY'
+import sys
+
+path, key = sys.argv[1], sys.argv[2]
+with open(path, encoding='utf-8') as handle:
+    for raw in handle:
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('export '):
+            line = line[7:].lstrip()
+        if '=' not in line:
+            continue
+        current_key, value = line.split('=', 1)
+        if current_key.strip() != key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        sys.stdout.write(value)
+        raise SystemExit(0)
+raise SystemExit(3)
+PY
+}
+
 mkdir -p "$STATE_DIR"
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail 'başka bir production deploy/rollback çalışıyor'
 
-set -a
-# shellcheck disable=SC1090
-. "$PRODUCTION_ENV_FILE"
-set +a
-
-: "${PRODUCTION_DATABASE_URL:?PRODUCTION_DATABASE_URL gerekli}"
-: "${PRODUCTION_REDIS_URL:?PRODUCTION_REDIS_URL gerekli}"
-: "${PRODUCTION_API_ORIGIN:?PRODUCTION_API_ORIGIN gerekli}"
-: "${PRODUCTION_WIDGET_ORIGIN:?PRODUCTION_WIDGET_ORIGIN gerekli}"
-: "${PRODUCTION_OPS_ALERT_WEBHOOK_URL:?PRODUCTION_OPS_ALERT_WEBHOOK_URL gerekli}"
-: "${PRODUCTION_OPS_ALERT_WEBHOOK_SECRET:?PRODUCTION_OPS_ALERT_WEBHOOK_SECRET gerekli}"
-
+if ! PRODUCTION_DATABASE_URL="$(read_env_value PRODUCTION_DATABASE_URL)"; then
+  fail 'PRODUCTION_DATABASE_URL production env dosyasında bulunamadı'
+fi
+PRODUCTION_BACKUP_DIR="$(read_env_value PRODUCTION_BACKUP_DIR || true)"
 PRODUCTION_BACKUP_DIR="${PRODUCTION_BACKUP_DIR:-/var/backups/shopai-production}"
+
 CURRENT_RELEASE_FILE="$STATE_DIR/current-release"
 PREVIOUS_RELEASE_FILE="$STATE_DIR/previous-release"
 CURRENT_RELEASE=""
