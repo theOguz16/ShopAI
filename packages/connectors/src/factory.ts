@@ -1,7 +1,4 @@
-import type {
-  LiveCatalogConnector,
-  LiveCatalogProvider,
-} from './live.js';
+import type { LiveCatalogConnector, LiveCatalogProvider } from './live.js';
 import {
   parseTrendyolCredentials,
   TrendyolConnector,
@@ -49,9 +46,7 @@ function parseWooCommerceCredentials(input: unknown): WooCommerceCredentials {
   const consumerKey =
     typeof value.consumerKey === 'string' ? value.consumerKey.trim() : '';
   const consumerSecret =
-    typeof value.consumerSecret === 'string'
-      ? value.consumerSecret.trim()
-      : '';
+    typeof value.consumerSecret === 'string' ? value.consumerSecret.trim() : '';
   if (!storeUrl || !consumerKey || !consumerSecret)
     throw new Error('WooCommerce bağlantı bilgileri eksik.');
   return { storeUrl, consumerKey, consumerSecret };
