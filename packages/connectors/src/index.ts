@@ -10,52 +10,10 @@ export interface CatalogConnector {
   }>;
 }
 
-export type SyncMode = 'full' | 'incremental';
-export type ConnectorPage = {
-  rows: SourceRow[];
-  nextCursor: string | null;
-  sourceObservedAt: string;
-  fetchedAt: string;
-  complete: boolean;
-};
-export interface LiveCatalogConnector {
-  readonly provider: 'woocommerce';
-  readonly capabilities: { liveInventory: true; incrementalSync: true };
-  validate(): Promise<void>;
-  readPage(input: {
-    cursor?: string | null;
-    modifiedAfter?: string | null;
-    mode: SyncMode;
-  }): Promise<ConnectorPage>;
-}
-
-export type ConnectorHttpDiagnostics = {
-  contentType?: string;
-  upstreamServer?: string;
-  retryAfter?: string;
-  cfRay?: string;
-  requestId?: string;
-  responseBodySnippet?: string;
-};
-
-export class ConnectorHttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly retryAfterMs?: number,
-    readonly diagnostics?: ConnectorHttpDiagnostics,
-  ) {
-    super(message);
-  }
-  get retryable() {
-    return this.status === 429 || this.status >= 500;
-  }
-  get reauthorizationRequired() {
-    return this.status === 401 || this.status === 403;
-  }
-}
-
+export * from './factory.js';
+export * from './live.js';
 export * from './managed-secrets.js';
+export * from './providers/trendyol.js';
 export * from './providers/woocommerce.js';
 export * from './target-safety.js';
 
@@ -121,6 +79,7 @@ export function parseCatalogCsv(content: string) {
   });
   return { rows, errors };
 }
+
 export class CsvConnector implements CatalogConnector {
   readonly provider = 'csv';
   readonly capabilities = { liveInventory: false, incrementalSync: false };
