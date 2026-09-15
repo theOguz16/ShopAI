@@ -1,11 +1,12 @@
 name: Staging hosted smoke
+run-name: Staging smoke ${{ inputs.release_version }}
 
 on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Optional 40-character release SHA to verify
-        required: false
+        description: Exact 40-character deployed release SHA to verify
+        required: true
         type: string
 
 permissions:
@@ -26,10 +27,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate optional release SHA
+      - name: Validate exact release SHA
         shell: bash
         run: |
-          if [ -n "$RELEASE_VERSION" ] && ! [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+          if ! [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
             echo "release_version must be an immutable 40-character commit SHA"
             exit 1
           fi
@@ -45,7 +46,7 @@ jobs:
             echo "### ShopAI hosted staging verification"
             echo "- MCP: https://shop.fizyoflow.com/mcp"
             echo "- widget: https://widget.fizyoflow.com"
-            echo "- requested release: ${RELEASE_VERSION:-current deployed release}"
-            echo "- deploy automation: deferred to TASK-021"
-            echo "- real ChatGPT iframe acceptance: deferred until publication"
+            echo "- exact release: $RELEASE_VERSION"
+            echo "- this successful run can be supplied to Production release as staging evidence"
+            echo "- real ChatGPT iframe acceptance remains a separate publication/platform gate"
           } >> "$GITHUB_STEP_SUMMARY"
