@@ -207,7 +207,10 @@ const apiEnvSchema = z
           message: 'postgres/staging modunda benzersiz bir secret olmalıdır',
         });
     }
-    if (Boolean(env.OPS_ALERT_WEBHOOK_URL) !== Boolean(env.OPS_ALERT_WEBHOOK_SECRET))
+    if (
+      Boolean(env.OPS_ALERT_WEBHOOK_URL) !==
+      Boolean(env.OPS_ALERT_WEBHOOK_SECRET)
+    )
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['OPS_ALERT_WEBHOOK_URL'],
