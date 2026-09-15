@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseApiEnv } from '../apps/api/src/env.js';
 import { parseWorkerEnv } from '../apps/worker/src/env.js';
 
+const connectorEncryptionKey = Buffer.alloc(32, 7).toString('base64');
 const hostedStagingEnv = {
   DEPLOY_ENV: 'staging',
   RELEASE_VERSION: 'abcdef123',
@@ -15,6 +16,7 @@ const hostedStagingEnv = {
   REDIRECT_SIGNING_SECRET: 'staging-redirect-signing-secret-000000000000',
   AUTH_PILOT_CREDENTIALS:
     '{"pilot@shopai.example":"staging-pilot-credential-0001"}',
+  CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
 } as const;
 
 describe('startup environment validation', () => {
@@ -88,7 +90,42 @@ describe('startup environment validation', () => {
       DEPLOY_ENV: 'staging',
       MCP_PUBLIC_ORIGIN: 'https://api.staging.shopai.example',
       WIDGET_ORIGIN: 'https://widget.staging.shopai.example',
+      CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
     });
+  });
+
+  it('requires connector secret encryption in hosted API and worker runtimes', () => {
+    const { CONNECTOR_SECRET_ENCRYPTION_KEY: _ignored, ...withoutKey } =
+      hostedStagingEnv;
+    expect(() => parseApiEnv(withoutKey)).toThrow(
+      /CONNECTOR_SECRET_ENCRYPTION_KEY|encryption key/,
+    );
+    expect(() =>
+      parseWorkerEnv({
+        DEPLOY_ENV: 'staging',
+        RELEASE_VERSION: 'abcdef123',
+        DATABASE_URL: hostedStagingEnv.DATABASE_URL,
+        REDIS_URL: 'rediss://redis.example',
+      }),
+    ).toThrow(/CONNECTOR_SECRET_ENCRYPTION_KEY|encryption key/);
+    expect(
+      parseWorkerEnv({
+        DEPLOY_ENV: 'staging',
+        RELEASE_VERSION: 'abcdef123',
+        DATABASE_URL: hostedStagingEnv.DATABASE_URL,
+        REDIS_URL: 'rediss://redis.example',
+        CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+      }).CONNECTOR_SECRET_ENCRYPTION_KEY,
+    ).toBe(connectorEncryptionKey);
+  });
+
+  it('rejects malformed connector encryption keys', () => {
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        CONNECTOR_SECRET_ENCRYPTION_KEY: 'not-a-32-byte-key',
+      }),
+    ).toThrow(/32-byte key/);
   });
 
   it('rejects pathful hosted origins', () => {
