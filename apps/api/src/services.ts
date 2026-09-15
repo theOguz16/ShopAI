@@ -58,11 +58,15 @@ type SearchContext = {
 
 function resolveSearchIntent(input: {
   cursor?: unknown;
+  query?: unknown;
   analyticsIntent?: unknown;
 }): RecordedSearchIntent {
   if (input.cursor) return 'pagination';
+  if (input.analyticsIntent === 'catalog_load')
+    return typeof input.query === 'string' && input.query.trim()
+      ? 'explicit_search'
+      : 'catalog_load';
   if (
-    input.analyticsIntent === 'catalog_load' ||
     input.analyticsIntent === 'explicit_search' ||
     input.analyticsIntent === 'refinement'
   )
@@ -167,6 +171,7 @@ export function createServices(env: ApiEnv) {
       input && typeof input === 'object'
         ? (input as {
             cursor?: unknown;
+            query?: unknown;
             merchantIds?: unknown;
             discoverySessionId?: unknown;
             analyticsIntent?: unknown;
