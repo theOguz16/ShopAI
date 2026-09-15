@@ -68,6 +68,11 @@ export class PostgresRedirectRepository implements RedirectRepository {
         | { discoverySessionId: string | null }
         | undefined;
       const discoverySessionId = attribution?.discoverySessionId ?? null;
+      if (discoverySessionId) {
+        await tx.execute(
+          sql`select set_config('app.discovery_session_id', ${discoverySessionId}, true)`,
+        );
+      }
       const [session] = discoverySessionId
         ? await tx
             .select({ campaign: discoverySessions.campaign })
