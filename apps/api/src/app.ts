@@ -64,6 +64,8 @@ export async function buildApp(
         'req.headers.x-shopai-signature',
         'req.body.consumerKey',
         'req.body.consumerSecret',
+        'req.body.apiKey',
+        'req.body.apiSecret',
         'req.body.token',
         'req.body.AUTH_PILOT_CREDENTIALS',
         'req.body.email',
