@@ -25,6 +25,7 @@
     { "idx": 20, "version": "7", "when": 1789164000000, "tag": "0021_anonymous_shopping_profile", "breakpoints": true },
     { "idx": 21, "version": "7", "when": 1789167600000, "tag": "0022_saved_products", "breakpoints": true },
     { "idx": 22, "version": "7", "when": 1789171200000, "tag": "0023_product_alerts", "breakpoints": true },
-    { "idx": 23, "version": "7", "when": 1789372800000, "tag": "0024_source_sync_watermark", "breakpoints": true }
+    { "idx": 23, "version": "7", "when": 1789372800000, "tag": "0024_source_sync_watermark", "breakpoints": true },
+    { "idx": 24, "version": "7", "when": 1789461600000, "tag": "0025_public_visibility_rls", "breakpoints": true }
   ]
 }
