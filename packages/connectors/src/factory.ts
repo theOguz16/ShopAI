@@ -27,15 +27,17 @@ export function createLiveCatalogConnector(
   provider: string,
   credentials: unknown,
 ): LiveCatalogConnector {
-  const factory = liveCatalogConnectorFactories[provider as LiveCatalogProvider];
-  if (!factory) throw new Error(`Desteklenmeyen canlı connector: ${provider}`);
-  return factory(credentials);
+  if (!Object.hasOwn(liveCatalogConnectorFactories, provider))
+    throw new Error(`Desteklenmeyen canlı connector: ${provider}`);
+  return liveCatalogConnectorFactories[provider as LiveCatalogProvider](
+    credentials,
+  );
 }
 
 export function isLiveCatalogProvider(
   provider: string,
 ): provider is LiveCatalogProvider {
-  return provider in liveCatalogConnectorFactories;
+  return Object.hasOwn(liveCatalogConnectorFactories, provider);
 }
 
 function parseWooCommerceCredentials(input: unknown): WooCommerceCredentials {
