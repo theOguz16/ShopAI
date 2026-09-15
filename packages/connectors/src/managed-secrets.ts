@@ -26,7 +26,7 @@ export class ManagedConnectorSecretStore {
 
   constructor(
     private readonly privateRoot: string,
-    encryptionKey?: string,
+    encryptionKey = process.env.CONNECTOR_SECRET_ENCRYPTION_KEY,
   ) {
     this.encryptionKey = encryptionKey ? decodeEncryptionKey(encryptionKey) : null;
   }
