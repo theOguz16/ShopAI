@@ -37,7 +37,7 @@ describe('saved products migration', () => {
         'utf8',
       ),
     ) as { entries: Array<{ idx: number; tag: string }> };
-    expect(journal.entries.slice(-5)).toEqual([
+    expect(journal.entries.slice(-6)).toEqual([
       expect.objectContaining({ idx: 19, tag: '0020_product_view_events' }),
       expect.objectContaining({
         idx: 20,
@@ -46,6 +46,7 @@ describe('saved products migration', () => {
       expect.objectContaining({ idx: 21, tag: '0022_saved_products' }),
       expect.objectContaining({ idx: 22, tag: '0023_product_alerts' }),
       expect.objectContaining({ idx: 23, tag: '0024_source_sync_watermark' }),
+      expect.objectContaining({ idx: 24, tag: '0025_public_visibility_rls' }),
     ]);
   });
 });
