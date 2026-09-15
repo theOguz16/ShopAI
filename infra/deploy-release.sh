@@ -70,6 +70,7 @@ PRODUCTION_BACKUP_DIR="${PRODUCTION_BACKUP_DIR:-/var/backups/shopai-production}"
 
 CURRENT_RELEASE_FILE="$STATE_DIR/current-release"
 PREVIOUS_RELEASE_FILE="$STATE_DIR/previous-release"
+SUCCESSFUL_RELEASES_FILE="$STATE_DIR/successful-releases"
 CURRENT_RELEASE=""
 if [[ -f "$CURRENT_RELEASE_FILE" ]]; then
   CURRENT_RELEASE="$(tr -d '[:space:]' < "$CURRENT_RELEASE_FILE")"
@@ -79,6 +80,13 @@ fi
 if [[ "$OPERATION" == "rollback" && "$CURRENT_RELEASE" == "$RELEASE_VERSION" ]]; then
   printf 'release %s zaten aktif; rollback gerekmiyor\n' "$RELEASE_VERSION"
   exit 0
+fi
+
+if [[ "$OPERATION" == "rollback" ]]; then
+  [[ -f "$SUCCESSFUL_RELEASES_FILE" ]] ||
+    fail 'rollback için başarılı release geçmişi bulunamadı'
+  grep -Fxq "$RELEASE_VERSION" "$SUCCESSFUL_RELEASES_FILE" ||
+    fail 'rollback yalnız daha önce readiness doğrulamasını geçmiş release SHA değerine yapılabilir'
 fi
 
 export RELEASE_VERSION SHOPAI_IMAGE
@@ -138,5 +146,8 @@ if [[ -n "$CURRENT_RELEASE" && "$CURRENT_RELEASE" != "$RELEASE_VERSION" ]]; then
 fi
 printf '%s\n' "$RELEASE_VERSION" > "$CURRENT_RELEASE_FILE.tmp"
 mv "$CURRENT_RELEASE_FILE.tmp" "$CURRENT_RELEASE_FILE"
+if ! grep -Fxq "$RELEASE_VERSION" "$SUCCESSFUL_RELEASES_FILE" 2>/dev/null; then
+  printf '%s\n' "$RELEASE_VERSION" >> "$SUCCESSFUL_RELEASES_FILE"
+fi
 
 printf '%s success: %s\n' "$OPERATION" "$RELEASE_VERSION"
