@@ -182,7 +182,10 @@ describeWithDatabase('search analytics intent taxonomy', () => {
     expect(refinement.statusCode).toBe(200);
 
     const rows = await database.db
-      .select({ intent: searchEvents.intent, requestKind: searchEvents.requestKind })
+      .select({
+        intent: searchEvents.intent,
+        requestKind: searchEvents.requestKind,
+      })
       .from(searchEvents)
       .where(eq(searchEvents.merchantId, merchantId))
       .orderBy(searchEvents.occurredAt);
