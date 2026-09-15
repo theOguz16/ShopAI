@@ -59,6 +59,7 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "production workflow must be dispatched from main"; exit 1; }
           [[ "$CONFIRMATION" == "PRODUCTION" ]] || { echo "confirmation must be PRODUCTION"; exit 1; }
           [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "release_version must be a 40-character SHA"; exit 1; }
           git cat-file -e "$RELEASE_VERSION^{commit}"
@@ -67,9 +68,21 @@ jobs:
             echo "release_version must already be reachable from main"
             exit 1
           }
-          [[ "$PRODUCTION_API_ORIGIN" =~ ^https://[^/]+$ ]] || { echo "PRODUCTION_API_ORIGIN must be origin-only HTTPS"; exit 1; }
-          [[ "$PRODUCTION_WIDGET_ORIGIN" =~ ^https://[^/]+$ ]] || { echo "PRODUCTION_WIDGET_ORIGIN must be origin-only HTTPS"; exit 1; }
-          [[ -n "$PRODUCTION_HOST" && -n "$PRODUCTION_SSH_USER" ]] || { echo "production SSH vars are required"; exit 1; }
+          node - "$PRODUCTION_API_ORIGIN" "$PRODUCTION_WIDGET_ORIGIN" <<'NODE'
+          for (const value of process.argv.slice(2)) {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.origin !== value) {
+              console.error('production origins must be origin-only HTTPS URLs');
+              process.exit(1);
+            }
+          }
+          NODE
+          [[ "$PRODUCTION_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "PRODUCTION_HOST contains unsafe characters"; exit 1; }
+          [[ "$PRODUCTION_SSH_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "PRODUCTION_SSH_USER is invalid"; exit 1; }
+          deploy_path="${PRODUCTION_DEPLOY_PATH:-/opt/shopai-production}"
+          env_file="${PRODUCTION_ENV_FILE:-/etc/shopai/production.env}"
+          [[ "$deploy_path" =~ ^/[A-Za-z0-9._/-]+$ && "$deploy_path" != *".."* ]] || { echo "PRODUCTION_DEPLOY_PATH is unsafe"; exit 1; }
+          [[ "$env_file" =~ ^/[A-Za-z0-9._/-]+$ && "$env_file" != *".."* ]] || { echo "PRODUCTION_ENV_FILE is unsafe"; exit 1; }
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
         id: request
 
@@ -85,6 +98,12 @@ jobs:
           conclusion="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.conclusion ?? "")' "$run_json")"
           title="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.display_title ?? "")' "$run_json")"
           event="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.event ?? "")' "$run_json")"
+          path="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.path ?? "")' "$run_json")"
+          branch="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.head_branch ?? "")' "$run_json")"
+          repo="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.repository?.full_name ?? "")' "$run_json")"
+          [[ "$repo" == "$GITHUB_REPOSITORY" ]] || { echo "staging evidence belongs to another repository"; exit 1; }
+          [[ "$path" == ".github/workflows/staging.yml" ]] || { echo "staging evidence must come from staging.yml"; exit 1; }
+          [[ "$branch" == "main" ]] || { echo "staging evidence must be dispatched from main"; exit 1; }
           [[ "$conclusion" == "success" ]] || { echo "staging run is not successful"; exit 1; }
           [[ "$event" == "workflow_dispatch" ]] || { echo "staging evidence must be workflow_dispatch"; exit 1; }
           [[ "$title" == "Staging smoke $RELEASE_VERSION" ]] || {
