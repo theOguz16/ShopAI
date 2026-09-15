@@ -25,7 +25,9 @@ export class PostgresSearchEventRepository {
         .select({ id: merchants.id })
         .from(merchants)
         .where(inArray(merchants.id, merchantIds));
-      const visibleIds = new Set(visibleMerchants.map((merchant) => merchant.id));
+      const visibleIds = new Set(
+        visibleMerchants.map((merchant) => merchant.id),
+      );
       const visibleEvents = events.filter((event) =>
         visibleIds.has(event.merchantId),
       );
