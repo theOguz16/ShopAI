@@ -387,7 +387,9 @@ export default function ConnectionsPage() {
                       type="password"
                       autoComplete="new-password"
                       value={consumerSecret}
-                      onChange={(event) => setConsumerSecret(event.target.value)}
+                      onChange={(event) =>
+                        setConsumerSecret(event.target.value)
+                      }
                     />
                   </label>
                 </>
