@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { EnvironmentSecretResolver } from '../apps/worker/src/sync.js';
 import { ManagedConnectorSecretStore } from '../packages/connectors/src/managed-secrets.js';
 
 const encryptionKey = Buffer.alloc(32, 11).toString('base64');
@@ -47,6 +48,20 @@ describe('managed connector secret encryption', () => {
       ciphertext: expect.any(String),
     });
     await expect(store.resolve(reference)).resolves.toEqual(credentials);
+  });
+
+  it('resolves encrypted managed secrets through the worker injected environment', async () => {
+    const root = await privateRoot();
+    const reference = await new ManagedConnectorSecretStore(
+      root,
+      encryptionKey,
+    ).create(credentials);
+    const resolver = new EnvironmentSecretResolver({
+      UPLOAD_DIR: root,
+      CONNECTOR_SECRET_ENCRYPTION_KEY: encryptionKey,
+    });
+
+    await expect(resolver.resolve(reference)).resolves.toEqual(credentials);
   });
 
   it('fails closed when an encrypted credential is read with the wrong key', async () => {
