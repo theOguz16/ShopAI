@@ -335,6 +335,7 @@ export const searchEvents = pgTable(
     transport: text('transport').notNull(),
     surface: text('surface').notNull(),
     requestKind: text('request_kind').notNull(),
+    intent: text('intent').notNull().default('explicit_search'),
     outcome: text('outcome').notNull(),
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
@@ -352,6 +353,10 @@ export const searchEvents = pgTable(
       sql`${t.requestKind} in ('initial','pagination')`,
     ),
     check(
+      'search_event_intent',
+      sql`${t.intent} in ('catalog_load','explicit_search','refinement','pagination')`,
+    ),
+    check(
       'search_event_outcome',
       sql`${t.outcome} in ('results','empty','error')`,
     ),
@@ -359,6 +364,11 @@ export const searchEvents = pgTable(
       t.merchantId,
       t.occurredAt,
       t.requestKind,
+    ),
+    index('search_events_intent_reporting').on(
+      t.merchantId,
+      t.intent,
+      t.occurredAt,
     ),
     index('search_events_surface_reporting').on(
       t.merchantId,
