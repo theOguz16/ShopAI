@@ -9,7 +9,9 @@ export const searchAnalyticsIntentSchema = z.enum([
 export type SearchAnalyticsIntent = z.infer<typeof searchAnalyticsIntentSchema>;
 
 export const recordedSearchIntentSchema = z.enum([
-  ...searchAnalyticsIntentSchema.options,
+  'catalog_load',
+  'explicit_search',
+  'refinement',
   'pagination',
 ]);
 
