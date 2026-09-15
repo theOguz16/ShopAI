@@ -5,8 +5,10 @@ export * from './storefront.js';
 export * from './anonymous-shopping-profile.js';
 export * from './saved-products.js';
 export * from './product-alerts.js';
+export * from './search-analytics.js';
 
 import { z } from 'zod';
+import { searchAnalyticsIntentSchema } from './search-analytics.js';
 
 export const moneySchema = z
   .number()
@@ -51,6 +53,7 @@ export const searchRequestSchema = z
     discoverySessionId: z.string().uuid().optional(),
     limit: z.number().int().min(1).max(50).default(12),
     cursor: z.string().trim().min(1).max(500).optional().nullable(),
+    analyticsIntent: searchAnalyticsIntentSchema.optional(),
   })
   .strict();
 export type SearchRequest = z.infer<typeof searchRequestSchema>;

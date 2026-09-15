@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { catalogItemSchema, searchFacetsSchema } from './index.js';
+import { searchAnalyticsIntentSchema } from './search-analytics.js';
 
 const publicMoneySchema = z
   .number()
@@ -45,6 +46,7 @@ export const searchProductsRequestSchema = z
     inStockOnly: z.boolean().optional(),
     cursor: z.string().trim().min(1).max(500).optional(),
     limit: z.number().int().min(1).max(50).optional(),
+    analyticsIntent: searchAnalyticsIntentSchema.optional(),
   })
   .strict();
 

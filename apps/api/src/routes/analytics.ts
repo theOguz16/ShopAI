@@ -8,13 +8,14 @@ import {
   searchEvents,
   setTenantContext,
 } from '@shopai/db';
-import { and, eq, gte, isNotNull, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
 import { requireRole } from '../plugins/auth.js';
 
 const DAY_MS = 86_400_000;
 const MAX_RANGE_MS = 93 * DAY_MS;
+const userSearchIntents = ['explicit_search', 'refinement'] as const;
 
 const validZone = (zone: string) => {
   try {
@@ -101,12 +102,20 @@ export async function registerAnalyticsRoutes(
           gte(searchEvents.occurredAt, from),
           lt(searchEvents.occurredAt, to),
         );
+        const userSearchRange = and(
+          searchRange,
+          eq(searchEvents.requestKind, 'initial'),
+          inArray(searchEvents.intent, [...userSearchIntents]),
+        );
         const [searches] = await tx
           .select({
-            attempts: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial')::int`,
-            successful: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} <> 'error')::int`,
-            empty: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} = 'empty')::int`,
-            failed: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.outcome} = 'error')::int`,
+            attempts: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement'))::int`,
+            successful: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} <> 'error')::int`,
+            empty: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'empty')::int`,
+            failed: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'error')::int`,
+            catalogLoads: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'catalog_load')::int`,
+            explicitSearches: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'explicit_search')::int`,
+            refinements: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'refinement')::int`,
             pagination: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'pagination')::int`,
           })
           .from(searchEvents)
@@ -117,7 +126,21 @@ export async function registerAnalyticsRoutes(
             count: sql<number>`count(*)::int`,
           })
           .from(searchEvents)
-          .where(and(searchRange, eq(searchEvents.requestKind, 'initial')))
+          .where(userSearchRange)
+          .groupBy(searchEvents.surface);
+        const catalogLoadsBySurface = await tx
+          .select({
+            surface: searchEvents.surface,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(searchEvents)
+          .where(
+            and(
+              searchRange,
+              eq(searchEvents.requestKind, 'initial'),
+              eq(searchEvents.intent, 'catalog_load'),
+            ),
+          )
           .groupBy(searchEvents.surface);
 
         const [views] = await tx
@@ -166,6 +189,9 @@ export async function registerAnalyticsRoutes(
         const searchSurfaceCounts = Object.fromEntries(
           searchesBySurface.map((row) => [row.surface, row.count]),
         );
+        const catalogLoadSurfaceCounts = Object.fromEntries(
+          catalogLoadsBySurface.map((row) => [row.surface, row.count]),
+        );
         const redirectSurfaceCounts = Object.fromEntries(
           bySurface.map((row) => [row.surface, row.count]),
         ) as Partial<Record<Surface, number>>;
@@ -201,6 +227,9 @@ export async function registerAnalyticsRoutes(
             successfulSearches: searches?.successful ?? 0,
             emptySearches: searches?.empty ?? 0,
             failedSearches: searches?.failed ?? 0,
+            catalogLoads: searches?.catalogLoads ?? 0,
+            explicitSearches: searches?.explicitSearches ?? 0,
+            refinements: searches?.refinements ?? 0,
             paginationRequests: searches?.pagination ?? 0,
             noResultRate:
               (searches?.successful ?? 0) > 0
@@ -212,6 +241,7 @@ export async function registerAnalyticsRoutes(
                 : null,
             searchesBySurface: searchSurfaceCounts,
             searchesByChannel: searchSurfaceCounts,
+            catalogLoadsBySurface: catalogLoadSurfaceCounts,
             productInteractions: valueMetrics.productViews,
             humanRedirects: valueMetrics.checkoutClicks,
             botPreviews: clicks?.bots ?? 0,
@@ -226,7 +256,7 @@ export async function registerAnalyticsRoutes(
           measurement: measured ? 'measured' : 'not_configured',
           definitions: {
             aiSearches:
-              'Seçili tarih aralığındaki ilk sayfa ShopAI arama çağrılarıdır; pagination dahil değildir.',
+              'Kullanıcının başlattığı explicit_search + refinement eventleridir; catalog_load ve pagination dahil değildir.',
             productViews:
               'Başarıyla açılan ürün detaylarının product_view_events kayıtlarıdır.',
             checkoutClicks:
@@ -236,16 +266,25 @@ export async function registerAnalyticsRoutes(
             attributedGmvMinor:
               'Atfedilen ve iptal edilmemiş siparişlerin iadeden önceki brüt toplamıdır.',
             searchToCheckoutRate:
-              'İnsan checkout yönlendirmeleri / ilk sayfa ShopAI aramaları.',
+              'İnsan checkout yönlendirmeleri / kullanıcı tarafından başlatılan aramalar.',
             checkoutToOrderRate:
               'Atfedilen siparişler / insan checkout yönlendirmeleri.',
             surfaceBreakdown:
               'İnsan checkout yönlendirmelerinin yüzey dağılımıdır. Other = gemini + brand_widget.',
             searchAttempts:
-              'İlk sayfa arama çağrılarıdır. Sayfalama ayrı sayılır; ayırt edilemeyen istemci veya tool tekrarları yeni deneme sayılır.',
+              'explicit_search + refinement eventleridir. Mağaza açılışındaki catalog_load ve sayfalama dahil değildir.',
+            catalogLoads:
+              'Kullanıcı araması olmadan katalog görünürlüğü sağlamak için yapılan ilk yüklemelerdir; search KPI paydasına girmez.',
+            explicitSearches:
+              'Bir discovery session içindeki kullanıcı tarafından başlatılan ilk aramadır.',
+            refinements:
+              'İlk kullanıcı aramasından sonra sorgu veya filtrelerle yapılan yeni kullanıcı aramalarıdır.',
+            paginationRequests:
+              'Mevcut sonuç kümesinin cursor ile devam sayfası istekleridir; search attempt sayılmaz.',
             noResultRate:
-              'Boş sonuçlanan başarılı ilk aramalar / başarılı ilk aramalar.',
-            searchErrorRate: 'Hatalı ilk aramalar / tüm ilk arama denemeleri.',
+              'Boş sonuçlanan başarılı kullanıcı aramaları / başarılı kullanıcı aramaları.',
+            searchErrorRate:
+              'Hatalı kullanıcı aramaları / tüm kullanıcı arama denemeleri.',
             surfaceScope:
               'web, chatgpt, gemini ve brand_widget kullanıcı yüzeyleridir; REST, MCP ve UCP transport olarak ayrı tutulur. Ham sorgu metni kaydedilmez.',
             channelScope:

@@ -16,6 +16,10 @@
       "types": "./dist/search-products.d.ts",
       "import": "./dist/search-products.js"
     },
+    "./search-analytics": {
+      "types": "./dist/search-analytics.d.ts",
+      "import": "./dist/search-analytics.js"
+    },
     "./category-facets": {
       "types": "./dist/category-facets.d.ts",
       "import": "./dist/category-facets.js"
