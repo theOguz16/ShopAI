@@ -68,10 +68,12 @@ function response(input: {
 describe('Trendyol Product V2 connector', () => {
   it('maps variants, stock, customer price and incremental watermark', async () => {
     const calls: Array<{ url: URL; init?: RequestInit }> = [];
-    const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
-      calls.push({ url: new URL(String(input)), init });
-      return response({ page: 0, totalPages: 1, body: [content()] });
-    });
+    const fetcher = vi.fn(
+      async (input: URL | RequestInfo, init?: RequestInit) => {
+        calls.push({ url: new URL(String(input)), init });
+        return response({ page: 0, totalPages: 1, body: [content()] });
+      },
+    );
     const connector = new TrendyolConnector(
       credentials,
       fetcher as typeof fetch,
