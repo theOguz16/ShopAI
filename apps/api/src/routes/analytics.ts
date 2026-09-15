@@ -104,18 +104,19 @@ export async function registerAnalyticsRoutes(
         );
         const userSearchRange = and(
           searchRange,
+          eq(searchEvents.requestKind, 'initial'),
           inArray(searchEvents.intent, [...userSearchIntents]),
         );
         const [searches] = await tx
           .select({
-            attempts: sql<number>`count(*) filter (where ${searchEvents.intent} in ('explicit_search','refinement'))::int`,
-            successful: sql<number>`count(*) filter (where ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} <> 'error')::int`,
-            empty: sql<number>`count(*) filter (where ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'empty')::int`,
-            failed: sql<number>`count(*) filter (where ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'error')::int`,
-            catalogLoads: sql<number>`count(*) filter (where ${searchEvents.intent} = 'catalog_load')::int`,
-            explicitSearches: sql<number>`count(*) filter (where ${searchEvents.intent} = 'explicit_search')::int`,
-            refinements: sql<number>`count(*) filter (where ${searchEvents.intent} = 'refinement')::int`,
-            pagination: sql<number>`count(*) filter (where ${searchEvents.intent} = 'pagination')::int`,
+            attempts: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement'))::int`,
+            successful: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} <> 'error')::int`,
+            empty: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'empty')::int`,
+            failed: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} in ('explicit_search','refinement') and ${searchEvents.outcome} = 'error')::int`,
+            catalogLoads: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'catalog_load')::int`,
+            explicitSearches: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'explicit_search')::int`,
+            refinements: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'initial' and ${searchEvents.intent} = 'refinement')::int`,
+            pagination: sql<number>`count(*) filter (where ${searchEvents.requestKind} = 'pagination')::int`,
           })
           .from(searchEvents)
           .where(searchRange);
@@ -133,7 +134,13 @@ export async function registerAnalyticsRoutes(
             count: sql<number>`count(*)::int`,
           })
           .from(searchEvents)
-          .where(and(searchRange, eq(searchEvents.intent, 'catalog_load')))
+          .where(
+            and(
+              searchRange,
+              eq(searchEvents.requestKind, 'initial'),
+              eq(searchEvents.intent, 'catalog_load'),
+            ),
+          )
           .groupBy(searchEvents.surface);
 
         const [views] = await tx
