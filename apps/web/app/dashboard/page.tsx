@@ -9,9 +9,10 @@ import { useActiveMerchant } from './merchant-context';
 import { OnboardingSteps } from './onboarding-steps';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
+const liveCatalogProviders = new Set(['woocommerce', 'trendyol']);
 type Summary = {
   connections: number;
-  hasWooCommerce: boolean;
+  hasLiveCatalogConnector: boolean;
   imports: number;
   products: number;
   published: number;
@@ -52,15 +53,18 @@ export default function Dashboard() {
         }>;
         const typedImports = imports as unknown[];
         const typedHealth = health as CatalogHealthSnapshot;
-        const hasWooCommerce = typedConnections.some(
+        const hasLiveCatalogConnector = typedConnections.some(
           (connection) =>
-            connection.provider === 'woocommerce' &&
-            connection.active !== false,
+            Boolean(
+              connection.provider &&
+                liveCatalogProviders.has(connection.provider) &&
+                connection.active !== false,
+            ),
         );
         if (!signal?.aborted)
           setSummary({
             connections: typedConnections.length,
-            hasWooCommerce,
+            hasLiveCatalogConnector,
             imports: typedImports.length,
             products: typedHealth.totalProducts,
             published: typedHealth.publishedProducts,
@@ -82,7 +86,8 @@ export default function Dashboard() {
 
   const dataTransferred = Boolean(
     summary &&
-      (summary.imports > 0 || (summary.hasWooCommerce && summary.products > 0)),
+      (summary.imports > 0 ||
+        (summary.hasLiveCatalogConnector && summary.products > 0)),
   );
   const current = !summary?.connections
     ? 'connect'
@@ -101,10 +106,10 @@ export default function Dashboard() {
         ...(summary.published ? ['publish' as const] : []),
       ]
     : [];
-  const importAction = summary?.hasWooCommerce
+  const importAction = summary?.hasLiveCatalogConnector
     ? {
         href: '/dashboard/connections',
-        title: 'İlk WooCommerce senkronunu tamamla',
+        title: 'İlk katalog senkronunu tamamla',
         text: 'Bağlantın oluşturuldu. İlk ürün aktarımının sonucunu bağlantılar ekranından takip et; CSV yüklemen gerekmiyor.',
         action: 'Senkron durumunu aç',
       }
@@ -118,7 +123,7 @@ export default function Dashboard() {
     connect: {
       href: '/dashboard/connections',
       title: 'Mağazanı bir ürün kaynağına bağla',
-      text: 'WooCommerce mağaza adresini ve API bilgilerini gir; bağlantıyı ShopAI içinden test edip ilk senkronu başlatabilirsin.',
+      text: 'WooCommerce veya Trendyol bağlantı bilgilerini gir; ShopAI içinden test edip ilk senkronu başlatabilirsin.',
       action: 'Mağazanı bağla',
     },
     import: importAction,
