@@ -23,6 +23,8 @@ type CollectCatalogSnapshotInput = {
   onProgress?: (progress: CatalogSyncProgress) => Promise<void> | void;
 };
 
+const MAX_CATALOG_PAGES = 10_000;
+
 export async function collectCatalogSnapshot({
   connector,
   mode,
@@ -32,6 +34,7 @@ export async function collectCatalogSnapshot({
   const rows: SourceRow[] = [];
   const externalIds = new Set<string>();
   const productKeys = new Set<string>();
+  const visitedCursors = new Set<string>();
   let cursor: string | null = null;
   let latestSourceTime = modifiedAfter;
   let latestFetchedAt = new Date().toISOString();
@@ -44,7 +47,13 @@ export async function collectCatalogSnapshot({
     variants: 0,
   };
 
-  for (let pageCount = 0; pageCount < 100; pageCount += 1) {
+  for (let pageCount = 0; pageCount < MAX_CATALOG_PAGES; pageCount += 1) {
+    if (cursor) {
+      if (visitedCursors.has(cursor))
+        throw new Error('Connector snapshot cursor döngüsü tespit edildi.');
+      visitedCursors.add(cursor);
+    }
+
     const page = await connector.readPage({
       cursor,
       modifiedAfter,
@@ -55,10 +64,10 @@ export async function collectCatalogSnapshot({
       productKeys.add(row.productKey);
       externalIds.add(row.externalId);
     }
-    latestSourceTime = [latestSourceTime, page.sourceObservedAt]
-      .filter(Boolean)
-      .sort()
-      .at(-1) as string;
+    latestSourceTime = latestIsoTimestamp(
+      latestSourceTime,
+      page.sourceObservedAt,
+    );
     latestFetchedAt = page.fetchedAt;
     cursor = page.nextCursor;
     complete = page.complete && !cursor;
@@ -86,4 +95,9 @@ export async function collectCatalogSnapshot({
     complete,
     progress,
   };
+}
+
+function latestIsoTimestamp(left: string | null, right: string) {
+  if (!left) return right;
+  return left > right ? left : right;
 }
