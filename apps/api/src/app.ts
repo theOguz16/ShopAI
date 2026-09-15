@@ -87,7 +87,7 @@ export async function buildApp(
     reply.header('x-request-id', request.id);
   });
   app.addHook('onResponse', async (request, reply) => {
-    const route = request.routeOptions.url;
+    const route = request.routeOptions.url ?? request.url;
     if (reply.statusCode >= 500 && isSearchRoute(route)) {
       const fields = {
         requestId: request.id,
@@ -352,11 +352,12 @@ export async function buildApp(
         : undefined;
     const status =
       typeof code === 'number' && code >= 400 && code < 500 ? code : 500;
-    if (status >= 500 && !isSearchRoute(request.routeOptions.url))
+    const route = request.routeOptions.url ?? request.url;
+    if (status >= 500 && !isSearchRoute(route))
       void opsAlerts.send('request_failed', 'error', {
         requestId: request.id,
         method: request.method,
-        route: request.routeOptions.url,
+        route,
         statusCode: status,
         errorName: error instanceof Error ? error.name : 'unknown',
       });
