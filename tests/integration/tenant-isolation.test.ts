@@ -2,12 +2,18 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { productAttributes } from '../../packages/db/src/category-model.js';
 import { createDatabase } from '../../packages/db/src/client.js';
+import { PostgresDiscoverySessionRepository } from '../../packages/db/src/discovery-session-repository.js';
 import {
   connections,
+  discoverySessions,
   importOutboxEvents,
   importRuns,
+  inventory,
   merchants,
+  offers,
   products,
+  searchEvents,
+  variants,
 } from '../../packages/db/src/schema.js';
 import { setTenantContext } from '../../packages/db/src/tenant-context.js';
 
@@ -23,10 +29,14 @@ const tenantA = 'a1000000-0000-4000-8000-000000000001';
 const tenantB = 'b1000000-0000-4000-8000-000000000001';
 const productA = 'a1000000-0000-4000-8000-000000000004';
 const productB = 'b1000000-0000-4000-8000-000000000004';
+const variantA = 'a1000000-0000-4000-8000-000000000005';
+const variantB = 'b1000000-0000-4000-8000-000000000005';
+const offerA = 'a1000000-0000-4000-8000-000000000006';
+const offerB = 'b1000000-0000-4000-8000-000000000006';
 
 beforeAll(async () => {
   await adminDatabase.db.execute(
-    sql`truncate table ${importOutboxEvents}, ${importRuns}, ${productAttributes}, ${products}, ${connections}, ${merchants} cascade`,
+    sql`truncate table ${importOutboxEvents}, ${importRuns}, ${searchEvents}, ${discoverySessions}, ${inventory}, ${offers}, ${variants}, ${productAttributes}, ${products}, ${connections}, ${merchants} cascade`,
   );
   await adminDatabase.db.insert(merchants).values([
     {
@@ -81,6 +91,68 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  await adminDatabase.db.insert(variants).values([
+    {
+      id: variantA,
+      merchantId: tenantA,
+      productId: productA,
+      connectionId: 'a1000000-0000-4000-8000-000000000002',
+      externalId: 'a-variant',
+      size: 'M',
+      color: 'black',
+      observedAt: new Date(),
+    },
+    {
+      id: variantB,
+      merchantId: tenantB,
+      productId: productB,
+      connectionId: 'b1000000-0000-4000-8000-000000000002',
+      externalId: 'b-variant',
+      size: 'L',
+      color: 'white',
+      observedAt: new Date(),
+    },
+  ]);
+  await adminDatabase.db.insert(offers).values([
+    {
+      id: offerA,
+      merchantId: tenantA,
+      variantId: variantA,
+      connectionId: 'a1000000-0000-4000-8000-000000000002',
+      externalId: 'a-offer',
+      priceMinor: 10_000,
+      currency: 'TRY',
+      checkoutUrl: 'https://example.com/a',
+      active: true,
+      observedAt: new Date(),
+    },
+    {
+      id: offerB,
+      merchantId: tenantB,
+      variantId: variantB,
+      connectionId: 'b1000000-0000-4000-8000-000000000002',
+      externalId: 'b-offer',
+      priceMinor: 20_000,
+      currency: 'TRY',
+      checkoutUrl: 'https://example.com/b',
+      active: true,
+      observedAt: new Date(),
+    },
+  ]);
+  await adminDatabase.db.insert(inventory).values([
+    {
+      offerId: offerA,
+      merchantId: tenantA,
+      available: true,
+      observedAt: new Date(),
+    },
+    {
+      offerId: offerB,
+      merchantId: tenantB,
+      available: true,
+      observedAt: new Date(),
+    },
+  ]);
   await adminDatabase.db.insert(productAttributes).values([
     {
       merchantId: tenantA,
@@ -168,6 +240,29 @@ describe('database tenant isolation', () => {
     ).resolves.toEqual([]);
   });
 
+  it('hides every private merchant catalog layer from the public database role', async () => {
+    const visible = await applicationDatabase.db.transaction(async (tx) => {
+      await tx.execute(sql`set local role shopai_public`);
+      return {
+        merchants: await tx.select({ id: merchants.id }).from(merchants),
+        products: await tx.select({ id: products.id }).from(products),
+        variants: await tx.select({ id: variants.id }).from(variants),
+        offers: await tx.select({ id: offers.id }).from(offers),
+        inventory: await tx
+          .select({ offerId: inventory.offerId })
+          .from(inventory),
+      };
+    });
+
+    expect(visible).toEqual({
+      merchants: [{ id: tenantA }],
+      products: [{ id: productA }],
+      variants: [{ id: variantA }],
+      offers: [{ id: offerA }],
+      inventory: [{ offerId: offerA }],
+    });
+  });
+
   it('hides private merchant product attributes from the public role', async () => {
     const visibility = await applicationDatabase.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
@@ -184,6 +279,57 @@ describe('database tenant isolation', () => {
 
     expect(visibility.publicRows).toEqual([{ value: 'M' }]);
     expect(visibility.privateRows).toEqual([]);
+  });
+
+  it('rejects public telemetry writes for a private merchant', async () => {
+    await expect(
+      applicationDatabase.db.transaction(async (tx) => {
+        await tx.execute(sql`set local role shopai_public`);
+        return tx.insert(searchEvents).values({
+          merchantId: tenantB,
+          transport: 'rest',
+          surface: 'web',
+          requestKind: 'initial',
+          outcome: 'results',
+        });
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      applicationDatabase.db.transaction(async (tx) => {
+        await tx.execute(sql`set local role shopai_public`);
+        return tx.insert(searchEvents).values({
+          merchantId: tenantA,
+          transport: 'rest',
+          surface: 'web',
+          requestKind: 'initial',
+          outcome: 'results',
+        });
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('prevents public-role discovery session table scans while repository lookup still works', async () => {
+    const repository = new PostgresDiscoverySessionRepository(
+      applicationDatabase.db,
+    );
+    const created = await repository.create({
+      surface: 'web',
+      transport: 'rest',
+      merchantScope: [tenantA],
+      referrer: null,
+      campaign: null,
+      anonymousUserId: 'a2000000-0000-4000-8000-000000000001',
+      userId: null,
+    });
+
+    await expect(
+      applicationDatabase.db.transaction(async (tx) => {
+        await tx.execute(sql`set local role shopai_public`);
+        return tx.select({ id: discoverySessions.id }).from(discoverySessions);
+      }),
+    ).resolves.toEqual([]);
+    await expect(repository.findById(created.id)).resolves.toEqual(created);
   });
 
   it('isolates application outbox access and reserves global access for the worker', async () => {
