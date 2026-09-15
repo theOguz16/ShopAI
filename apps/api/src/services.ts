@@ -28,6 +28,7 @@ import {
 import type {
   AttributionContext,
   DiscoverySession,
+  RecordedSearchIntent,
   Surface,
 } from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
@@ -54,6 +55,20 @@ type SearchContext = {
   merchantIds?: string[];
   anonymousUserId?: string;
 };
+
+function resolveSearchIntent(input: {
+  cursor?: unknown;
+  analyticsIntent?: unknown;
+}): RecordedSearchIntent {
+  if (input.cursor) return 'pagination';
+  if (
+    input.analyticsIntent === 'catalog_load' ||
+    input.analyticsIntent === 'explicit_search' ||
+    input.analyticsIntent === 'refinement'
+  )
+    return input.analyticsIntent;
+  return 'explicit_search';
+}
 
 export function createServices(env: ApiEnv) {
   const database =
@@ -154,9 +169,11 @@ export function createServices(env: ApiEnv) {
             cursor?: unknown;
             merchantIds?: unknown;
             discoverySessionId?: unknown;
+            analyticsIntent?: unknown;
           })
         : {};
-    const requestKind = requestInput.cursor ? 'pagination' : 'initial';
+    const intent = resolveSearchIntent(requestInput);
+    const requestKind = intent === 'pagination' ? 'pagination' : 'initial';
     let scopedContext: { merchantIds?: string[] } = context;
     let discoverySessionId: string;
     if (typeof requestInput.discoverySessionId === 'string') {
@@ -196,6 +213,7 @@ export function createServices(env: ApiEnv) {
             discoverySessionId,
             ...attribution,
             requestKind,
+            intent,
             outcome: result.items.length ? 'results' : 'empty',
           })),
         );
@@ -209,6 +227,7 @@ export function createServices(env: ApiEnv) {
             discoverySessionId,
             ...attribution,
             requestKind,
+            intent,
             outcome: 'error',
           })),
         );
