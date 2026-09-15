@@ -10,6 +10,7 @@ import { Queue, Worker } from 'bullmq';
 import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { redisConnection } from './connection.js';
 import { parseWorkerEnv } from './env.js';
+import { createOpsAlertSender } from './ops-alert.js';
 import { enqueueImportOutboxEvent } from './outbox.js';
 import { processImportReference } from './process-import.js';
 import { createAlertEmailSender } from './product-alerts.js';
@@ -19,6 +20,7 @@ import { EnvironmentSecretResolver, syncCatalogConnection } from './sync.js';
 const env = parseWorkerEnv(process.env);
 const database = createDatabase(env.DATABASE_URL);
 const alertEmailSender = createAlertEmailSender(env);
+const opsAlerts = createOpsAlertSender(env);
 const operationalLog = (
   level: 'info' | 'error' | 'warn',
   event: string,
@@ -34,6 +36,12 @@ const operationalLog = (
   if (level === 'error') console.error(entry);
   else if (level === 'warn') console.warn(entry);
   else console.info(entry);
+  if (level !== 'info')
+    void opsAlerts.send(
+      event,
+      level === 'error' ? 'error' : 'warning',
+      fields,
+    );
 };
 const connectorFailureFields = (error: Error) =>
   error instanceof ConnectorHttpError
