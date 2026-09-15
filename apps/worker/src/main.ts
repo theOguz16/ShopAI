@@ -1,7 +1,4 @@
-import {
-  ConnectorHttpError,
-  LIVE_CATALOG_PROVIDERS,
-} from '@shopai/connectors';
+import { ConnectorHttpError, LIVE_CATALOG_PROVIDERS } from '@shopai/connectors';
 import { IMPORT_QUEUE, SYNC_QUEUE } from '@shopai/contracts';
 import {
   connections,
