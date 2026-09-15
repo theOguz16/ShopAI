@@ -2,6 +2,7 @@
 
 import {
   type PublicStore,
+  type SearchAnalyticsIntent,
   type SearchResponse,
   discoverySessionSchema,
   publicStoreSchema,
@@ -39,6 +40,8 @@ export default function StorePage() {
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState('');
   const requestSequence = useRef(0);
+  const hasUserSearch = useRef(false);
+  const lastIntent = useRef<SearchAnalyticsIntent>('catalog_load');
 
   const search = useCallback(
     async (
@@ -46,8 +49,10 @@ export default function StorePage() {
       nextQuery = '',
       nextSize = '',
       sessionId?: string,
+      analyticsIntent: SearchAnalyticsIntent = 'explicit_search',
     ) => {
       const sequence = ++requestSequence.current;
+      lastIntent.current = analyticsIntent;
       setSearching(true);
       setError('');
       try {
@@ -57,6 +62,7 @@ export default function StorePage() {
           body: JSON.stringify({
             query: nextQuery,
             filters: { sizes: nextSize ? [nextSize] : [], inStockOnly: false },
+            analyticsIntent,
             ...(sessionId ? { discoverySessionId: sessionId } : {}),
           }),
         });
@@ -81,6 +87,8 @@ export default function StorePage() {
     setStore(undefined);
     setDiscoverySessionId(undefined);
     setResult(undefined);
+    hasUserSearch.current = false;
+    lastIntent.current = 'catalog_load';
     void fetch(`${api}/v1/stores/${encodeURIComponent(slug)}`, {
       signal: controller.signal,
     })
@@ -112,7 +120,7 @@ export default function StorePage() {
         if (!controller.signal.aborted) {
           setStore(next);
           setDiscoverySessionId(session.id);
-          await search(next.id, '', '', session.id);
+          await search(next.id, '', '', session.id, 'catalog_load');
         }
       })
       .catch(() => {
@@ -132,8 +140,13 @@ export default function StorePage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (store && discoverySessionId)
-      void search(store.id, query, size, discoverySessionId);
+    if (store && discoverySessionId) {
+      const intent: SearchAnalyticsIntent = hasUserSearch.current
+        ? 'refinement'
+        : 'explicit_search';
+      hasUserSearch.current = true;
+      void search(store.id, query, size, discoverySessionId, intent);
+    }
   }
 
   if (loading)
@@ -203,7 +216,13 @@ export default function StorePage() {
           <button
             type="button"
             onClick={() =>
-              void search(store.id, query, size, discoverySessionId)
+              void search(
+                store.id,
+                query,
+                size,
+                discoverySessionId,
+                lastIntent.current,
+              )
             }
           >
             Yeniden dene
