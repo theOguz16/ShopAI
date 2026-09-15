@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+const optionalConnectorEncryptionKeySchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z
+    .string()
+    .refine(
+      (value) => Buffer.from(value.trim(), 'base64').length === 32,
+      'base64 encoded 32-byte key olmalıdır',
+    )
+    .optional(),
+);
+
 const workerEnvSchema = z
   .object({
     DEPLOY_ENV: z
@@ -14,6 +26,7 @@ const workerEnvSchema = z
         const protocol = new URL(value).protocol;
         return protocol === 'redis:' || protocol === 'rediss:';
       }, 'redis:// veya rediss:// adresi olmalı'),
+    CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
     RESEND_API_KEY: z.string().min(8).optional(),
     ALERT_FROM_EMAIL: z.string().email().optional(),
   })
@@ -23,6 +36,15 @@ const workerEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['RELEASE_VERSION'],
         message: 'local dışı ortamda immutable sürüm kimliği zorunludur',
+      });
+    if (
+      (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+      !env.CONNECTOR_SECRET_ENCRYPTION_KEY
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CONNECTOR_SECRET_ENCRYPTION_KEY'],
+        message: 'hosted ortamda connector secret encryption key zorunludur',
       });
     if (Boolean(env.RESEND_API_KEY) !== Boolean(env.ALERT_FROM_EMAIL))
       context.addIssue({
