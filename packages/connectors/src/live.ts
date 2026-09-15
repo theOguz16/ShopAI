@@ -1,7 +1,8 @@
 import type { SourceRow } from '@shopai/contracts';
 
 export type SyncMode = 'full' | 'incremental';
-export type LiveCatalogProvider = 'woocommerce' | 'trendyol';
+export const LIVE_CATALOG_PROVIDERS = ['woocommerce', 'trendyol'] as const;
+export type LiveCatalogProvider = (typeof LIVE_CATALOG_PROVIDERS)[number];
 
 export type ConnectorPage = {
   rows: SourceRow[];
