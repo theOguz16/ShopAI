@@ -53,13 +53,12 @@ export default function Dashboard() {
         }>;
         const typedImports = imports as unknown[];
         const typedHealth = health as CatalogHealthSnapshot;
-        const hasLiveCatalogConnector = typedConnections.some(
-          (connection) =>
-            Boolean(
-              connection.provider &&
-                liveCatalogProviders.has(connection.provider) &&
-                connection.active !== false,
-            ),
+        const hasLiveCatalogConnector = typedConnections.some((connection) =>
+          Boolean(
+            connection.provider &&
+              liveCatalogProviders.has(connection.provider) &&
+              connection.active !== false,
+          ),
         );
         if (!signal?.aborted)
           setSummary({
