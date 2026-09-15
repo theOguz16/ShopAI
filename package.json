@@ -29,6 +29,7 @@
     "infra:down": "docker compose -f infra/compose.yaml down",
     "staging:smoke": "node scripts/staging-chatgpt-smoke.mjs",
     "rehearsal:woocommerce": "bash scripts/woocommerce-rehearsal.sh",
+    "pilot:rehearsal": "pnpm build:packages && tsx scripts/pilot-rehearsal.mts",
     "import:csv": "pnpm build:packages && pnpm --filter @shopai/worker import:csv"
   },
   "devDependencies": {

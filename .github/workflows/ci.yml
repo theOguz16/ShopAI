@@ -98,6 +98,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
       - run: pnpm test:integration
+      - name: Run TASK-023A synthetic pilot rehearsal
+        env:
+          PILOT_REHEARSAL_DATABASE_URL: postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_pilot_rehearsal_ci
+        run: pnpm pilot:rehearsal -- --mode=ci --seed=23001
       - name: Exercise backup and restore into an isolated test database
         run: |
           mkdir -p /tmp/shopai-backups

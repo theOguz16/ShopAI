@@ -12,3 +12,4 @@ private/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+artifacts/pilot-rehearsal/
