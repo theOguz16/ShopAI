@@ -19,6 +19,31 @@ const optionalConnectorEncryptionKeySchema = z.preprocess(
     .optional(),
 );
 
+const optionalOpsWebhookUrlSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z
+    .string()
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      );
+    }, 'HTTPS URL olmalı ve credential/query/fragment içermemelidir')
+    .optional(),
+);
+
+const optionalOpsWebhookSecretSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().min(32).optional(),
+);
+
 const baseSchema = z.object({
   DEPLOY_ENV: z
     .enum(['local', 'test', 'staging', 'production'])
@@ -61,6 +86,8 @@ const baseSchema = z.object({
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
   CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
+  OPS_ALERT_WEBHOOK_URL: optionalOpsWebhookUrlSchema,
+  OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
   REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
   AI_PROVIDER: z.enum(['rules', 'openai']).default('rules'),
   OPENAI_API_KEY: z.string().min(1).optional(),
@@ -180,6 +207,21 @@ const apiEnvSchema = z
           message: 'postgres/staging modunda benzersiz bir secret olmalıdır',
         });
     }
+    if (
+      Boolean(env.OPS_ALERT_WEBHOOK_URL) !==
+      Boolean(env.OPS_ALERT_WEBHOOK_SECRET)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPS_ALERT_WEBHOOK_URL'],
+        message: 'OPS alert webhook URL ve secret birlikte ayarlanmalıdır',
+      });
+    if (env.DEPLOY_ENV === 'production' && !env.OPS_ALERT_WEBHOOK_URL)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPS_ALERT_WEBHOOK_URL'],
+        message: 'production ortamında harici operasyon alert sink zorunludur',
+      });
     if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {
       if (!env.CONNECTOR_SECRET_ENCRYPTION_KEY)
         context.addIssue({

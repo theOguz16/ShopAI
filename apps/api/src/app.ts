@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import { z } from 'zod';
 import { type ApiEnv, parseApiEnv } from './env.js';
 import { createMcpServer } from './mcp.js';
+import { createOpsAlertSender } from './ops-alert.js';
 import { registerAuth, requireSameOrigin } from './plugins/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
@@ -40,6 +41,14 @@ const loginRequestSchema = z
   .strict();
 const restDiscoverySurfaces = new Set(['web', 'brand_widget']);
 
+function isSearchRoute(route: string) {
+  return (
+    route === '/v1/search' ||
+    route === '/v1/stores/:merchantId/search' ||
+    route === '/mcp'
+  );
+}
+
 export type BuildAppOptions = {
   onboardingConnectorFactory?: OnboardingConnectorFactory;
 };
@@ -54,6 +63,7 @@ export async function buildApp(
     env.CATALOG_MODE === 'postgres'
       ? createDatabase(env.DATABASE_URL)
       : undefined;
+  const opsAlerts = createOpsAlertSender(env);
   const app = Fastify({
     routerOptions: { maxParamLength: 1024 },
     logger: {
@@ -77,19 +87,24 @@ export async function buildApp(
     reply.header('x-request-id', request.id);
   });
   app.addHook('onResponse', async (request, reply) => {
-    if (
-      reply.statusCode >= 500 &&
-      (request.url.startsWith('/v1/search') || request.url === '/mcp')
-    )
+    const route = request.routeOptions.url ?? request.url;
+    if (reply.statusCode >= 500 && isSearchRoute(route)) {
+      const fields = {
+        requestId: request.id,
+        method: request.method,
+        route,
+        statusCode: reply.statusCode,
+      };
       request.log.error(
         {
           event: 'search_error',
-          requestId: request.id,
           release: env.RELEASE_VERSION,
-          statusCode: reply.statusCode,
+          ...fields,
         },
         'Search request failed',
       );
+      void opsAlerts.send('search_error', 'error', fields);
+    }
   });
   app.addContentTypeParser(
     ['text/csv', 'application/csv', 'application/octet-stream'],
@@ -337,6 +352,15 @@ export async function buildApp(
         : undefined;
     const status =
       typeof code === 'number' && code >= 400 && code < 500 ? code : 500;
+    const route = request.routeOptions.url ?? request.url;
+    if (status >= 500 && !isSearchRoute(route))
+      void opsAlerts.send('request_failed', 'error', {
+        requestId: request.id,
+        method: request.method,
+        route,
+        statusCode: status,
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
     return reply.code(status).send({
       code: status < 500 ? 'INVALID_INPUT' : 'INTERNAL_ERROR',
       requestId: request.id,

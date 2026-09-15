@@ -1,0 +1,109 @@
+name: shopai-production
+
+x-app: &app
+  image: "${SHOPAI_IMAGE:?SHOPAI_IMAGE gerekli}:${RELEASE_VERSION:?RELEASE_VERSION gerekli}"
+  restart: unless-stopped
+  networks:
+    - shopai-production-net
+  security_opt:
+    - no-new-privileges:true
+
+x-runtime: &runtime
+  DEPLOY_ENV: production
+  RELEASE_VERSION: "${RELEASE_VERSION}"
+  CATALOG_MODE: postgres
+  DATABASE_URL: "${PRODUCTION_DATABASE_URL:?Production DB gerekli}"
+  REDIS_URL: "${PRODUCTION_REDIS_URL:?Production Redis gerekli}"
+  MCP_PUBLIC_ORIGIN: "${PRODUCTION_API_ORIGIN:?Production API origin gerekli}"
+  WIDGET_ORIGIN: "${PRODUCTION_WIDGET_ORIGIN:?Production widget origin gerekli}"
+  MCP_ALLOWED_ORIGINS: "${PRODUCTION_ALLOWED_ORIGINS:?Origin listesi gerekli}"
+  WIDGET_RESOURCE_DOMAINS: "${PRODUCTION_RESOURCE_DOMAINS:?Asset origin listesi gerekli}"
+  REDIRECT_SIGNING_SECRET: "${PRODUCTION_REDIRECT_SIGNING_SECRET:?Redirect secret gerekli}"
+  AUTH_PILOT_CREDENTIALS: "${PRODUCTION_AUTH_PILOT_CREDENTIALS:?Kimlik secretı gerekli}"
+  CONNECTOR_SECRET_ENCRYPTION_KEY: "${PRODUCTION_CONNECTOR_SECRET_ENCRYPTION_KEY:?Connector encryption key gerekli}"
+  OPS_ALERT_WEBHOOK_URL: "${PRODUCTION_OPS_ALERT_WEBHOOK_URL:?Ops alert webhook gerekli}"
+  OPS_ALERT_WEBHOOK_SECRET: "${PRODUCTION_OPS_ALERT_WEBHOOK_SECRET:?Ops alert secret gerekli}"
+  LOGIN_RATE_LIMIT_MAX: "${PRODUCTION_LOGIN_RATE_LIMIT_MAX:-5}"
+  CONVERSION_CALLBACK_SECRET: "${PRODUCTION_CONVERSION_CALLBACK_SECRET:-}"
+  RESEND_API_KEY: "${PRODUCTION_RESEND_API_KEY:-}"
+  ALERT_FROM_EMAIL: "${PRODUCTION_ALERT_FROM_EMAIL:-}"
+  UPLOAD_DIR: /var/lib/shopai/uploads
+  LOG_LEVEL: info
+
+services:
+  api:
+    <<: *app
+    environment:
+      <<: *runtime
+      SHOPAI_ROLE: api
+      HOST: 0.0.0.0
+      PORT: 4000
+    ports: ["127.0.0.1:5400:4000"]
+    volumes: ["production-private-uploads:/var/lib/shopai/uploads"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health/ready').then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(j.release!==process.env.RELEASE_VERSION)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *app
+    environment:
+      <<: *runtime
+      SHOPAI_ROLE: worker
+    volumes: ["production-private-uploads:/var/lib/shopai/uploads"]
+
+  web:
+    <<: *app
+    environment:
+      SHOPAI_ROLE: web
+      DEPLOY_ENV: production
+      RELEASE_VERSION: "${RELEASE_VERSION}"
+      HOSTNAME: 0.0.0.0
+    ports: ["127.0.0.1:5300:3000"]
+
+  widget:
+    <<: *app
+    environment:
+      SHOPAI_ROLE: widget
+      DEPLOY_ENV: production
+      RELEASE_VERSION: "${RELEASE_VERSION}"
+      WIDGET_HOST: 0.0.0.0
+      WIDGET_PORT: 3001
+    ports: ["127.0.0.1:5500:3001"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  migrate:
+    <<: *app
+    restart: "no"
+    profiles: ["migration"]
+    environment:
+      <<: *runtime
+      SHOPAI_ROLE: migrate
+
+volumes:
+  production-private-uploads:
+    name: shopai-production-private-uploads
+
+networks:
+  shopai-production-net:
+    external: true
+    name: shopai-production-net

@@ -12,6 +12,31 @@ const optionalConnectorEncryptionKeySchema = z.preprocess(
     .optional(),
 );
 
+const optionalOpsWebhookUrlSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z
+    .string()
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      );
+    }, 'HTTPS URL olmalı ve credential/query/fragment içermemelidir')
+    .optional(),
+);
+
+const optionalOpsWebhookSecretSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().min(32).optional(),
+);
+
 const workerEnvSchema = z
   .object({
     DEPLOY_ENV: z
@@ -27,6 +52,8 @@ const workerEnvSchema = z
         return protocol === 'redis:' || protocol === 'rediss:';
       }, 'redis:// veya rediss:// adresi olmalı'),
     CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
+    OPS_ALERT_WEBHOOK_URL: optionalOpsWebhookUrlSchema,
+    OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
     RESEND_API_KEY: z.string().min(8).optional(),
     ALERT_FROM_EMAIL: z.string().email().optional(),
   })
@@ -45,6 +72,21 @@ const workerEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['CONNECTOR_SECRET_ENCRYPTION_KEY'],
         message: 'hosted ortamda connector secret encryption key zorunludur',
+      });
+    if (
+      Boolean(env.OPS_ALERT_WEBHOOK_URL) !==
+      Boolean(env.OPS_ALERT_WEBHOOK_SECRET)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPS_ALERT_WEBHOOK_URL'],
+        message: 'OPS alert webhook URL ve secret birlikte ayarlanmalıdır',
+      });
+    if (env.DEPLOY_ENV === 'production' && !env.OPS_ALERT_WEBHOOK_URL)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPS_ALERT_WEBHOOK_URL'],
+        message: 'production ortamında harici operasyon alert sink zorunludur',
       });
     if (Boolean(env.RESEND_API_KEY) !== Boolean(env.ALERT_FROM_EMAIL))
       context.addIssue({

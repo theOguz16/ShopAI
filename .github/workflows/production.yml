@@ -1,0 +1,216 @@
+name: Production release
+run-name: Production ${{ inputs.operation }} ${{ inputs.release_version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: deploy applies forward migrations; rollback changes application image only
+        required: true
+        type: choice
+        options:
+          - deploy
+          - rollback
+      release_version:
+        description: Exact 40-character commit SHA to deploy or roll back to
+        required: true
+        type: string
+      staging_run_id:
+        description: Successful exact-release Staging hosted smoke run id; required for deploy
+        required: false
+        type: string
+      confirmation:
+        description: Type PRODUCTION to authorize this run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+concurrency:
+  group: shopai-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      OPERATION: ${{ inputs.operation }}
+      RELEASE_VERSION: ${{ inputs.release_version }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      PRODUCTION_API_ORIGIN: ${{ vars.PRODUCTION_API_ORIGIN }}
+      PRODUCTION_WIDGET_ORIGIN: ${{ vars.PRODUCTION_WIDGET_ORIGIN }}
+      PRODUCTION_HOST: ${{ vars.PRODUCTION_HOST }}
+      PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
+      PRODUCTION_DEPLOY_PATH: ${{ vars.PRODUCTION_DEPLOY_PATH }}
+      PRODUCTION_ENV_FILE: ${{ vars.PRODUCTION_ENV_FILE }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release request
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "production workflow must be dispatched from main"; exit 1; }
+          [[ "$CONFIRMATION" == "PRODUCTION" ]] || { echo "confirmation must be PRODUCTION"; exit 1; }
+          [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "release_version must be a 40-character SHA"; exit 1; }
+          git cat-file -e "$RELEASE_VERSION^{commit}"
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$RELEASE_VERSION" origin/main || {
+            echo "release_version must already be reachable from main"
+            exit 1
+          }
+          node - "$PRODUCTION_API_ORIGIN" "$PRODUCTION_WIDGET_ORIGIN" <<'NODE'
+          for (const value of process.argv.slice(2)) {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.origin !== value) {
+              console.error('production origins must be origin-only HTTPS URLs');
+              process.exit(1);
+            }
+          }
+          NODE
+          [[ "$PRODUCTION_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "PRODUCTION_HOST contains unsafe characters"; exit 1; }
+          [[ "$PRODUCTION_SSH_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "PRODUCTION_SSH_USER is invalid"; exit 1; }
+          deploy_path="${PRODUCTION_DEPLOY_PATH:-/opt/shopai-production}"
+          env_file="${PRODUCTION_ENV_FILE:-/etc/shopai/production.env}"
+          [[ "$deploy_path" =~ ^/[A-Za-z0-9._/-]+$ && "$deploy_path" != *".."* ]] || { echo "PRODUCTION_DEPLOY_PATH is unsafe"; exit 1; }
+          [[ "$env_file" =~ ^/[A-Za-z0-9._/-]+$ && "$env_file" != *".."* ]] || { echo "PRODUCTION_ENV_FILE is unsafe"; exit 1; }
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        id: request
+
+      - name: Require exact-release staging evidence
+        if: inputs.operation == 'deploy'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$STAGING_RUN_ID" =~ ^[0-9]+$ ]] || { echo "staging_run_id is required for deploy"; exit 1; }
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN_ID")"
+          conclusion="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.conclusion ?? "")' "$run_json")"
+          title="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.display_title ?? "")' "$run_json")"
+          event="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.event ?? "")' "$run_json")"
+          path="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.path ?? "")' "$run_json")"
+          branch="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.head_branch ?? "")' "$run_json")"
+          repo="$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(x.repository?.full_name ?? "")' "$run_json")"
+          [[ "$repo" == "$GITHUB_REPOSITORY" ]] || { echo "staging evidence belongs to another repository"; exit 1; }
+          [[ "$path" == ".github/workflows/staging.yml" ]] || { echo "staging evidence must come from staging.yml"; exit 1; }
+          [[ "$branch" == "main" ]] || { echo "staging evidence must be dispatched from main"; exit 1; }
+          [[ "$conclusion" == "success" ]] || { echo "staging run is not successful"; exit 1; }
+          [[ "$event" == "workflow_dispatch" ]] || { echo "staging evidence must be workflow_dispatch"; exit 1; }
+          [[ "$title" == "Staging smoke $RELEASE_VERSION" ]] || {
+            echo "staging run does not prove this exact release"
+            exit 1
+          }
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish immutable application image
+        if: inputs.operation == 'deploy'
+        shell: bash
+        env:
+          SHOPAI_IMAGE: ${{ steps.request.outputs.image }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/shopai-release "$RELEASE_VERSION"
+          docker buildx build \
+            --file /tmp/shopai-release/infra/Dockerfile \
+            --build-arg "NEXT_PUBLIC_API_URL=$PRODUCTION_API_ORIGIN" \
+            --tag "$SHOPAI_IMAGE:$RELEASE_VERSION" \
+            --provenance=true \
+            --sbom=true \
+            --push \
+            /tmp/shopai-release
+
+      - name: Verify rollback image exists
+        if: inputs.operation == 'rollback'
+        shell: bash
+        env:
+          SHOPAI_IMAGE: ${{ steps.request.outputs.image }}
+        run: docker buildx imagetools inspect "$SHOPAI_IMAGE:$RELEASE_VERSION" >/dev/null
+
+      - name: Configure pinned SSH host identity
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_KNOWN_HOSTS" ]] || { echo "production SSH secrets are required"; exit 1; }
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/shopai-production"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopai-production" "$HOME/.ssh/known_hosts"
+
+      - name: Upload deployment control files
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_path="${PRODUCTION_DEPLOY_PATH:-/opt/shopai-production}"
+          ssh -i "$HOME/.ssh/shopai-production" "$PRODUCTION_SSH_USER@$PRODUCTION_HOST" "mkdir -p '$deploy_path'"
+          scp -i "$HOME/.ssh/shopai-production" \
+            infra/production.compose.yaml \
+            infra/deploy-release.sh \
+            infra/backup.sh \
+            infra/restore.sh \
+            infra/retention.sh \
+            "$PRODUCTION_SSH_USER@$PRODUCTION_HOST:$deploy_path/"
+          ssh -i "$HOME/.ssh/shopai-production" "$PRODUCTION_SSH_USER@$PRODUCTION_HOST" \
+            "chmod 700 '$deploy_path/deploy-release.sh' '$deploy_path/backup.sh' '$deploy_path/restore.sh' '$deploy_path/retention.sh'"
+
+      - name: Authenticate production host to GHCR for this release
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | ssh -i "$HOME/.ssh/shopai-production" \
+            "$PRODUCTION_SSH_USER@$PRODUCTION_HOST" \
+            "docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin >/dev/null"
+
+      - name: Deploy immutable release
+        shell: bash
+        env:
+          SHOPAI_IMAGE: ${{ steps.request.outputs.image }}
+        run: |
+          set -euo pipefail
+          deploy_path="${PRODUCTION_DEPLOY_PATH:-/opt/shopai-production}"
+          env_file="${PRODUCTION_ENV_FILE:-/etc/shopai/production.env}"
+          ssh -i "$HOME/.ssh/shopai-production" "$PRODUCTION_SSH_USER@$PRODUCTION_HOST" \
+            "cd '$deploy_path' && OPERATION='$OPERATION' RELEASE_VERSION='$RELEASE_VERSION' SHOPAI_IMAGE='$SHOPAI_IMAGE' PRODUCTION_ENV_FILE='$env_file' ./deploy-release.sh"
+
+      - name: Verify public HTTPS release
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 10 "$PRODUCTION_API_ORIGIN/health/ready")"
+          [[ "$response" == *"\"status\":\"ok\""* && "$response" == *"\"release\":\"$RELEASE_VERSION\""* ]]
+          curl --fail --silent --show-error --max-time 10 "$PRODUCTION_WIDGET_ORIGIN/health/ready" >/dev/null
+
+      - name: Production release record
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### ShopAI production release"
+            echo "- operation: $OPERATION"
+            echo "- release: $RELEASE_VERSION"
+            echo "- image: ${{ steps.request.outputs.image }}:$RELEASE_VERSION"
+            echo "- staging evidence run: ${STAGING_RUN_ID:-not required for rollback}"
+            echo "- workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- migrations: $([[ "$OPERATION" == "deploy" ]] && echo forward-only || echo skipped)"
+          } >> "$GITHUB_STEP_SUMMARY"

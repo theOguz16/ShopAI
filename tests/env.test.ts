@@ -3,6 +3,8 @@ import { parseApiEnv } from '../apps/api/src/env.js';
 import { parseWorkerEnv } from '../apps/worker/src/env.js';
 
 const connectorEncryptionKey = Buffer.alloc(32, 7).toString('base64');
+const opsAlertWebhookUrl = 'https://alerts.shopai.example/events';
+const opsAlertWebhookSecret = 'ops-alert-production-secret-000000000000';
 const hostedStagingEnv = {
   DEPLOY_ENV: 'staging',
   RELEASE_VERSION: 'abcdef123',
@@ -17,6 +19,15 @@ const hostedStagingEnv = {
   AUTH_PILOT_CREDENTIALS:
     '{"pilot@shopai.example":"staging-pilot-credential-0001"}',
   CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+} as const;
+const hostedProductionEnv = {
+  ...hostedStagingEnv,
+  DEPLOY_ENV: 'production',
+  RELEASE_VERSION: '0123456789abcdef0123456789abcdef01234567',
+  MCP_PUBLIC_ORIGIN: 'https://api.shopai.example',
+  WIDGET_ORIGIN: 'https://widget.shopai.example',
+  OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+  OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
 } as const;
 
 describe('startup environment validation', () => {
@@ -117,6 +128,63 @@ describe('startup environment validation', () => {
         CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
       }).CONNECTOR_SECRET_ENCRYPTION_KEY,
     ).toBe(connectorEncryptionKey);
+  });
+
+  it('requires an external signed operations alert sink in production', () => {
+    const {
+      OPS_ALERT_WEBHOOK_URL: _url,
+      OPS_ALERT_WEBHOOK_SECRET: _secret,
+      ...withoutOpsSink
+    } = hostedProductionEnv;
+    expect(() => parseApiEnv(withoutOpsSink)).toThrow(
+      /operation alert sink|OPS_ALERT_WEBHOOK_URL/,
+    );
+    expect(() =>
+      parseWorkerEnv({
+        DEPLOY_ENV: 'production',
+        RELEASE_VERSION: hostedProductionEnv.RELEASE_VERSION,
+        DATABASE_URL: hostedProductionEnv.DATABASE_URL,
+        REDIS_URL: 'rediss://redis.example',
+        CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+      }),
+    ).toThrow(/operation alert sink|OPS_ALERT_WEBHOOK_URL/);
+  });
+
+  it('accepts matching production operations alert configuration', () => {
+    expect(parseApiEnv(hostedProductionEnv)).toMatchObject({
+      OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+      OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+    });
+    expect(
+      parseWorkerEnv({
+        DEPLOY_ENV: 'production',
+        RELEASE_VERSION: hostedProductionEnv.RELEASE_VERSION,
+        DATABASE_URL: hostedProductionEnv.DATABASE_URL,
+        REDIS_URL: 'rediss://redis.example',
+        CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+        OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+        OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+      }),
+    ).toMatchObject({
+      OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+      OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+    });
+  });
+
+  it('rejects partial or unsafe operations alert configuration', () => {
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        OPS_ALERT_WEBHOOK_URL: 'http://alerts.shopai.example/events',
+        OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+      }),
+    ).toThrow(/HTTPS URL/);
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+      }),
+    ).toThrow(/birlikte ayarlanmalıdır/);
   });
 
   it('rejects malformed connector encryption keys', () => {

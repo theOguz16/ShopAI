@@ -1,85 +1,145 @@
-# ShopAI staging işletim runbook'u
+# ShopAI staging + production işletim runbook'u
 
-Bu belge çalışır durumdaki kodun işletim sözleşmesidir. Staging ve production aynı veritabanını, Redis'i, secret'ı veya upload volume'ünü paylaşmaz. Production verisi staging'e kopyalanmaz.
+Bu belge çalışır durumdaki kodun işletim sözleşmesidir. Staging ve production aynı PostgreSQL'i, Redis'i, secret'ı, backup dizinini veya upload volume'ünü paylaşmaz. Production verisi staging'e kopyalanmaz.
+
+Ayrıntılı go-live checklist'i: `docs/production-readiness.md`.
 
 ## Yayın öncesi erişim ve veri kontrolü
 
-- GitHub `staging` environment onayı: pilot teknik sorumlusu.
-- Staging runner ve container registry yazma erişimi: release sorumlusu.
-- Staging PostgreSQL/Redis ve private upload volume erişimi: yalnız API/worker çalışma kimliği ve operasyon sorumlusu.
-- WooCommerce anahtarı salt-okunur ürün yetkisiyle secret manager'da tutulur; DB'de yalnız `secret://` referansı bulunur.
-- `AUTH_PILOT_CREDENTIALS`, normalize e-posta → benzersiz kod JSON eşlemesidir. Ortak kod kullanılmaz; kullanıcı ayrıldığında yalnız kendi girdisi döndürülür.
-- Pilot mağazadan ürün, varyant, fiyat, stok, ürün URL'si ve varsa imzalı sipariş snapshot'ı işlenir. Ödeme kartı, müşteri adı, e-posta, adres veya webhook gövdesi tutulmaz/loglanmaz.
-- Ürün görseli gösterme izni, tıklama ölçümü, 30 günlük takma kimlikli tıklama ve 365 günlük sipariş aggregate saklama süresi pilot sözleşmesinde onaylanır.
-- ChatGPT platform erişimi, izin verilen origin/CSP alanları ve staging TLS sertifikası yayın kontrol listesinde doğrulanır.
+- Staging ve production çalışma kimlikleri minimum yetkili olmalıdır.
+- Connector credential'ları repo'ya yazılmaz; DB'de yalnız `secret://` referansı tutulur ve managed secret production/staging'de encrypted-at-rest'tir.
+- `AUTH_PILOT_CREDENTIALS`, normalize e-posta → benzersiz credential JSON eşlemesidir. Ortak pilot token kullanılmaz.
+- Pilot mağazadan ürün, varyant, fiyat, stok, ürün URL'si ve varsa minimum signed conversion snapshot'ı işlenir. Ödeme kartı, müşteri adı, e-posta, adres veya tam webhook/order gövdesi tutulmaz/loglanmaz.
+- Ürün/görsel kullanımı, attribution ve retention süreleri gerçek merchant agreement ile uyumlu olmalıdır.
 
-## Immutable yayın ve rollback
+## Staging doğrulaması
 
-`.github/workflows/staging.yml` yalnız commit SHA etiketiyle image üretir. GitHub `staging` environment secret'ları compose'a çalışma anında verilir; log veya image katmanına yazılmaz. Migration API başlangıcında çalışmaz ve yalnız deployment job'ındaki ayrı `migrate` rolünde bir kez uygulanır.
+`.github/workflows/staging.yml` bir **deploy workflow'u değildir**. Public staging'e daha önce deploy edilmiş exact release SHA'sını doğrulayan hosted smoke workflow'udur.
 
-Normal yayın:
+Başarılı bir staging evidence run için:
 
-1. CI `check` ve `integration` job'larının yeşil olduğunu doğrula.
-2. `Staging deploy` workflow'unu boş `release_version` ile çalıştır.
-3. Job önce DB backup alır, gözden geçirilmiş forward migration'ı uygular, sonra API/worker/web'i değiştirir.
-4. `/health/ready` yanıtının `release` alanı yayımlanan SHA ile aynı olmalıdır.
-5. Arama, test mağazası araması, bir import ve worker log zinciri smoke-test edilir.
+1. `release_version` exact 40-char commit SHA olmalıdır.
+2. `scripts/staging-chatgpt-smoke.mjs` public staging API/widget üzerinde çalışır.
+3. API readiness'in `release` alanı istenen SHA ile uyuşmalıdır.
+4. Workflow run adı `Staging smoke <SHA>` olur.
+5. Bu run id normal production deploy'a evidence olarak verilir.
 
-Uygulama rollback'i:
+Staging'e hangi mekanizmayla deployment yapıldığı ayrıca operatör sorumluluğudur; smoke geçmeden production deploy açılamaz.
 
-1. Son başarılı deployment kaydındaki image SHA'sını seç.
-2. `Staging deploy` workflow'unu o SHA'yı `release_version` olarak vererek çalıştır.
-3. Migration geriye alınmaz. Eski sürüm yeni şemayla uyumlu değilse rollout durdurulur ve forward-fix hazırlanır.
-4. Readiness ve release doğrulaması workflow tarafından tekrar yapılır.
+## Production immutable deploy
 
-Bu prosedür self-hosted `shopai-staging` runner, GHCR erişimi ve GitHub environment onayı kurulmadan “denenmiş” sayılmaz. Her denemede workflow URL'si ve önceki/yeni SHA deployment kaydına eklenir.
+Production workflow: `.github/workflows/production.yml`.
+
+Normal `deploy` sırası:
+
+1. Target SHA'nın `main` history'sinde olduğu doğrulanır.
+2. Aynı SHA için successful `Staging smoke <SHA>` run id zorunludur.
+3. GitHub `production` environment approval uygulanır.
+4. Exact SHA source'tan GHCR image build edilir ve SHA tag'iyle push edilir.
+5. Control files pinned SSH host identity ile production host'a kopyalanır.
+6. Host `infra/deploy-release.sh` ile production env/compose contract'ını doğrular.
+7. Deployment öncesi DB backup alınır.
+8. Forward migration ayrı `migrate` container'ında bir kez çalışır.
+9. API/worker/web/widget aynı immutable image SHA ile rollout edilir.
+10. Local readiness ve public HTTPS readiness exact release SHA'yı doğrular.
+
+`production` environment minimum GitHub config ve server env sözleşmesi `docs/production-readiness.md` içinde tutulur.
+
+## Application rollback
+
+Rollback bilinçli ve explicit'tir:
+
+1. Daha önce başarıyla yayımlanmış immutable SHA seçilir.
+2. `Production release` workflow'u `operation=rollback` ve target SHA ile çalıştırılır.
+3. Workflow image'ın GHCR'da varlığını doğrular.
+4. `deploy-release.sh` application container'larını eski SHA'ya çevirir.
+5. Migration çalıştırılmaz ve migration otomatik geri alınmaz.
+6. Exact release readiness tekrar doğrulanır.
+
+Eski application yeni DB schema ile uyumlu değilse rollback yapılmaz; forward-fix release hazırlanır. Şema rollback'i ayrı, review edilmiş bir veri operasyonudur.
+
+## Production secret dosyası
+
+Production host varsayılan olarak `/etc/shopai/production.env` kullanır. Dosya `chmod 600` olmalıdır; deploy script group/world-readable secret dosyasını fail-closed reddeder.
+
+Secret dosyası GitHub Actions loglarına veya image katmanına kopyalanmaz. GitHub workflow yalnız release metadata, SSH erişimi ve kısa ömürlü GHCR workflow token'ını kullanır.
 
 ## Backup ve test restore
 
-`infra/backup.sh` custom-format dump ve SHA-256 manifest üretir. Staging'de şifreli, staging'e özel backup dizinine yazılır. CI her entegrasyon koşusunda dump'ı yeni `shopai_restore_test` DB'sine `infra/restore.sh` ile geri yükler ve migration tablosunu okur. Restore script'i `RESTORE_TARGET=test` ve `ALLOW_RESTORE=true` olmadan çalışmaz.
+`infra/backup.sh` custom-format PostgreSQL dump ve SHA-256 manifest üretir. CI her integration koşusunda dump'ı izole test DB'sine `infra/restore.sh` ile geri yükler.
 
-Elle doğrulama örneği:
+Production deploy'da backup migration'dan önce alınır. Production target'a destructive otomatik restore yoktur. Production restore ayrı incident/change prosedürü gerektirir.
 
-```sh
-DATABASE_URL="$STAGING_DATABASE_URL" BACKUP_DIR=/secure/shopai-staging-backups infra/backup.sh
-DATABASE_URL="$RESTORE_TEST_DATABASE_URL" BACKUP_FILE=/secure/shopai-staging-backups/shopai-TIMESTAMP.dump RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
-```
+Hedef:
 
-Günlük backup, 14 günlük saklama ve sağlayıcı destekliyorsa PITR hedeflenir. Üç ayda bir izole test restore yapılır; tarih, dump checksum'ı, süre ve doğrulayan kişi kaydedilir. Production hedefinde otomatik `--clean` restore yasaktır.
+- günlük production backup;
+- yaklaşık 14 günlük backup retention veya sağlayıcı policy'si;
+- sağlayıcı destekliyorsa PITR;
+- en az üç ayda bir isolated restore rehearsal.
 
-## Log korelasyonu ve alarm koşulları
+Her restore rehearsal tarih, dump checksum, süre ve doğrulayan kişi ile kaydedilmelidir.
 
-API her yanıtta `x-request-id` döndürür. Import kabul logunda `requestId`, `importRunId`, `merchantId`, `connectionId`; outbox ve worker loglarında aynı `importRunId` ile Bull `jobId` bulunur. Örnek sorgu zinciri:
+## External operations alerting
+
+Production API ve worker şu kritik olayları configured external alert sink'e iletir:
+
+- `search_error`;
+- `request_failed`;
+- `queue_lag`;
+- `catalog_stale`;
+- `import_failed`;
+- `sync_failed`;
+- `outbox_publish_failed`;
+- `scheduler_failed` ve worker-level errors.
+
+Payload HMAC-SHA256 ile imzalanır:
 
 ```text
-event=import_accepted importRunId=<run-id>
-event=outbox_published importRunId=<run-id> jobId=<run-id>
-event=import_completed|import_failed importRunId=<run-id> jobId=<run-id>
+x-shopai-alert-timestamp: <unix-ms>
+x-shopai-alert-signature: sha256=<HMAC(secret, timestamp + "." + rawBody)>
 ```
 
-Uyarı üretilecek yapılandırılmış olaylar:
+Alert sink erişilemezse ShopAI request/job execution fail ettirilmez; delivery failure local structured warning olarak kalır. Receiver replay/freshness kontrolü ve gerçek on-call routing uygulamalıdır.
 
-- `search_error`: web/MCP aramasında 5xx; beş dakikada üç olay alarm.
-- `queue_lag`: bekleyen en eski import/sync işi beş dakikadan yaşlı; tek olay alarm.
-- `catalog_stale`: etkin bağlantıda son fetch 30 dakikadan eski veya hiç yok; iki ardışık olay alarm.
-- `import_failed`, `sync_failed`, `outbox_publish_failed`: merchant/run/job alanlarıyla hata alarmı.
+Önerilen eşikler:
 
-Logger authorization, cookie, callback imzası, giriş token'ı ve connector secret alanlarını redakte eder. Request/webhook gövdeleri loglanmaz.
+- search/request 5xx: 5 dakikada >=3 → page;
+- queue lag: 5 dakikadan eski job → warning/page;
+- aynı catalog connection iki ardışık stale gözlem → page;
+- import/sync/outbox failure → tek olay warning veya page.
+
+## Log korelasyonu
+
+API yanıtı `x-request-id` taşır. Import/sync logları `merchantId`, `connectionId`, `importRunId` ve/veya Bull `jobId` ile korele edilir.
+
+Logger authorization, cookie, callback imzası, login token'ı ve connector credential alanlarını redakte eder. Raw request/webhook body operational alert payload'una gönderilmez.
 
 ## Kesinti teşhisi
 
 - `/health/live`: süreç ayakta mı?
-- `/health/ready`: katalog repository/DB erişilebilir mi? DB kesintisinde 503 dönmelidir ve trafik instance'a yönlendirilmemelidir.
-- Redis kesintisi: API kabul ettiği importu outbox'ta tutar; `outbox_publish_failed` görülür. Redis dönünce aynı run ID ile yayınlanır.
-- Eski katalog: `catalog_stale` bağlantı ve merchant kimliğiyle araştırılır; son başarılı sync ve hata panelden kontrol edilir. Başarısız sync ürünleri topluca pasifleştirmez.
+- `/health/ready`: repository/DB erişilebilir mi ve doğru release mi?
+- Redis kesintisi: import outbox event'i DB'de kalır; publisher retry eder.
+- `queue_lag`: Redis/Bull worker throughput ve oldest job incelenir.
+- `catalog_stale`: connection son başarılı sync, authorization status ve connector upstream hataları incelenir.
+- `sync_failed`: connector HTTP diagnostics credential-redacted olarak kullanılır.
 
 ## Saklama ve silme
 
-`RETENTION_APPLY=true DATABASE_URL=... UPLOAD_DIR=/var/lib/shopai/uploads infra/retention.sh` günlük çalıştırılır:
+`infra/retention.sh` kontrollü olarak şu teknik varsayımları uygular:
 
-- tamamlanmış/başarısız ham import ve run/outbox: 7 gün;
-- takma kimlikli yönlendirme tıklaması: 30 gün;
-- aggregate conversion sipariş snapshot'ı: 365 gün;
-- süresi dolmuş oturum: ek 7 gün.
+- tamamlanmış/başarısız raw import/run/outbox: yaklaşık 7 gün;
+- pseudonymous redirect/click kayıtları: yaklaşık 30 gün;
+- attributed conversion aggregate snapshot: yaklaşık 365 gün;
+- expired session: kısa operational grace period.
 
-Backup silinmesi ayrı 14 günlük lifecycle ile yapılır. Hukuki bekletme veya pilot sözleşmesi farklıysa job çalıştırılmadan politika değiştirilir ve migration/review uygulanır.
+Backup lifecycle ayrıdır. Legal hold, merchant agreement veya final Privacy Policy farklı süre isterse retention job production'a uygulanmadan önce policy/code/migration birlikte review edilmelidir.
+
+## Legal gate
+
+Repo'daki legal dokümanlar draft'tır:
+
+- `docs/legal/privacy-policy-draft.md`
+- `docs/legal/terms-of-service-draft.md`
+- `docs/legal/merchant-pilot-agreement-draft.md`
+
+Placeholder ve counsel/authorized owner approval tamamlanmadan production launch sign-off verilmez.

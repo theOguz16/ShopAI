@@ -16,6 +16,30 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Validate production deployment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n infra/deploy-release.sh
+          cat > /tmp/shopai-production.env <<'EOF'
+          PRODUCTION_DATABASE_URL=postgresql://shopai:test@db.example/shopai
+          PRODUCTION_REDIS_URL=rediss://redis.example
+          PRODUCTION_API_ORIGIN=https://api.shopai.example
+          PRODUCTION_WIDGET_ORIGIN=https://widget.shopai.example
+          PRODUCTION_ALLOWED_ORIGINS=https://chatgpt.com,https://chat.openai.com
+          PRODUCTION_RESOURCE_DOMAINS=https://widget.shopai.example,https://images.shopai.example
+          PRODUCTION_REDIRECT_SIGNING_SECRET=ci-production-redirect-signing-secret-000000000000
+          PRODUCTION_AUTH_PILOT_CREDENTIALS={"pilot@shopai.example":"ci-production-pilot-secret-000000"}
+          PRODUCTION_CONNECTOR_SECRET_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          PRODUCTION_OPS_ALERT_WEBHOOK_URL=https://alerts.shopai.example/events
+          PRODUCTION_OPS_ALERT_WEBHOOK_SECRET=ci-production-ops-alert-secret-000000000000
+          PRODUCTION_LOGIN_RATE_LIMIT_MAX=5
+          EOF
+          SHOPAI_IMAGE=ghcr.io/theoguz16/shopai \
+          RELEASE_VERSION=0123456789abcdef0123456789abcdef01234567 \
+            docker compose --env-file /tmp/shopai-production.env -f infra/production.compose.yaml config >/tmp/shopai-production-compose.yaml
+          grep -q 'DEPLOY_ENV: production' /tmp/shopai-production-compose.yaml
+          grep -q 'OPS_ALERT_WEBHOOK_URL: https://alerts.shopai.example/events' /tmp/shopai-production-compose.yaml
   integration:
     runs-on: ubuntu-latest
     services:
