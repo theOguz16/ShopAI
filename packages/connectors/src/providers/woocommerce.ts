@@ -4,7 +4,7 @@ import {
   type ConnectorHttpDiagnostics,
   type ConnectorPage,
   type LiveCatalogConnector,
-} from '../index.js';
+} from '../live.js';
 import { createPublicConnectorFetch } from '../target-safety.js';
 
 export type WooCommerceCredentials = {

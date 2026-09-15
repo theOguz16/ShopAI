@@ -6,12 +6,11 @@ import {
 } from '@shopai/commerce';
 import {
   ConnectorHttpError,
+  createLiveCatalogConnector,
   type LiveCatalogConnector,
   ManagedConnectorSecretStore,
-  WooCommerceConnector,
-  type WooCommerceCredentials,
 } from '@shopai/connectors';
-import { type SyncJob, syncJobSchema } from '@shopai/contracts';
+import { type SourceRow, type SyncJob, syncJobSchema } from '@shopai/contracts';
 import {
   connections,
   type Database,
@@ -56,11 +55,20 @@ type ConnectorFactory = (
   credentials: unknown,
 ) => LiveCatalogConnector;
 
-export const createConnector: ConnectorFactory = (provider, credentials) => {
-  if (provider !== 'woocommerce')
-    throw new Error(`Desteklenmeyen canlı connector: ${provider}`);
-  return new WooCommerceConnector(credentials as WooCommerceCredentials);
-};
+export const createConnector: ConnectorFactory = createLiveCatalogConnector;
+export const CATALOG_IMPORT_BATCH_SIZE = 1000;
+
+export function chunkCatalogRows(
+  rows: readonly SourceRow[],
+  size = CATALOG_IMPORT_BATCH_SIZE,
+) {
+  if (!Number.isSafeInteger(size) || size < 1 || size > 1000)
+    throw new Error('Catalog import batch size 1-1000 arasında olmalıdır.');
+  const batches: SourceRow[][] = [];
+  for (let offset = 0; offset < rows.length; offset += size)
+    batches.push(rows.slice(offset, offset + size));
+  return batches;
+}
 
 export async function syncCatalogConnection(
   db: Database,
@@ -178,46 +186,62 @@ export async function syncCatalogConnection(
     });
 
     if (snapshot.rows.length) {
+      const processedProductKeys = new Set<string>();
       try {
-        await importCatalog(
-          db,
-          {
-            schemaVersion: 1,
-            runId: randomUUID(),
-            merchantId: job.merchantId,
-            connectionId: job.connectionId,
-            observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
-            rows: snapshot.rows,
-          },
-          {
-            onProgress: async ({ processedProducts }) => {
-              progress = {
-                status: 'running',
-                foundProducts: snapshot.progress.foundProducts,
-                processedProducts,
-                failedProducts: 0,
-                variants: snapshot.progress.variants,
-              };
-              await writeConnectionSyncProgress(
-                db,
-                job.merchantId,
-                job.connectionId,
-                {
-                  ...progress,
-                  startedAt,
-                  completedAt: null,
-                  error: null,
-                },
-                now(),
-              );
+        for (const rows of chunkCatalogRows(snapshot.rows)) {
+          let lastProcessedRows = 0;
+          await importCatalog(
+            db,
+            {
+              schemaVersion: 1,
+              runId: randomUUID(),
+              merchantId: job.merchantId,
+              connectionId: job.connectionId,
+              observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+              rows,
             },
-          },
-        );
+            {
+              onProgress: async ({ processedRows }) => {
+                for (
+                  let index = lastProcessedRows;
+                  index < processedRows;
+                  index += 1
+                ) {
+                  const row = rows[index];
+                  if (row) processedProductKeys.add(row.productKey);
+                }
+                lastProcessedRows = processedRows;
+                progress = {
+                  status: 'running',
+                  foundProducts: snapshot.progress.foundProducts,
+                  processedProducts: processedProductKeys.size,
+                  failedProducts: 0,
+                  variants: snapshot.progress.variants,
+                };
+                await writeConnectionSyncProgress(
+                  db,
+                  job.merchantId,
+                  job.connectionId,
+                  {
+                    ...progress,
+                    startedAt,
+                    completedAt: null,
+                    error: null,
+                  },
+                  now(),
+                );
+              },
+            },
+          );
+        }
       } catch (error) {
         progress = {
           ...snapshot.progress,
-          processedProducts: 0,
-          failedProducts: snapshot.progress.foundProducts,
+          processedProducts: processedProductKeys.size,
+          failedProducts: Math.max(
+            0,
+            snapshot.progress.foundProducts - processedProductKeys.size,
+          ),
         };
         throw error;
       }

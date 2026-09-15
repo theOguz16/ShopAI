@@ -1,4 +1,4 @@
-import { ConnectorHttpError } from '@shopai/connectors';
+import { ConnectorHttpError, LIVE_CATALOG_PROVIDERS } from '@shopai/connectors';
 import { IMPORT_QUEUE, SYNC_QUEUE } from '@shopai/contracts';
 import {
   connections,
@@ -144,7 +144,7 @@ const enqueueDueSyncs = async () => {
       .where(
         and(
           eq(connections.active, true),
-          eq(connections.provider, 'woocommerce'),
+          inArray(connections.provider, [...LIVE_CATALOG_PROVIDERS]),
           inArray(connections.authorizationStatus, ['pending', 'active']),
         ),
       ),
@@ -152,7 +152,7 @@ const enqueueDueSyncs = async () => {
   const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
   for (const connection of active) {
     const job = connectionToSyncJob(connection);
-    await syncQueue.add('woocommerce-sync', job, {
+    await syncQueue.add('catalog-sync', job, {
       jobId: `${connection.id}-${bucket}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -204,7 +204,7 @@ const monitorOperations = async () => {
       .where(
         and(
           eq(connections.active, true),
-          eq(connections.provider, 'woocommerce'),
+          inArray(connections.provider, [...LIVE_CATALOG_PROVIDERS]),
         ),
       ),
   )) as {
