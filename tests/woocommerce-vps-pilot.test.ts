@@ -46,19 +46,17 @@ describe('synthetic WooCommerce VPS pilot guardrails', () => {
 
 describe.skipIf(docker.status !== 0)('WooCommerce VPS compose contract', () => {
   it('renders with dummy secrets, loopback-only HTTP and a private DB', () => {
+    const env = {
+      ...process.env,
+      WOO_DB_PASSWORD: 'ci-demo-db-not-a-secret',
+      WOO_DB_ROOT_PASSWORD: 'ci-demo-root-not-a-secret',
+      WOO_PUBLIC_ORIGIN: 'https://woo-pilot.example.invalid',
+      WOO_LOOPBACK_PORT: '18480',
+    };
     const result = spawnSync(
       'docker',
       ['compose', '-f', compose, 'config', '--format', 'json'],
-      {
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          WOO_DB_PASSWORD: 'ci-demo-db-not-a-secret',
-          WOO_DB_ROOT_PASSWORD: 'ci-demo-root-not-a-secret',
-          WOO_PUBLIC_ORIGIN: 'https://woo-pilot.example.invalid',
-          WOO_LOOPBACK_PORT: '18480',
-        },
-      },
+      { encoding: 'utf8', env },
     );
     expect(result.status, result.stderr).toBe(0);
     const config = JSON.parse(result.stdout);
@@ -72,7 +70,17 @@ describe.skipIf(docker.status !== 0)('WooCommerce VPS compose contract', () => {
     expect(config.services.wordpress.environment.WOO_PUBLIC_ORIGIN).toBe(
       'https://woo-pilot.example.invalid',
     );
-    expect(config.services.wpcli.profiles).toContain('tools');
+    expect(config.services.wpcli).toBeUndefined();
+
+    const withTools = spawnSync(
+      'docker',
+      ['compose', '-f', compose, '--profile', 'tools', 'config', '--format', 'json'],
+      { encoding: 'utf8', env },
+    );
+    expect(withTools.status, withTools.stderr).toBe(0);
+    expect(JSON.parse(withTools.stdout).services.wpcli.image).toContain(
+      'wordpress:cli',
+    );
   });
 
   it('fails closed without required credentials', () => {
