@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-const assetVersion = '3';
+const assetVersion = '4';
 
 export default defineConfig({
   build: {

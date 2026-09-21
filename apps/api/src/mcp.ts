@@ -31,8 +31,8 @@ import type { ProductAlertsApi } from './routes/product-alerts.js';
 import type { SavedProductsApi } from './routes/saved-products.js';
 import type { Services } from './services.js';
 
-export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-shopping-v3.html';
-export const SHOPAI_WIDGET_ASSET_VERSION = '3';
+export const SHOPAI_WIDGET_URI = 'ui://widget/shopai-shopping-v4.html';
+export const SHOPAI_WIDGET_ASSET_VERSION = '4';
 
 export type WidgetConfig = {
   origin: string;

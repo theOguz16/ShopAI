@@ -125,17 +125,17 @@ assert(
   'ShopAI API origin CSP redirect_domains içinde değil',
 );
 assert(
-  resource.text?.includes(`${widgetOrigin}/assets/widget-v3.js`),
+  resource.text?.includes(`${widgetOrigin}/assets/widget-v4.js`),
   'hosted widget JS URL resource HTML içinde yok',
 );
 assert(
-  resource.text?.includes(`${widgetOrigin}/assets/widget-v3.css`),
+  resource.text?.includes(`${widgetOrigin}/assets/widget-v4.css`),
   'hosted widget CSS URL resource HTML içinde yok',
 );
 
 await Promise.all([
-  fetchAsset('/assets/widget-v3.js', 'application/javascript'),
-  fetchAsset('/assets/widget-v3.css', 'text/css'),
+  fetchAsset('/assets/widget-v4.js', 'application/javascript'),
+  fetchAsset('/assets/widget-v4.css', 'text/css'),
 ]);
 
 const searchResult = await rpc('tools/call', {
