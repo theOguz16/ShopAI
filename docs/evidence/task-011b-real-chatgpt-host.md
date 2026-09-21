@@ -4,33 +4,33 @@ Tarih: 21 Eylül 2026 (Europe/Istanbul)
 
 ## Sonuç
 
-**KISMİ / KAPI AÇIK.** Yetkili gerçek ChatGPT Plus hesabında Developer Mode ile ShopAI özel uygulaması bağlıdır. İlk koşuda bulunan initial tool-output hydration hatası PR #43 ile düzeltildi ve gerçek hostta yeniden arama ve ürün detayı geçti. `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` release'inde sentetik kabul görseli hosted smoke ile origin, MIME, CORS ve CORP düzeyinde geçti; gerçek ChatGPT iframe tekrar koşusu henüz kaydedilmedi. Saved kimliği yetkilendirmesiz/stateless ChatGPT tool çağrıları arasında korunmuyor; ürün bu davranışı açıkça raporluyor ve account-linking TASK-024'tür. Kontrollü timeout, ShopAI-origin console/CSP kaydı ve ekran kaydı hâlâ eksik olduğu için görev kapatılamaz.
+**KISMİ / KAPI AÇIK.** Yetkili gerçek ChatGPT Plus hesabında Developer Mode ile ShopAI özel uygulaması bağlıdır. İlk koşuda bulunan initial tool-output hydration hatası PR #43 ile düzeltildi ve gerçek hostta yeniden arama ve ürün detayı geçti. Immutable browser cache'inde kalan v3 assetlerini ayırmak için PR #50 ile resource/assets v4'e yükseltildi; gerçek ChatGPT eklenti yönetimindeki `Yenile` sonrası `ui://widget/shopai-shopping-v4.html` ve `shopai/assetVersion=4` görüldü. `a8594cfcb739932a2fcaec94fad27b545d3724c1` release'i exact-SHA hosted smoke'ta görsel origin, MIME, CORS ve CORP dahil geçti. Ancak v4 iframe'in görsel tekrar koşusu, kontrollü timeout, ShopAI-origin console/CSP kaydı ve ekran kaydı hâlâ eksiktir. Saved kimliği yetkilendirmesiz/stateless ChatGPT tool çağrıları arasında korunmuyor; ürün bu davranışı açıkça raporluyor ve account-linking TASK-024'tür.
 
 ## Release ve host kanıtı
 
 - Staging readiness: `https://shop.fizyoflow.com/health/ready`
 - İlk koşu release'i: `cb74208776afb998139ac4211a2477bea543068b`
 - Düzeltme tekrar koşusu release'i: `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6`
-- Güncel hosted görsel kabul release'i: `af1646aa85e6da3ff94df430a6ec4c16cf69adcb`
-- Exact-release staging workflow: https://github.com/theOguz16/ShopAI/actions/runs/35637005952
+- Güncel hosted/cache-bust kabul release'i: `a8594cfcb739932a2fcaec94fad27b545d3724c1`
+- Exact-release staging workflow: https://github.com/theOguz16/ShopAI/actions/runs/35641244699
 - Düzeltme release readiness sonucu: `status=ok`, exact release SHA
 - Hosted smoke: search tool, widget assets, product detail ve signed external handoff PASS
 - CI: https://github.com/theOguz16/ShopAI/actions/runs/35602033609 (PASS)
 - Test edilen MCP: `https://shop.fizyoflow.com/mcp`
-- UI resource: `ui://widget/shopai-shopping-v3.html`
+- UI resource: `ui://widget/shopai-shopping-v4.html`
 - ChatGPT uygulama kimliği: `asdk_app_6ab0ce99252081919ba9f97a7a0b1aaf`
 - ChatGPT uygulama sürüm kimliği: `asdk_app_v_6ab0ce99252c81918b4c2955f8f7e9f8`
 - ChatGPT konuşması: `https://chatgpt.com/c/6ab0cf3a-3f44-83ed-a36f-2feac5da1fdc`
 - Hesap sınıfı: gerçek ChatGPT Plus hesabı; kişisel hesap ayrıntıları bu belgeye yazılmadı.
 
-REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2` olarak merge edildi. Real-host hydration düzeltmesi [PR #43](https://github.com/theOguz16/ShopAI/pull/43), görsel eşleme düzeltmesi [PR #46](https://github.com/theOguz16/ShopAI/pull/46) ve widget görsel servisi [PR #47](https://github.com/theOguz16/ShopAI/pull/47) ile merge edildi. Staging uygulama release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb`'dir; sonraki commitler yalnız kabul belgelerini günceller.
+REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2` olarak merge edildi. Real-host hydration düzeltmesi [PR #43](https://github.com/theOguz16/ShopAI/pull/43), görsel eşleme düzeltmesi [PR #46](https://github.com/theOguz16/ShopAI/pull/46), widget görsel servisi [PR #47](https://github.com/theOguz16/ShopAI/pull/47) ve immutable-cache ayırımı [PR #50](https://github.com/theOguz16/ShopAI/pull/50) ile merge edildi. Güncel staging uygulama release'i `a8594cfcb739932a2fcaec94fad27b545d3724c1`'dir.
 
 ## Senaryo sonuçları
 
 | Senaryo | Sonuç | Gözlem |
 |---|---|---|
 | Developer Mode / private app | PASS | ShopAI oluşturuldu; ChatGPT `Success: ShopAI şimdi bağlandı` gösterdi. |
-| Tool keşfi | PASS | 8 eylem ve `ui://widget/shopai-shopping-v3.html` şablonu gerçek hostta listelendi. |
+| Tool keşfi | PASS | Eklenti yenilemesi sonrası eylemler ve `ui://widget/shopai-shopping-v4.html` şablonu gerçek host yönetim ekranında listelendi; `shopai/assetVersion=4` doğrulandı. |
 | Arama | PASS | `search_products` çalıştı; 3 sentetik ürün döndü. |
 | Widget render | PASS | Gerçek ChatGPT sandbox iframe'i render edildi. |
 | Filtreleme | PASS | Siyah filtresi 3 ürünü 1 ürüne indirdi. |
@@ -38,7 +38,7 @@ REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2
 | Initial widget hydration | PASS (tekrar koşusu) | `window.openai.toolOutput` nested `result.structuredContent` biçimi normalize edildi; host-bridge 6/6 ve real-host yeni çağrısı PASS. |
 | Varyant | PASS | M/Siyah stokta, L/Siyah stokta yok olarak gösterildi. |
 | Merchant handoff | PASS | `Satın Al` yeni sekmede `https://example.com/products/1?shopai_click_id=...` açtı. Bu gerçek checkout değil, doğru adlandırılmış demo product-page handoff'tur. |
-| Görsel yükleme | HOSTED PASS / REAL HOST TEKRAR EKSİK | Açıkça `SENTETİK DEMO · GERÇEK ÜRÜN DEĞİL` etiketli SVG; hosted smoke origin, `image/svg+xml`, CORS ve CORP kontrolünü geçti. Gerçek ChatGPT iframe render kaydı henüz yok. |
+| Görsel yükleme | HOSTED PASS / REAL HOST v4 TEKRAR EKSİK | Açıkça `SENTETİK DEMO · GERÇEK ÜRÜN DEĞİL` etiketli SVG; exact-SHA hosted smoke origin, `image/svg+xml`, CORS ve CORP kontrolünü geçti. Gerçek ChatGPT yönetim ekranında v4 aktif, fakat v4 iframe görsel render kaydı henüz yok. |
 | Timeout/hata UX | KISMİ PASS | Detail hatası sonlandı ve yeniden deneme mesajı gösterildi; kontrollü gerçek timeout senaryosu ayrıca çalıştırılmadı. |
 | Saved identity | Beklenen sınırlama / account-linking gerekli | Tekrar koşusunda `save_product` kayıt ID'si `2de63147-c23f-42cf-8a3a-694ac95e5d53` üretti; hemen sonraki stateless `list_saved_products` boş döndü. Stateful `Mcp-Session-Id` entegrasyon testi PASS olsa da gerçek host ayrı tool çağrılarında bu session/cookie principal'ını taşımıyor. Davranış kullanıcıya açık raporlandı; TASK-024 gerekir. |
 | Alert identity | KISMİ | Salt okunur `list_product_alerts` çalıştı ve boş liste döndü. Yeni e-posta alarmı oluşturulmadı; bildirim aboneliği testi yapılmadı. |

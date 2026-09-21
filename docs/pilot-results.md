@@ -8,7 +8,7 @@ Görevlerin mühendislik ve dış kabul durumu için tek kaynak `docs/06-impleme
 
 **Mevcut karar: PİLOT YAYININA HAZIR DEĞİL — dış kabul kanıtı bekleniyor.**
 
-Teknik temel, hosted staging ve gerçek ChatGPT Developer Mode koşusu vardır; ancak gerçek host koşusu kısmi başarısızdır. Saved identity sürekliliği, karttan detail, CSP, gerçek görsel ve ekran kaydı eksikleri yanında izinli bağımsız gerçek mağaza/kullanıcı, rollback ve ücretli devam kanıtı yoktur. Bu nedenle ürün faydası veya ücret ödeme isteği hakkında olumlu sonuç çıkarılamaz.
+Teknik temel, hosted staging ve gerçek ChatGPT Developer Mode koşusu vardır; ancak gerçek host kabulü tamamlanmamıştır. Karttan detail düzeltme tekrar koşusunda geçti; v4 metadata gerçek hostta aktiftir. Saved identity sürekliliği, v4 iframe görsel tekrar koşusu, CSP/console, kontrollü timeout ve ekran kaydı eksikleri yanında izinli bağımsız gerçek mağaza/kullanıcı, rollback ve ücretli devam kanıtı yoktur. Bu nedenle ürün faydası veya ücret ödeme isteği hakkında olumlu sonuç çıkarılamaz.
 
 **Onaylanan sonraki adım:** `docs/pilot-brief.md` uyarınca `M01` kodlu, sentetik CSV kataloglu iç kullanılabilirlik koşusu yapılabilir. Önceden sabit eşik 25 görevin en az 20'sinin başarılı olması, kullanıcı başına en az 3/5 başarı, başarılı görevlerde en fazla 90 saniye medyan ve sıfır çıkışsız akıştır; sert beden/fiyat/stok doğruluğu ile yetkisiz erişimde tolerans sıfırdır. M01 sonucu gerçek butik kabulü, pazar talebi, satış artışı veya ödeme isteği kanıtı sayılmaz.
 
@@ -24,10 +24,10 @@ Teknik temel, hosted staging ve gerçek ChatGPT Developer Mode koşusu vardır; 
 | TASK-023A sentetik prova | Geçti | PR #39 / `cb74208`; 5 sentetik merchant, 10k+ ürün ve 100 deterministik yolculuk; gerçek katılımcı kabulü değildir |
 | Onboarding Playwright senaryosu | Hazır; dış kabul bekliyor | İzinli gerçek merchant credential'ı ve kaydedilmiş hosted koşu gerekli |
 | Gerçek WooCommerce kaynak mutabakatı | Bekliyor | İzinli gerçek ürün ve mağaza erişimi gerekli |
-| Hosted MCP/widget smoke | Manuel PASS kaydı | `docs/07-chatgpt-staging.md`; exact deployed SHA/run URL bulunmadığı için auditable release acceptance değildir |
+| Hosted MCP/widget smoke | Exact-SHA PASS | `a8594cfcb739932a2fcaec94fad27b545d3724c1`; https://github.com/theOguz16/ShopAI/actions/runs/35641244699 |
 | Web varyant/redirect senaryosu | Sentetik/hosted teknik yol geçti; dış kabul bekliyor | İzinli gerçek ürün ve kaynak mutabakatı gerekli |
 | MCP ürün eşitliği senaryosu | Otomatik geçti | MCP HTTP/resource yolunu kapsar; gerçek ChatGPT iframe kanıtı değildir |
-| Gerçek ChatGPT oturumu | Kısmi / FAIL | 21 Eylül 2026 gerçek Plus + Developer Mode koşusu: search/widget/filter/direct detail/handoff PASS; karttan detail, saved continuity ve CSP FAIL; ekran kaydı eksik. `docs/evidence/task-011b-real-chatgpt-host.md` |
+| Gerçek ChatGPT oturumu | Kısmi / AÇIK | 21 Eylül 2026 gerçek Plus + Developer Mode koşusu: search/widget/filter/direct detail/handoff ve düzeltme sonrası karttan detail PASS; v4 metadata aktif. Saved continuity yok; v4 iframe görsel, kontrollü timeout, CSP/console ve ekran kaydı eksik. `docs/evidence/task-011b-real-chatgpt-host.md` |
 | Backup restore / app rollback | CI restore geçti; gerçek hosted rollback bekliyor | Önceki/yeni SHA ve workflow run URL'si yok |
 
 ## Pilot ölçüm tablosu
@@ -61,8 +61,8 @@ Pilot tamamlandığında mağaza bazında aşağıdaki tablo gerçek sayılarla 
 ## Bilinen sınırlamalar ve açık bulgular
 
 - WooCommerce connector basit ve variable ürünleri destekler; gerçek mağazada variation ID/fiyat/stok kaynak mutabakatı henüz yapılmadı.
-- Gerçek ChatGPT host koşusu yapılmıştır; search/widget/filter/direct detail/handoff geçti. Karttan detail, saved identity ve CSP başarısız olduğu için kabul açık kalır.
-- Hosted staging için manuel smoke kaydı vardır; exact SHA/run URL'li rollback/restore kanıtı yoktur. CI'daki izole restore gerçek hosted rollback yerine geçmez.
+- Gerçek ChatGPT host koşusu yapılmıştır; search/widget/filter/direct detail/handoff ve düzeltme sonrası karttan detail geçti. Saved identity, v4 iframe görsel tekrar koşusu, timeout ve CSP/console kanıtı açık olduğu için kabul açık kalır.
+- Hosted staging exact-SHA smoke kaydı vardır; gerçek hosted rollback/restore kanıtı yoktur. CI'daki izole restore gerçek hosted rollback yerine geçmez.
 - AES-256-GCM yerel secret dosyası şifrelemesi vardır; bu Vault/KMS entegrasyonu, rotation veya erişim audit'i değildir.
 - 1.000 satırlık batch import vardır; snapshot'ın tamamı önce bellekte toplandığı için streaming/bounded-memory ingestion değildir.
 - Kullanıcı araştırması yapılmadığı için arama kalitesi test seti gerçek görev başarısının yerine geçmez.

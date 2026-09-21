@@ -6,19 +6,19 @@ Son güncelleme: 21 Eylül 2026
 
 Görevlerin kanonik mühendislik/dış kabul durumu `docs/06-implementation-status.md` içindedir. Bu belge hosted koşunun operasyon kaydıdır.
 
-ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel uygulama readiness release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb`'dir; bunu izleyen commitler yalnız kabul belgelerini günceller. Hosted smoke exact uygulama SHA'sı üzerinde PASS; kalıcı staging doğrulama kaydı https://github.com/theOguz16/ShopAI/actions/runs/35637005952 adresindedir.
+ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel uygulama readiness release'i `a8594cfcb739932a2fcaec94fad27b545d3724c1`'dir. Hosted smoke exact uygulama SHA'sı üzerinde PASS; kalıcı staging doğrulama kaydı https://github.com/theOguz16/ShopAI/actions/runs/35641244699 adresindedir.
 
 Public HTTPS, MCP endpoint, widget assetleri, product search, product detail ve signed external checkout hosted smoke testi başarıyla geçmiştir.
 
-Gerçek ChatGPT Plus hesabında Developer Mode ile private ShopAI MCP uygulaması bağlandı. İlk koşunun widget hydration hatası PR #43 ile düzeltildi; arama ve detail/varyant gerçek hostta PASS. Yetkilendirmesiz/stateless ChatGPT çağrılarında saved principal continuity yoktur ve TASK-024 account linking gerektirir. Sentetik ve açıkça etiketli kabul görselleri hosted smoke'ta origin, MIME, CORS ve CORP ile PASS; gerçek ChatGPT iframe tekrar koşusu, kontrollü timeout, kalıcı console/CSP kaydı ve ekran kaydı eksiktir. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
+Gerçek ChatGPT Plus hesabında Developer Mode ile private ShopAI MCP uygulaması bağlandı. İlk koşunun widget hydration hatası PR #43 ile düzeltildi; arama ve detail/varyant gerçek hostta PASS. Immutable cache için v4 resource/assets yayımlandı ve gerçek host eklenti yönetimindeki yenileme sonrası v4 metadata doğrulandı. Yetkilendirmesiz/stateless ChatGPT çağrılarında saved principal continuity yoktur ve TASK-024 account linking gerektirir. Sentetik ve açıkça etiketli kabul görselleri hosted smoke'ta origin, MIME, CORS ve CORP ile PASS; v4 gerçek ChatGPT iframe tekrar koşusu, kontrollü timeout, kalıcı console/CSP kaydı ve ekran kaydı eksiktir. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
 
 ## Güncel uygulama sözleşmesi
 
 - MCP server: `shopai` / `0.5.0`
 - Public MCP endpoint: `${STAGING_API_ORIGIN}/mcp`
-- UI resource: `ui://widget/shopai-shopping-v3.html`
-- Widget JS: `${STAGING_WIDGET_ORIGIN}/assets/widget-v3.js`
-- Widget CSS: `${STAGING_WIDGET_ORIGIN}/assets/widget-v3.css`
+- UI resource: `ui://widget/shopai-shopping-v4.html`
+- Widget JS: `${STAGING_WIDGET_ORIGIN}/assets/widget-v4.js`
+- Widget CSS: `${STAGING_WIDGET_ORIGIN}/assets/widget-v4.css`
 - UI MIME: `text/html;profile=mcp-app`
 - Tool DTO: `schemaVersion: 1`
 - ChatGPT surface attribution: `transport=mcp`, `surface=chatgpt`
@@ -75,7 +75,7 @@ Production-like otomatik deployment ve secret-management standardizasyonu TASK-0
 
 ## Deployment akışı
 
-İlk staging deployment'in tarihsel run URL'si eksiktir. Güncel tekrar deploy'u immutable `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` image'ı, migration, container recreation, readiness ve public hosted smoke ile doğrulanmıştır.
+İlk staging deployment'in tarihsel run URL'si eksiktir. Güncel tekrar deploy'u immutable `a8594cfcb739932a2fcaec94fad27b545d3724c1` image'ı, migration, container recreation, readiness ve public hosted smoke ile doğrulanmıştır.
 
 Doğrulanan akış:
 
@@ -97,7 +97,7 @@ ChatGPT-origin CORS
   -> tools/list
   -> search_products
   -> UI resource + CSP
-  -> widget-v3.js/css
+  -> widget-v4.js/css
   -> get_product_detail
   -> signed ShopAI /r/... checkout
   -> merchant redirect
@@ -130,8 +130,8 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 
 | Kanıt | Sonuç |
 | --- | --- |
-| Release SHA | PASS — readiness `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` döndürdü |
-| Workflow / run URL | PASS — https://github.com/theOguz16/ShopAI/actions/runs/35637005952; public hosted smoke exact SHA üzerinde PASS |
+| Release SHA | PASS — readiness `a8594cfcb739932a2fcaec94fad27b545d3724c1` döndürdü |
+| Workflow / run URL | PASS — https://github.com/theOguz16/ShopAI/actions/runs/35641244699; public hosted smoke exact SHA üzerinde PASS |
 | Public API health | PASS |
 | Public widget health | PASS |
 | Public MCP `/mcp` | PASS |
@@ -152,9 +152,9 @@ Hosted smoke sonucu:
 ```json
 {
   "status": "ok",
-  "release": "af1646aa85e6da3ff94df430a6ec4c16cf69adcb",
+  "release": "a8594cfcb739932a2fcaec94fad27b545d3724c1",
   "mcpUrl": "https://shop.fizyoflow.com/mcp",
-  "resourceUri": "ui://widget/shopai-shopping-v3.html",
+  "resourceUri": "ui://widget/shopai-shopping-v4.html",
   "searchTool": true,
   "widgetAssets": true,
   "demoProductImage": true,
