@@ -24,6 +24,7 @@ Teknik temel, hosted staging ve gerçek ChatGPT Developer Mode koşusu vardır; 
 | TASK-023A sentetik prova | Geçti | PR #39 / `cb74208`; 5 sentetik merchant, 10k+ ürün ve 100 deterministik yolculuk; gerçek katılımcı kabulü değildir |
 | Onboarding Playwright senaryosu | Hazır; dış kabul bekliyor | İzinli gerçek merchant credential'ı ve kaydedilmiş hosted koşu gerekli |
 | Gerçek WooCommerce kaynak mutabakatı | Bekliyor | İzinli gerçek ürün ve mağaza erişimi gerekli |
+| `giyimeticaret` LocalWP 500+ hazırlığı | Kısmi | 618 published ürün; variable/indirim/stoksuz/eksik veri kaynakta doğrulandı. Public tunnel kurulamadığı için staging sync ve ShopAI mutabakatı çalıştırılmadı; `docs/evidence/task-018b-localwp-acceptance.md` |
 | Hosted MCP/widget smoke | Exact-SHA PASS | `a8594cfcb739932a2fcaec94fad27b545d3724c1`; https://github.com/theOguz16/ShopAI/actions/runs/35641244699 |
 | Web varyant/redirect senaryosu | Sentetik/hosted teknik yol geçti; dış kabul bekliyor | İzinli gerçek ürün ve kaynak mutabakatı gerekli |
 | MCP ürün eşitliği senaryosu | Otomatik geçti | MCP HTTP/resource yolunu kapsar; gerçek ChatGPT iframe kanıtı değildir |
