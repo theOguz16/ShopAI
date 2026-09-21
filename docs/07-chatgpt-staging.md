@@ -6,11 +6,11 @@ Son güncelleme: 21 Eylül 2026
 
 Görevlerin kanonik mühendislik/dış kabul durumu `docs/06-implementation-status.md` içindedir. Bu belge hosted koşunun operasyon kaydıdır.
 
-ShopAI hosted staging'in gerçek public sunucuya deploy edildiği ve aşağıdaki manuel smoke zincirinin geçtiği kaydedilmiştir. İlk manuel smoke'un exact SHA/run URL kanıtı eksikti. 21 Eylül gerçek host koşusunda readiness endpoint'i güncel deployed SHA'yı `cb74208776afb998139ac4211a2477bea543068b` olarak doğruladı; kalıcı workflow/run URL'si hâlâ yoktur.
+ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel readiness release'i `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` olup repository HEAD ile aynıdır. Hosted smoke exact SHA üzerinde PASS; merge CI kaydı https://github.com/theOguz16/ShopAI/actions/runs/35602033609 adresindedir.
 
 Public HTTPS, MCP endpoint, widget assetleri, product search, product detail ve signed external checkout hosted smoke testi başarıyla geçmiştir.
 
-Gerçek ChatGPT Plus hesabında Developer Mode açılarak private ShopAI MCP uygulaması 21 Eylül 2026'da bağlandı. Arama, iframe/widget render, filtre, doğrudan detay/varyant ve merchant handoff çalıştı. Kabul yine de tamamlanmadı: karttan detail hata verdi, saved read-after-write sürekliliği başarısız oldu, host `CSP kapalı` gösterdi, gerçek ürün görseli ve ekran kaydı yoktu. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
+Gerçek ChatGPT Plus hesabında Developer Mode ile private ShopAI MCP uygulaması bağlandı. İlk koşunun widget hydration hatası PR #43 ile düzeltildi; yeni release'te arama ve detail/varyant gerçek hostta PASS. Yetkilendirmesiz/stateless ChatGPT çağrılarında saved principal continuity yoktur ve TASK-024 account linking gerektirir. Gerçek ürün görseli, kontrollü timeout, kalıcı console/CSP kaydı ve ekran kaydı eksiktir. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
 
 ## Güncel uygulama sözleşmesi
 
@@ -75,7 +75,7 @@ Production-like otomatik deployment ve secret-management standardizasyonu TASK-0
 
 ## Deployment akışı
 
-TASK-011 kapsamındaki ilk staging deployment manuel olarak doğrulanmış, fakat o koşunun exact SHA/run URL'si kaydedilmemiştir. 21 Eylül TASK-011B koşusu deployed SHA'yı readiness üzerinden sonradan doğrulamıştır; workflow/run URL eksikliği sürer.
+İlk staging deployment'in tarihsel run URL'si eksiktir. Güncel tekrar deploy'u immutable `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` image'ı, migration, container recreation, readiness ve public hosted smoke ile doğrulanmıştır.
 
 Doğrulanan akış:
 
@@ -130,8 +130,8 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 
 | Kanıt | Sonuç |
 | --- | --- |
-| Release SHA | PASS — readiness `cb74208776afb998139ac4211a2477bea543068b` döndürdü |
-| Workflow / run URL | **Eksik:** manuel smoke için kalıcı run URL kaydedilmemiş. |
+| Release SHA | PASS — readiness `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` döndürdü |
+| Workflow / run URL | PASS — merge CI https://github.com/theOguz16/ShopAI/actions/runs/35602033609; public hosted smoke exact SHA üzerinde PASS |
 | Public API health | PASS |
 | Public widget health | PASS |
 | Public MCP `/mcp` | PASS |
@@ -142,9 +142,9 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 | `get_product_detail` | PASS |
 | Signed external checkout | PASS |
 | Hosted automated smoke | PASS |
-| Real ChatGPT iframe render | KISMİ — arama/filter PASS; karttan detail FAIL, direct detail DTO uyumsuzluk uyarılı |
-| Real ChatGPT console/CSP testi | FAIL — host `CSP kapalı`; ShopAI-domain filtreli console eşleşmesi yok, hostta çok sayıda ilgisiz i18n hata kaydı var |
-| Web / ChatGPT identity continuity | FAIL — save başarı yanıtı sonrası iki list çağrısı boş; no-auth MCP web cookie ile bağlı değil |
+| Real ChatGPT iframe render | PASS — PR #43 sonrası yeni çağrıda arama ve ilk ürün detail/varyant akışı geçti |
+| Real ChatGPT console/CSP testi | EKSİK — CSP enforcement `on`; yeni release için kalıcı ShopAI-origin console/rozet kaydı henüz yok |
+| Web / ChatGPT identity continuity | Beklenen sınırlama — stateless no-auth çağrılarda save/list principal korunmuyor; davranış açık, TASK-024 OAuth/account linking gerekir |
 | Screen recording | EKSİK |
 
 Hosted smoke sonucu:
@@ -152,7 +152,7 @@ Hosted smoke sonucu:
 ```json
 {
   "status": "ok",
-  "release": "cb74208776afb998139ac4211a2477bea543068b",
+  "release": "c4cebb9906aa6c4c1aaf012dde8c20875891b1d6",
   "mcpUrl": "https://shop.fizyoflow.com/mcp",
   "resourceUri": "ui://widget/shopai-shopping-v3.html",
   "searchTool": true,
@@ -164,8 +164,8 @@ Hosted smoke sonucu:
 
 ## Mevcut blocker
 
-Hosted staging kod/manuel smoke akışında bilinen blocker yoktur. Exact deployed SHA ve kalıcı run URL eksikliği auditable release acceptance blocker'ıdır.
+Hosted staging kod/hosted smoke akışında bilinen blocker yoktur; exact deployed SHA doğrulanmıştır.
 
-Developer Mode erişim engeli kalkmıştır. Koşu sonrasında CSP enforcement kullanıcı onayıyla açılmıştır; yeni release üzerinde tekrar kanıtlanması gerekir. Güncel blocker'lar detail ve stateful saved düzeltmelerinin gerçek host tekrar koşusu, web/ChatGPT identity süreksizliği, gerçek görsel/timeout koşusu ve ekran kaydıdır. Account-linking takibi `docs/follow-ups/task-024-account-linking.md` içindedir.
+Developer Mode erişim engeli kalkmıştır. CSP enforcement kullanıcı onayıyla açılmıştır. Güncel blocker'lar yeni release için kalıcı console/CSP kaydı, gerçek izinli görsel, kontrollü timeout ve ekran kaydıdır. Stateless ChatGPT çağrıları ile web yüzeyi arasındaki principal sürekliliği `docs/follow-ups/task-024-account-linking.md` kapsamındadır.
 
 TASK-011 kod kapsamını bu bulgular geriye döndürmez; TASK-011B dış kabulü bütün maddeler aynı release üzerinde kanıtlanana kadar açık kalır.
