@@ -1,5 +1,5 @@
-import { DEMO_MERCHANT_ID } from '@shopai/commerce';
-import { eq } from 'drizzle-orm';
+import { DEMO_CONNECTION_ID, DEMO_MERCHANT_ID } from '@shopai/commerce';
+import { and, eq } from 'drizzle-orm';
 import { createDatabase } from './client.js';
 import { inventory, products } from './schema.js';
 
@@ -34,14 +34,27 @@ const database = createDatabase(url, {
 });
 
 try {
+  let matchedImages = 0;
   for (const image of demoImages) {
-    await database.db
+    const updated = await database.db
       .update(products)
       .set({
         imageUrl: `${widgetOrigin}/demo-products/${image.path}`,
         imageAlt: image.alt,
       })
-      .where(eq(products.id, image.productId));
+      .where(
+        and(
+          eq(products.merchantId, DEMO_MERCHANT_ID),
+          eq(products.connectionId, DEMO_CONNECTION_ID),
+          eq(products.externalKey, image.productId),
+        ),
+      )
+      .returning({ productId: products.id });
+    if (updated.length !== 1)
+      throw new Error(
+        `Demo görsel eşlemesi tam bir ürün bulmalıdır: ${image.productId}`,
+      );
+    matchedImages += updated.length;
   }
   const rows = await database.db
     .update(inventory)
@@ -53,7 +66,7 @@ try {
     throw new Error('Demo merchant için inventory satırı bulunamadı.');
 
   console.info(
-    `Demo staging inventory yenilendi: ${rows.length} offer; ${demoImages.length} sentetik görsel eşlendi.`,
+    `Demo staging inventory yenilendi: ${rows.length} offer; ${matchedImages} sentetik görsel eşlendi.`,
   );
 } finally {
   await database.close();
