@@ -9,15 +9,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const distRoot = resolve(process.env.WIDGET_DIST_DIR ?? join(here, 'dist'));
 const assetFiles = new Map([
   [
-    '/assets/widget-v3.js',
+    '/assets/widget-v4.js',
     {
-      file: 'assets/widget-v3.js',
+      file: 'assets/widget-v4.js',
       type: 'application/javascript; charset=utf-8',
     },
   ],
   [
-    '/assets/widget-v3.css',
-    { file: 'assets/widget-v3.css', type: 'text/css; charset=utf-8' },
+    '/assets/widget-v4.css',
+    { file: 'assets/widget-v4.css', type: 'text/css; charset=utf-8' },
   ],
   ...['black-tshirt.svg', 'white-tshirt.svg', 'navy-tshirt.svg'].map((file) => [
     `/demo-products/${file}`,

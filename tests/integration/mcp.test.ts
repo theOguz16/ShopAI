@@ -54,9 +54,9 @@ describe('MCP Apps product widget', () => {
     const resource = await rpc('resources/read', { uri: SHOPAI_WIDGET_URI });
     const content = resource.json().result.contents[0];
     expect(content.mimeType).toBe('text/html;profile=mcp-app');
-    expect(content.text).toContain('/assets/widget-v3.js');
-    expect(content.text).toContain('/assets/widget-v3.css');
-    expect(content._meta['shopai/assetVersion']).toBe('3');
+    expect(content.text).toContain('/assets/widget-v4.js');
+    expect(content.text).toContain('/assets/widget-v4.css');
+    expect(content._meta['shopai/assetVersion']).toBe('4');
     expect(content._meta['openai/widgetDescription']).toContain(
       'visual shopping',
     );
