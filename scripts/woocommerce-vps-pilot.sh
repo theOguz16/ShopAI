@@ -46,9 +46,11 @@ case "$operation" in
       exit 1
     fi
     if compose run --rm wpcli wp plugin is-installed woocommerce >/dev/null 2>&1; then
+      # 11.1.1 fixes WooCommerce 11.1.0 security issues; do not retain an older installed plugin.
+      compose run --rm wpcli wp plugin update woocommerce --version=11.1.1
       compose run --rm wpcli wp plugin activate woocommerce
     else
-      compose run --rm wpcli wp plugin install woocommerce --version=11.1.0 --activate
+      compose run --rm wpcli wp plugin install woocommerce --version=11.1.1 --activate
     fi
     compose run --rm wpcli wp rewrite structure '/%postname%/' --hard
     compose run --rm wpcli wp rewrite flush --hard
