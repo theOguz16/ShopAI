@@ -6,7 +6,7 @@ Son güncelleme: 21 Eylül 2026
 
 Görevlerin kanonik mühendislik/dış kabul durumu `docs/06-implementation-status.md` içindedir. Bu belge hosted koşunun operasyon kaydıdır.
 
-ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel readiness release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` olup repository HEAD ile aynıdır. Hosted smoke exact SHA üzerinde PASS; kalıcı staging doğrulama kaydı https://github.com/theOguz16/ShopAI/actions/runs/35637005952 adresindedir.
+ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel uygulama readiness release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb`'dir; bunu izleyen commitler yalnız kabul belgelerini günceller. Hosted smoke exact uygulama SHA'sı üzerinde PASS; kalıcı staging doğrulama kaydı https://github.com/theOguz16/ShopAI/actions/runs/35637005952 adresindedir.
 
 Public HTTPS, MCP endpoint, widget assetleri, product search, product detail ve signed external checkout hosted smoke testi başarıyla geçmiştir.
 
