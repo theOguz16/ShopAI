@@ -1204,6 +1204,21 @@ async function main() {
     await scenario(scenarios, 'merchant-analytics', async () => {
       const analyticsFrom = new Date(startedAt.getTime() - 60_000);
       const analyticsTo = new Date(Date.now() + 60_000);
+      const expectedResult = await database.db.execute(sql`
+        select
+          count(*) filter (where search_id is not null and offer_id is not null and status <> 'cancelled')::int as orders,
+          coalesce(sum(gross_minor) filter (where search_id is not null and offer_id is not null and status <> 'cancelled'),0)::bigint as gross,
+          coalesce(sum(gross_minor-refunded_minor) filter (where search_id is not null and offer_id is not null and status <> 'cancelled'),0)::bigint as net
+        from conversion_orders
+        where merchant_id = ${merchantIds[0]}
+          and occurred_at >= ${analyticsFrom}
+          and occurred_at < ${analyticsTo}
+      `);
+      const expected = expectedResult.rows[0] as {
+        orders: number;
+        gross: string;
+        net: string;
+      };
       const response = await measured(() =>
         app.inject({
           method: 'GET',
@@ -1226,7 +1241,9 @@ async function main() {
         'Merchant analytics regressed TASK-022 taxonomy.',
       );
       assert(
-        analytics.attributedSales >= 2 &&
+        analytics.attributedSales === Number(expected.orders) &&
+          analytics.attributedGmvMinor === Number(expected.gross) &&
+          analytics.netRevenueMinor === Number(expected.net) &&
           analytics.attributedGmvMinor - analytics.netRevenueMinor === 5_000,
         'Merchant analytics did not preserve cancellation/refund semantics.',
       );

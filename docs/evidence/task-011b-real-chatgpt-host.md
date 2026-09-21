@@ -4,12 +4,16 @@ Tarih: 21 Eylül 2026 (Europe/Istanbul)
 
 ## Sonuç
 
-**KISMİ / KAPI AÇIK.** Yetkili gerçek ChatGPT Plus hesabında Developer Mode ile ShopAI özel uygulaması oluşturuldu ve bağlandı. Arama, gerçek ChatGPT iframe/widget render, renk filtresi, doğrudan ürün detayı, varyant/stok görünümü ve merchant handoff çalıştı. Görev kapatılamaz: widget içi sonuçtan detay açma hata verdi, saved kimliği aynı sohbet içinde korunmadı, CSP hostta kapalıydı, gerçek katalog görselleri yoktu ve ekran kaydı alınmadı.
+**KISMİ / KAPI AÇIK.** Yetkili gerçek ChatGPT Plus hesabında Developer Mode ile ShopAI özel uygulaması bağlıdır. İlk koşuda bulunan initial tool-output hydration hatası PR #43 ile düzeltildi ve `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` release'inde gerçek hostta yeniden arama ve ürün detayı geçti. Saved kimliği yetkilendirmesiz/stateless ChatGPT tool çağrıları arasında korunmuyor; ürün bu davranışı açıkça raporluyor ve account-linking TASK-024'tür. Gerçek izinli katalog görseli, kontrollü timeout, ShopAI-origin console/CSP kaydı ve ekran kaydı hâlâ eksik olduğu için görev kapatılamaz.
 
 ## Release ve host kanıtı
 
 - Staging readiness: `https://shop.fizyoflow.com/health/ready`
-- Readiness sonucu: `status=ok`, `release=cb74208776afb998139ac4211a2477bea543068b`
+- İlk koşu release'i: `cb74208776afb998139ac4211a2477bea543068b`
+- Düzeltme tekrar koşusu release'i: `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6`
+- Düzeltme release readiness sonucu: `status=ok`, exact release SHA
+- Hosted smoke: search tool, widget assets, product detail ve signed external handoff PASS
+- CI: https://github.com/theOguz16/ShopAI/actions/runs/35602033609 (PASS)
 - Test edilen MCP: `https://shop.fizyoflow.com/mcp`
 - UI resource: `ui://widget/shopai-shopping-v3.html`
 - ChatGPT uygulama kimliği: `asdk_app_6ab0ce99252081919ba9f97a7a0b1aaf`
@@ -17,7 +21,7 @@ Tarih: 21 Eylül 2026 (Europe/Istanbul)
 - ChatGPT konuşması: `https://chatgpt.com/c/6ab0cf3a-3f44-83ed-a36f-2feac5da1fdc`
 - Hesap sınıfı: gerçek ChatGPT Plus hesabı; kişisel hesap ayrıntıları bu belgeye yazılmadı.
 
-Readiness SHA'sı mevcut repository HEAD ile aynıydı. Ancak çalışma ağacındaki REV-001–007 değişiklikleri commit edilmemiş ve bu staging release'ine dahil değildir.
+REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2` olarak merge edildi. Real-host hydration düzeltmesi [PR #43](https://github.com/theOguz16/ShopAI/pull/43) ile merge edildi; staging ve repository HEAD aynı `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` SHA'sındadır.
 
 ## Senaryo sonuçları
 
@@ -28,22 +32,22 @@ Readiness SHA'sı mevcut repository HEAD ile aynıydı. Ancak çalışma ağacı
 | Arama | PASS | `search_products` çalıştı; 3 sentetik ürün döndü. |
 | Widget render | PASS | Gerçek ChatGPT sandbox iframe'i render edildi. |
 | Filtreleme | PASS | Siyah filtresi 3 ürünü 1 ürüne indirdi. |
-| Sonuç kartından detay | FAIL | `İncele` sonrası `Ürün detayı yüklenemedi. Aramaya dönüp yeniden deneyin.` |
-| Doğrudan detail tool çağrısı | KISMİ PASS | Detay, M/L varyantları ve stok durumu göründü; widget ayrıca `Ürün verisi bu widget sürümüyle uyumlu değil` uyarısı verdi. |
+| Sonuç kartından/detail tool akışı | PASS (tekrar koşusu) | PR #43 sonrası yeni gerçek-host çağrısında arama sonucu ve ilk ürün detayı başarıyla açıldı; M varyantı, fiyat ve stok raporlandı. Eski mesajlardaki FAIL widget'ları tarihsel ilk koşu kanıtıdır. |
+| Initial widget hydration | PASS (tekrar koşusu) | `window.openai.toolOutput` nested `result.structuredContent` biçimi normalize edildi; host-bridge 6/6 ve real-host yeni çağrısı PASS. |
 | Varyant | PASS | M/Siyah stokta, L/Siyah stokta yok olarak gösterildi. |
 | Merchant handoff | PASS | `Satın Al` yeni sekmede `https://example.com/products/1?shopai_click_id=...` açtı. Bu gerçek checkout değil, doğru adlandırılmış demo product-page handoff'tur. |
 | Görsel yükleme | BLOKE | Katalog ürünlerinde görsel yoktu; kartlar `Ürün görseli yok` gösterdi. Gerçek image-origin kabulü yapılamadı. |
 | Timeout/hata UX | KISMİ PASS | Detail hatası sonlandı ve yeniden deneme mesajı gösterildi; kontrollü gerçek timeout senaryosu ayrıca çalıştırılmadı. |
-| Saved identity | FAIL | `save_product` başarı döndürdü; aynı konuşmadaki iki `list_saved_products` çağrısı boş döndü. Kalıcılık/süreklilik kanıtlanmadı. |
+| Saved identity | Beklenen sınırlama / account-linking gerekli | Tekrar koşusunda `save_product` kayıt ID'si `2de63147-c23f-42cf-8a3a-694ac95e5d53` üretti; hemen sonraki stateless `list_saved_products` boş döndü. Stateful `Mcp-Session-Id` entegrasyon testi PASS olsa da gerçek host ayrı tool çağrılarında bu session/cookie principal'ını taşımıyor. Davranış kullanıcıya açık raporlandı; TASK-024 gerekir. |
 | Alert identity | KISMİ | Salt okunur `list_product_alerts` çalıştı ve boş liste döndü. Yeni e-posta alarmı oluşturulmadı; bildirim aboneliği testi yapılmadı. |
 | Profile identity (web ↔ ChatGPT) | FAIL / kanıtsız | MCP bağlantısı `Yetkilendirme Yok`; web cookie/account ile bağlayan bir account-linking akışı yok. |
-| CSP | FAIL | Her widget üzerinde ChatGPT `CSP kapalı` rozeti gösterdi. Manifestte CSP metadata bulunsa da developer-mode enforcement kapalıydı. |
+| CSP | TEKRAR KAYDI EKSİK | Kullanıcı onayıyla `Geliştirici modunda CSP’yi zorunlu kıl` açıldı ve ayar `on` görüldü. Yeni release çağrısı çalıştı; fakat ShopAI-origin console kaydı ve rozet sonucu kalıcı kanıt olarak henüz kaydedilmedi. |
 | Console | KISMİ | DevTools 218 host hatası gösterdi; görünen örnekler ChatGPT `tr-TR` eksik çeviri anahtarlarıydı. `widget-fizyoflow` filtresi ShopAI-origin hata eşleştirmedi. CSP rozeti nedeniyle bu sonuç CSP kabulünü geçirmez. |
 | Ekran kaydı | EKSİK | Otomasyon oturumu gözlemlendi, fakat kalıcı video kaydı üretilmedi. |
 
 ## Kimlik kararı
 
-Mevcut public/no-auth MCP bağlantısı ChatGPT kullanıcısını ShopAI web profilindeki server-issued anonymous cookie ile eşleyemez. Üstelik aynı ChatGPT konuşmasında save başarılı yanıtından sonra listede görünmemiştir. Bu nedenle profile/saved/alert identity continuity kabulü **başarısızdır**; TASK-015/016/017 ve TASK-011B dış kabulü açık kalır.
+Mevcut public/no-auth MCP bağlantısı ChatGPT kullanıcısını ShopAI web profilindeki server-issued anonymous cookie ile eşleyemez. Aynı ChatGPT konuşmasındaki ayrı tool çağrıları da `Mcp-Session-Id`/cookie principal'ını taşımadığı için save başarılı yanıtından sonra listede görünmez. Stateful MCP istemcisi için mühendislik testi PASS'tir; gerçek ChatGPT davranışı ise kimliksiz/stateless modda sınırlı olarak belgelenmiştir. TASK-015/016 mühendislik durumu tamamdır, yüzeyler arası dış kabul TASK-024'e bağlıdır; TASK-017 gerçek teslim kabulü ayrıca açıktır.
 
 Takip: `TASK-024 — Web/ChatGPT account linking ve MCP principal sürekliliği` tanımı `docs/follow-ups/task-024-account-linking.md` içinde tutulur.
 
@@ -60,10 +64,8 @@ Bu bölüm dış kabul sonucu değildir; değişiklikler yeni bir release ile ge
 
 ## Kapanış için gerekenler
 
-1. Widget detail zarfı düzeltmesini deploy et; sonuç kartından detail ve doğrudan detail'i aynı release'te tekrar çalıştır.
-2. Stateful MCP session düzeltmesini deploy et; aynı bağlantıda save → list ve alert → list sürekliliğini tekrar doğrula.
-3. Authenticated MCP principal/account-linking ile web/ChatGPT yüzeyleri arası sürekliliği doğrula.
-4. Artık açık olan developer-mode CSP enforcement ile yeni release'i test et; ShopAI-origin console/CSP hatası olmadığını kaydet.
-5. Gerçek izinli katalog görselleriyle image-origin yüklemesini doğrula.
-6. Kontrollü timeout ve hata senaryosunu çalıştır.
-7. Tarih ve release SHA görünür biçimde ekran kaydı üret.
+1. Authenticated MCP principal/account-linking ile web/ChatGPT yüzeyleri ve stateless tool çağrıları arası sürekliliği TASK-024 kapsamında doğrula.
+2. Açık developer-mode CSP enforcement ile ShopAI-origin console/CSP sonucunu kalıcı kaydet.
+3. Gerçek izinli katalog görselleriyle image-origin yüklemesini doğrula.
+4. Kontrollü timeout ve hata senaryosunu çalıştır.
+5. Tarih ve release SHA görünür biçimde ekran kaydı üret. macOS `screencapture` denemesi exit 1 döndü; ekran kayıt izni/harici kayıt aracı gerekir.
