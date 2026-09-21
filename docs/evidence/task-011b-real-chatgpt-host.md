@@ -23,7 +23,7 @@ Tarih: 21 Eylül 2026 (Europe/Istanbul)
 - ChatGPT konuşması: `https://chatgpt.com/c/6ab0cf3a-3f44-83ed-a36f-2feac5da1fdc`
 - Hesap sınıfı: gerçek ChatGPT Plus hesabı; kişisel hesap ayrıntıları bu belgeye yazılmadı.
 
-REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2` olarak merge edildi. Real-host hydration düzeltmesi [PR #43](https://github.com/theOguz16/ShopAI/pull/43), görsel eşleme düzeltmesi [PR #46](https://github.com/theOguz16/ShopAI/pull/46) ve widget görsel servisi [PR #47](https://github.com/theOguz16/ShopAI/pull/47) ile merge edildi; staging ve repository HEAD aynı `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` SHA'sındadır.
+REV-001–007 [PR #42](https://github.com/theOguz16/ShopAI/pull/42) ile `023f1a2` olarak merge edildi. Real-host hydration düzeltmesi [PR #43](https://github.com/theOguz16/ShopAI/pull/43), görsel eşleme düzeltmesi [PR #46](https://github.com/theOguz16/ShopAI/pull/46) ve widget görsel servisi [PR #47](https://github.com/theOguz16/ShopAI/pull/47) ile merge edildi. Staging uygulama release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb`'dir; sonraki commitler yalnız kabul belgelerini günceller.
 
 ## Senaryo sonuçları
 
