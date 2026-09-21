@@ -1,0 +1,88 @@
+# Dedicated synthetic WooCommerce source for TASK-018B; never use for actual sales.
+# Run with: docker compose --env-file /etc/shopai/woo-pilot.env -f infra/woocommerce-vps.compose.yaml up -d db wordpress
+name: shopai-woo-vps-pilot
+
+services:
+  db:
+    image: mariadb:11.4.13
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: ${WOO_DB_PASSWORD:?Set WOO_DB_PASSWORD in the private env file}
+      MARIADB_ROOT_PASSWORD: ${WOO_DB_ROOT_PASSWORD:?Set WOO_DB_ROOT_PASSWORD in the private env file}
+    volumes:
+      - woo-vps-db:/var/lib/mysql
+    networks:
+      - database-private
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WOO_DB_PASSWORD:?Set WOO_DB_PASSWORD in the private env file}
+      WORDPRESS_DB_NAME: wordpress
+      WOO_PUBLIC_ORIGIN: ${WOO_PUBLIC_ORIGIN:?Set a public HTTPS origin}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', getenv('WOO_PUBLIC_ORIGIN'));
+        define('WP_SITEURL', getenv('WOO_PUBLIC_ORIGIN'));
+        define('WP_ENVIRONMENT_TYPE', 'staging');
+        define('DISALLOW_FILE_EDIT', true);
+        if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+          $$_SERVER['HTTPS'] = 'on';
+        }
+    ports:
+      - "127.0.0.1:${WOO_LOOPBACK_PORT:-18480}:80"
+    volumes:
+      - woo-vps-files:/var/www/html
+      - ./woocommerce-vps-no-payments.php:/var/www/html/wp-content/mu-plugins/shopai-no-payments.php:ro
+    networks:
+      - database-private
+      - web-egress
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/wp-login.php >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  wpcli:
+    image: wordpress:cli-2.12.0-php8.3
+    profiles: ["tools"]
+    user: "33:33"
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WOO_DB_PASSWORD:?Set WOO_DB_PASSWORD in the private env file}
+      WORDPRESS_DB_NAME: wordpress
+      WOO_PUBLIC_ORIGIN: ${WOO_PUBLIC_ORIGIN:?Set a public HTTPS origin}
+    volumes:
+      - woo-vps-files:/var/www/html
+      - ../scripts/woocommerce-vps-seed.php:/opt/shopai/seed.php:ro
+    working_dir: /var/www/html
+    networks:
+      - database-private
+      - web-egress
+
+volumes:
+  woo-vps-db:
+  woo-vps-files:
+
+networks:
+  database-private:
+    internal: true
+  web-egress: {}
