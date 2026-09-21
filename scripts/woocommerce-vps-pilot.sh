@@ -26,13 +26,47 @@ if (( (8#$mode & 077) != 0 )); then
   exit 2
 fi
 command -v docker >/dev/null || { echo 'Docker is required.' >&2; exit 2; }
+command -v python3 >/dev/null || { echo 'Python 3 is required to validate the public origin.' >&2; exit 2; }
 compose_file="$repo_root/infra/woocommerce-vps.compose.yaml"
 compose() {
   docker compose --env-file "$env_file" -f "$compose_file" "$@"
 }
 
-# Validate all required variables without echoing the resolved compose (contains secrets).
+# Validate required variables and the resolved HTTPS origin without printing secrets.
 compose config --quiet
+if ! compose config --format json | python3 -c '
+import ipaddress
+import json
+import sys
+from urllib.parse import urlsplit
+
+origin = json.load(sys.stdin)["services"]["wordpress"]["environment"]["WOO_PUBLIC_ORIGIN"]
+try:
+    parsed = urlsplit(origin)
+    host = parsed.hostname or ""
+    valid = (
+        parsed.scheme == "https"
+        and "." in host
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in ("", "/")
+        and not parsed.query
+        and not parsed.fragment
+        and host not in ("localhost", "127.0.0.1")
+        and not host.endswith((".local", ".localhost", ".invalid", ".test", ".example", ".internal"))
+    )
+    try:
+        ipaddress.ip_address(host)
+        valid = False
+    except ValueError:
+        pass
+except ValueError:
+    valid = False
+sys.exit(0 if valid else 1)
+'; then
+  echo 'WOO_PUBLIC_ORIGIN must be a real public HTTPS domain origin, not localhost, .local, an IP address, or a placeholder.' >&2
+  exit 2
+fi
 
 case "$operation" in
   bootstrap)
