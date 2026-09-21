@@ -74,7 +74,16 @@ describe.skipIf(docker.status !== 0)('WooCommerce VPS compose contract', () => {
 
     const withTools = spawnSync(
       'docker',
-      ['compose', '-f', compose, '--profile', 'tools', 'config', '--format', 'json'],
+      [
+        'compose',
+        '-f',
+        compose,
+        '--profile',
+        'tools',
+        'config',
+        '--format',
+        'json',
+      ],
       { encoding: 'utf8', env },
     );
     expect(withTools.status, withTools.stderr).toBe(0);
