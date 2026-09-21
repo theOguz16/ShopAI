@@ -89,6 +89,7 @@ services:
       SHOPAI_ROLE: staging-demo-refresh
       DEPLOY_ENV: staging
       DATABASE_URL: "${STAGING_DATABASE_URL:?Ayrı staging DB gerekli}"
+      WIDGET_ORIGIN: "${STAGING_WIDGET_ORIGIN:?Staging widget origin gerekli}"
 
   migrate:
     <<: *app
