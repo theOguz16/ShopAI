@@ -6,11 +6,11 @@ Son güncelleme: 21 Eylül 2026
 
 Görevlerin kanonik mühendislik/dış kabul durumu `docs/06-implementation-status.md` içindedir. Bu belge hosted koşunun operasyon kaydıdır.
 
-ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel readiness release'i `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` olup repository HEAD ile aynıdır. Hosted smoke exact SHA üzerinde PASS; merge CI kaydı https://github.com/theOguz16/ShopAI/actions/runs/35602033609 adresindedir.
+ShopAI hosted staging gerçek public sunucuya deploy edilmiştir. Güncel readiness release'i `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` olup repository HEAD ile aynıdır. Hosted smoke exact SHA üzerinde PASS; kalıcı staging doğrulama kaydı https://github.com/theOguz16/ShopAI/actions/runs/35637005952 adresindedir.
 
 Public HTTPS, MCP endpoint, widget assetleri, product search, product detail ve signed external checkout hosted smoke testi başarıyla geçmiştir.
 
-Gerçek ChatGPT Plus hesabında Developer Mode ile private ShopAI MCP uygulaması bağlandı. İlk koşunun widget hydration hatası PR #43 ile düzeltildi; yeni release'te arama ve detail/varyant gerçek hostta PASS. Yetkilendirmesiz/stateless ChatGPT çağrılarında saved principal continuity yoktur ve TASK-024 account linking gerektirir. Gerçek ürün görseli, kontrollü timeout, kalıcı console/CSP kaydı ve ekran kaydı eksiktir. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
+Gerçek ChatGPT Plus hesabında Developer Mode ile private ShopAI MCP uygulaması bağlandı. İlk koşunun widget hydration hatası PR #43 ile düzeltildi; arama ve detail/varyant gerçek hostta PASS. Yetkilendirmesiz/stateless ChatGPT çağrılarında saved principal continuity yoktur ve TASK-024 account linking gerektirir. Sentetik ve açıkça etiketli kabul görselleri hosted smoke'ta origin, MIME, CORS ve CORP ile PASS; gerçek ChatGPT iframe tekrar koşusu, kontrollü timeout, kalıcı console/CSP kaydı ve ekran kaydı eksiktir. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
 
 ## Güncel uygulama sözleşmesi
 
@@ -75,7 +75,7 @@ Production-like otomatik deployment ve secret-management standardizasyonu TASK-0
 
 ## Deployment akışı
 
-İlk staging deployment'in tarihsel run URL'si eksiktir. Güncel tekrar deploy'u immutable `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` image'ı, migration, container recreation, readiness ve public hosted smoke ile doğrulanmıştır.
+İlk staging deployment'in tarihsel run URL'si eksiktir. Güncel tekrar deploy'u immutable `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` image'ı, migration, container recreation, readiness ve public hosted smoke ile doğrulanmıştır.
 
 Doğrulanan akış:
 
@@ -130,8 +130,8 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 
 | Kanıt | Sonuç |
 | --- | --- |
-| Release SHA | PASS — readiness `c4cebb9906aa6c4c1aaf012dde8c20875891b1d6` döndürdü |
-| Workflow / run URL | PASS — merge CI https://github.com/theOguz16/ShopAI/actions/runs/35602033609; public hosted smoke exact SHA üzerinde PASS |
+| Release SHA | PASS — readiness `af1646aa85e6da3ff94df430a6ec4c16cf69adcb` döndürdü |
+| Workflow / run URL | PASS — https://github.com/theOguz16/ShopAI/actions/runs/35637005952; public hosted smoke exact SHA üzerinde PASS |
 | Public API health | PASS |
 | Public widget health | PASS |
 | Public MCP `/mcp` | PASS |
@@ -152,11 +152,12 @@ Hosted smoke sonucu:
 ```json
 {
   "status": "ok",
-  "release": "c4cebb9906aa6c4c1aaf012dde8c20875891b1d6",
+  "release": "af1646aa85e6da3ff94df430a6ec4c16cf69adcb",
   "mcpUrl": "https://shop.fizyoflow.com/mcp",
   "resourceUri": "ui://widget/shopai-shopping-v3.html",
   "searchTool": true,
   "widgetAssets": true,
+  "demoProductImage": true,
   "productDetail": true,
   "signedExternalCheckout": true
 }
@@ -166,6 +167,6 @@ Hosted smoke sonucu:
 
 Hosted staging kod/hosted smoke akışında bilinen blocker yoktur; exact deployed SHA doğrulanmıştır.
 
-Developer Mode erişim engeli kalkmıştır. CSP enforcement kullanıcı onayıyla açılmıştır. Güncel blocker'lar yeni release için kalıcı console/CSP kaydı, gerçek izinli görsel, kontrollü timeout ve ekran kaydıdır. Stateless ChatGPT çağrıları ile web yüzeyi arasındaki principal sürekliliği `docs/follow-ups/task-024-account-linking.md` kapsamındadır.
+Developer Mode erişim engeli kalkmıştır. CSP enforcement kullanıcı onayıyla açılmıştır. Sentetik kabul görseli hosted origin/MIME/CORS/CORP testini geçmiştir. Güncel blocker'lar görselin gerçek ChatGPT iframe tekrar koşusu, yeni release için kalıcı console/CSP kaydı, kontrollü timeout ve ekran kaydıdır. Stateless ChatGPT çağrıları ile web yüzeyi arasındaki principal sürekliliği `docs/follow-ups/task-024-account-linking.md` kapsamındadır.
 
 TASK-011 kod kapsamını bu bulgular geriye döndürmez; TASK-011B dış kabulü bütün maddeler aynı release üzerinde kanıtlanana kadar açık kalır.
