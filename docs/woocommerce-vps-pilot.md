@@ -71,7 +71,7 @@ bash scripts/woocommerce-vps-pilot.sh seed "$HOME/.config/shopai/woo-pilot.env"
 bash scripts/woocommerce-vps-pilot.sh status "$HOME/.config/shopai/woo-pilot.env"
 ```
 
-The seed action installs/activates the existing repository's pinned WooCommerce `11.1.0` rehearsal version, configures permalinks, disables indexing, sets TRY currency and creates **520 synthetic products** (420 simple, 100 variable with 300 variations). It includes discounts, out-of-stock cases, missing descriptions/SKUs/images, locally hosted clearly marked demo PNGs and gallery images. Fixture IDs and variation SKUs make re-running the command additive/idempotent; an interrupted run repairs missing variations. It never deletes existing products, but use this only on the **new, empty rehearsal store**.
+The seed action installs/activates or updates WooCommerce to the patched `11.1.1` rehearsal version, configures permalinks, disables indexing, sets TRY currency and creates **520 synthetic products** (420 simple, 100 variable with 300 variations). It includes discounts, out-of-stock cases, missing descriptions/SKUs/images, locally hosted clearly marked demo PNGs and gallery images. Fixture IDs and variation SKUs make re-running the command additive/idempotent; an interrupted run repairs missing variations. It never deletes existing products, but use this only on the **new, empty rehearsal store**.
 
 In the WooCommerce admin, create a **read-only** REST API key for the synthetic store. Enter it through ShopAI's merchant onboarding/managed-secret workflow; do not commit it, print it in CI, or send it in chat. No real payments, purchases or conversion events are expected.
 
