@@ -144,7 +144,7 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
   let destroyed = false;
   let current: HostSnapshot = {
     input: hostWindow.openai?.toolInput,
-    output: hostWindow.openai?.toolOutput,
+    output: structuredContent(hostWindow.openai?.toolOutput),
   };
 
   const emit = () => {
