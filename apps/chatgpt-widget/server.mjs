@@ -19,6 +19,10 @@ const assetFiles = new Map([
     '/assets/widget-v3.css',
     { file: 'assets/widget-v3.css', type: 'text/css; charset=utf-8' },
   ],
+  ...['black-tshirt.svg', 'white-tshirt.svg', 'navy-tshirt.svg'].map((file) => [
+    `/demo-products/${file}`,
+    { file: `demo-products/${file}`, type: 'image/svg+xml; charset=utf-8' },
+  ]),
 ]);
 
 async function assetsReady() {
