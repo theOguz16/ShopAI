@@ -149,6 +149,13 @@ assert(
   'staging katalogda kabul testi için yayımlanmış ürün yok',
 );
 const product = search.products[0];
+assert(typeof product.imageUrl === 'string', 'staging demo ürün görseli eksik');
+const imageUrl = new URL(product.imageUrl);
+assert(
+  imageUrl.origin === widgetOrigin,
+  'staging demo görseli izinli widget origininden gelmiyor',
+);
+await fetchAsset(imageUrl.pathname, 'image/svg+xml');
 
 const detailResult = await rpc('tools/call', {
   name: 'get_product_detail',
@@ -195,6 +202,7 @@ console.log(
       productId: product.productId,
       searchTool: true,
       widgetAssets: true,
+      demoProductImage: true,
       productDetail: true,
       signedExternalCheckout: true,
     },

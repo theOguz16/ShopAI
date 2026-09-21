@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">Sentetik lacivert tişört illüstrasyonu</title>
+  <desc id="desc">ShopAI kabul testi için üretilmiş, gerçek ürün olmayan lacivert tişört çizimi.</desc>
+  <rect width="800" height="800" fill="#eaf0f5"/>
+  <path d="M255 150 355 105h90l100 45 115 145-108 82-53-67v365H301V310l-53 67-108-82z" fill="#17345f" stroke="#345b8e" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M355 105c9 55 81 55 90 0" fill="none" stroke="#9bb6d8" stroke-width="18"/>
+  <text x="400" y="735" text-anchor="middle" font-family="system-ui,sans-serif" font-size="30" fill="#27364a">SENTETİK DEMO · GERÇEK ÜRÜN DEĞİL</text>
+</svg>
