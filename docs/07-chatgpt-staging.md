@@ -1,16 +1,16 @@
 # TASK-011 — Hosted ChatGPT staging
 
-Son güncelleme: 13 Eylül 2026
+Son güncelleme: 21 Eylül 2026
 
 ## Durum
 
-ShopAI hosted staging gerçek public sunucuda deploy edilmiştir.
+Görevlerin kanonik mühendislik/dış kabul durumu `docs/06-implementation-status.md` içindedir. Bu belge hosted koşunun operasyon kaydıdır.
+
+ShopAI hosted staging'in gerçek public sunucuya deploy edildiği ve aşağıdaki manuel smoke zincirinin geçtiği kaydedilmiştir. İlk manuel smoke'un exact SHA/run URL kanıtı eksikti. 21 Eylül gerçek host koşusunda readiness endpoint'i güncel deployed SHA'yı `cb74208776afb998139ac4211a2477bea543068b` olarak doğruladı; kalıcı workflow/run URL'si hâlâ yoktur.
 
 Public HTTPS, MCP endpoint, widget assetleri, product search, product detail ve signed external checkout hosted smoke testi başarıyla geçmiştir.
 
-Gerçek ChatGPT iframe/widget acceptance testi mevcut ChatGPT Plus hesabında private custom MCP Developer Mode erişimi bulunmadığı için pre-publication aşamasında çalıştırılamamaktadır.
-
-Bu test App Directory publication sonrasında Plus hesabıyla gerçek son kullanıcı akışında yapılacaktır. Bu nedenle hosted deployment engineering acceptance PASS, gerçek ChatGPT host UI acceptance ise DEFERRED durumundadır.
+Gerçek ChatGPT Plus hesabında Developer Mode açılarak private ShopAI MCP uygulaması 21 Eylül 2026'da bağlandı. Arama, iframe/widget render, filtre, doğrudan detay/varyant ve merchant handoff çalıştı. Kabul yine de tamamlanmadı: karttan detail hata verdi, saved read-after-write sürekliliği başarısız oldu, host `CSP kapalı` gösterdi, gerçek ürün görseli ve ekran kaydı yoktu. Ayrıntı `docs/evidence/task-011b-real-chatgpt-host.md` içindedir.
 
 ## Güncel uygulama sözleşmesi
 
@@ -58,7 +58,7 @@ Staging PostgreSQL ve Redis ayrı Docker containerlarında ve `shopai-staging-ne
 
 Canlı secret değerleri repoya commit edilmez.
 
-İlk gerçek staging deployment manuel olarak doğrulanmıştır. Host üzerindeki `.env.staging` dosyası repository dışında tutulur ve `0600` izinle korunur.
+İlk gerçek staging deployment manuel olarak doğrulanmış olarak kaydedilmiştir; exact SHA/run URL sonradan belgeye eklenmemiştir. Host üzerindeki `.env.staging` dosyası repository dışında tutulur ve `0600` izinle korunur.
 
 Production-like otomatik deployment ve secret-management standardizasyonu TASK-021 Production Readiness kapsamında tamamlanacaktır.
 
@@ -75,7 +75,7 @@ Production-like otomatik deployment ve secret-management standardizasyonu TASK-0
 
 ## Deployment akışı
 
-TASK-011 kapsamında gerçek staging deployment manuel olarak doğrulanmıştır.
+TASK-011 kapsamındaki ilk staging deployment manuel olarak doğrulanmış, fakat o koşunun exact SHA/run URL'si kaydedilmemiştir. 21 Eylül TASK-011B koşusu deployed SHA'yı readiness üzerinden sonradan doğrulamıştır; workflow/run URL eksikliği sürer.
 
 Doğrulanan akış:
 
@@ -109,13 +109,9 @@ GitHub Actions üzerinden production-like deployment otomasyonu TASK-021 Product
 
 ## Gerçek ChatGPT kabul testi
 
-Pre-publication gerçek ChatGPT iframe/widget acceptance testi erişim nedeniyle DEFERRED durumundadır.
+Private Developer Mode bağlantısı artık erişilebilir ve gerçek Plus hesabında kullanılmıştır. 21 Eylül koşusu acceptance adımlarının bir bölümünü geçti; bu koşu App Directory publication veya production end-user kabulü değildir.
 
-Mevcut ChatGPT Plus hesabında private custom MCP uygulamasını doğrudan bağlayacak Developer Mode / custom connection seçeneği bulunmamaktadır.
-
-App review ve publication sonrasında ShopAI, aynı Plus hesabıyla gerçek son kullanıcı gibi test edilecektir.
-
-Publication sonrası acceptance adımları:
+Kalan acceptance adımları:
 
 1. Published ShopAI app açılır.
 2. `search_products` çağrısı doğrulanır.
@@ -134,7 +130,8 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 
 | Kanıt | Sonuç |
 | --- | --- |
-| Release SHA | Runtime smoke çıktısında ve PR evidence kaydında immutable SHA olarak tutulur. |
+| Release SHA | PASS — readiness `cb74208776afb998139ac4211a2477bea543068b` döndürdü |
+| Workflow / run URL | **Eksik:** manuel smoke için kalıcı run URL kaydedilmemiş. |
 | Public API health | PASS |
 | Public widget health | PASS |
 | Public MCP `/mcp` | PASS |
@@ -145,16 +142,17 @@ Identity iki surface arasında korunmuyorsa explicit account linking veya OAuth 
 | `get_product_detail` | PASS |
 | Signed external checkout | PASS |
 | Hosted automated smoke | PASS |
-| Real ChatGPT iframe render | DEFERRED - publication sonrası |
-| Real ChatGPT console/CSP testi | DEFERRED - publication sonrası |
-| Web / ChatGPT identity continuity | DEFERRED - publication sonrası |
+| Real ChatGPT iframe render | KISMİ — arama/filter PASS; karttan detail FAIL, direct detail DTO uyumsuzluk uyarılı |
+| Real ChatGPT console/CSP testi | FAIL — host `CSP kapalı`; ShopAI-domain filtreli console eşleşmesi yok, hostta çok sayıda ilgisiz i18n hata kaydı var |
+| Web / ChatGPT identity continuity | FAIL — save başarı yanıtı sonrası iki list çağrısı boş; no-auth MCP web cookie ile bağlı değil |
+| Screen recording | EKSİK |
 
 Hosted smoke sonucu:
 
 ```json
 {
   "status": "ok",
-  "release": "<deployed-release-sha>",
+  "release": "cb74208776afb998139ac4211a2477bea543068b",
   "mcpUrl": "https://shop.fizyoflow.com/mcp",
   "resourceUri": "ui://widget/shopai-shopping-v3.html",
   "searchTool": true,
@@ -166,8 +164,8 @@ Hosted smoke sonucu:
 
 ## Mevcut blocker
 
-Hosted staging engineering tarafında blocker kalmamıştır.
+Hosted staging kod/manuel smoke akışında bilinen blocker yoktur. Exact deployed SHA ve kalıcı run URL eksikliği auditable release acceptance blocker'ıdır.
 
-Gerçek ChatGPT iframe/widget acceptance testi yalnızca mevcut Plus hesabında private custom MCP Developer Mode erişimi bulunmadığı için publication sonrasına ertelenmiştir.
+Developer Mode erişim engeli kalkmıştır. Koşu sonrasında CSP enforcement kullanıcı onayıyla açılmıştır; yeni release üzerinde tekrar kanıtlanması gerekir. Güncel blocker'lar detail ve stateful saved düzeltmelerinin gerçek host tekrar koşusu, web/ChatGPT identity süreksizliği, gerçek görsel/timeout koşusu ve ekran kaydıdır. Account-linking takibi `docs/follow-ups/task-024-account-linking.md` içindedir.
 
-Bu deferred validation TASK-011 hosted staging engineering acceptance'ını bloklamaz. App Directory publication sonrası release validation maddesi olarak takip edilecektir.
+TASK-011 kod kapsamını bu bulgular geriye döndürmez; TASK-011B dış kabulü bütün maddeler aynı release üzerinde kanıtlanana kadar açık kalır.

@@ -1,7 +1,12 @@
 import {
+  type InteractionEventsRequest,
+  interactionEventsRequestSchema,
+  interactionEventsResponseSchema,
+} from '@shopai/contracts/interaction-events';
+import {
   type CreateProductAlertRequest,
-  type ProductAlert,
   createProductAlertRequestSchema,
+  type ProductAlert,
   productAlertResponseSchema,
 } from '@shopai/contracts/product-alerts';
 import {
@@ -28,6 +33,14 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+function structuredContent(value: unknown): unknown {
+  if (!record(value)) return value;
+  if ('structuredContent' in value) return value.structuredContent;
+  if ('result' in value && record(value.result))
+    return structuredContent(value.result);
+  return value;
+}
+
 type JsonRpcMessage = {
   jsonrpc: '2.0';
   id?: number;
@@ -42,7 +55,8 @@ type WidgetToolInput =
   | WidgetSearchInput
   | ProductDetailRequest
   | SaveProductRequest
-  | CreateProductAlertRequest;
+  | CreateProductAlertRequest
+  | InteractionEventsRequest;
 
 type OpenAiHost = {
   toolInput?: WidgetSearchInput;
@@ -105,6 +119,9 @@ export type HostBridge = {
   callCreateProductAlert(
     input: CreateProductAlertRequest,
   ): Promise<ProductAlert>;
+  callInteractionEvents(
+    input: InteractionEventsRequest,
+  ): Promise<{ accepted: number; duplicates: number }>;
   openCheckout(href: string): Promise<void>;
   destroy(): void;
 };
@@ -158,9 +175,8 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
       emit();
     }
     if (message.method === 'ui/notifications/tool-result') {
-      if (!record(message.params) || !('structuredContent' in message.params))
-        return;
-      current = { ...current, output: message.params.structuredContent };
+      if (!record(message.params)) return;
+      current = { ...current, output: structuredContent(message.params) };
       emit();
     }
   };
@@ -205,7 +221,7 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
         )) as { structuredContent?: unknown })
       : await hostWindow.openai?.callTool?.(name, args);
     if (!result) throw new Error('Uyumlu MCP Apps host köprüsü bulunamadı.');
-    return result.structuredContent;
+    return structuredContent(result);
   }
 
   return {
@@ -243,6 +259,13 @@ export function createHostBridge(options: BridgeOptions = {}): HostBridge {
       return productAlertResponseSchema.parse(
         await callTool('create_product_alert', arguments_),
       ).alert;
+    },
+    async callInteractionEvents(input: InteractionEventsRequest) {
+      if (destroyed) throw new Error('Host köprüsü kapatıldı.');
+      const arguments_ = interactionEventsRequestSchema.parse(input);
+      return interactionEventsResponseSchema.parse(
+        await callTool('record_interaction_events', arguments_),
+      );
     },
     async openCheckout(href) {
       if (destroyed) throw new Error('Host köprüsü kapatıldı.');

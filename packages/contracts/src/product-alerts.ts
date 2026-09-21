@@ -28,6 +28,7 @@ const createProductAlertRequestObject = z
     conditionType: productAlertConditionTypeSchema,
     targetValue: targetValueSchema.nullable().optional(),
     email: z.string().trim().email().max(254),
+    discoverySessionId: z.string().uuid().optional(),
   })
   .strict();
 

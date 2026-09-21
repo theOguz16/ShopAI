@@ -149,6 +149,64 @@ describe('ChatGPT widget host bridge', () => {
     bridge.destroy();
   });
 
+  it('normalizes the nested tool result envelope used by MCP Apps hosts', async () => {
+    const detail = {
+      searchId: '11111111-1111-4111-8111-111111111111',
+      product: {
+        id: '22222222-2222-4222-8222-222222222222',
+        title: 'Test ürünü',
+        category: 'tshirt',
+      },
+      brand: null,
+      images: [],
+      description: 'Test',
+      variants: [],
+      offers: [],
+      availability: 'out_of_stock',
+      attributes: {},
+      merchant: {
+        id: '33333333-3333-4333-8333-333333333333',
+        name: 'Test mağazası',
+        slug: 'test',
+        displayName: 'Test mağazası',
+        logoUrl: null,
+      },
+      checkoutAvailable: false,
+      similarProducts: [],
+    };
+    const host = fakeHost((message, current) => {
+      if (message.method === 'ui/initialize')
+        queueMicrotask(() =>
+          current.receive({ jsonrpc: '2.0', id: message.id, result: {} }),
+        );
+      if (message.method === 'tools/call')
+        queueMicrotask(() =>
+          current.receive({
+            jsonrpc: '2.0',
+            id: message.id,
+            result: { result: { structuredContent: detail } },
+          }),
+        );
+    });
+    const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
+
+    await expect(
+      bridge.callProductDetail({
+        productId: '22222222-2222-4222-8222-222222222222',
+      }),
+    ).resolves.toMatchObject({ product: { title: 'Test ürünü' } });
+
+    const snapshots = vi.fn();
+    bridge.subscribe(snapshots);
+    host.receive({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: { result: { structuredContent: detail } },
+    });
+    expect(bridge.snapshot().output).toEqual(detail);
+    bridge.destroy();
+  });
+
   it('times out pending requests and removes listeners on destroy', async () => {
     vi.useFakeTimers();
     try {

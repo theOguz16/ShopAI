@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import {
   discoverySessionCreateRequestSchema,
   searchRequestSchema,
@@ -16,6 +18,7 @@ import { registerAuth, requireSameOrigin } from './plugins/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
+import { registerInteractionEventRoutes } from './routes/interaction-events.js';
 import { registerMerchantRoutes } from './routes/merchants.js';
 import {
   type OnboardingConnectorFactory,
@@ -148,6 +151,7 @@ export async function buildApp(
   await registerSavedProductRoutes(app, resolvedServices, env);
   await registerProductAlertRoutes(app, resolvedServices, env);
   await registerImportRoutes(app, env);
+  await registerInteractionEventRoutes(app, resolvedServices);
   await registerProductRoutes(app);
   await registerProductDetailRoutes(app, resolvedServices);
   await registerRedirectRoutes(app, resolvedServices);
@@ -198,6 +202,21 @@ export async function buildApp(
       throw error;
     }
   });
+  const mcpSessions = new Map<
+    string,
+    {
+      transport: StreamableHTTPServerTransport;
+      server: ReturnType<typeof createMcpServer>;
+    }
+  >();
+
+  function mcpSessionId(header: string | string[] | undefined) {
+    return Array.isArray(header) ? header[0] : header;
+  }
+
+  function allowMcpOrigin(origin: string | undefined) {
+    return !origin || env.MCP_ALLOWED_ORIGINS.includes(origin);
+  }
   app.post('/v1/search', async (request, reply) => {
     const publicRequest = searchProductsRequestSchema.safeParse(request.body);
     const legacyRequest = searchRequestSchema.safeParse(request.body);
@@ -299,8 +318,25 @@ export async function buildApp(
   });
   app.post('/mcp', async (request, reply) => {
     const origin = request.headers.origin;
-    if (origin && !env.MCP_ALLOWED_ORIGINS.includes(origin)) {
+    if (!allowMcpOrigin(origin))
       return reply.code(403).send({ code: 'FORBIDDEN' });
+    const sessionId = mcpSessionId(request.headers['mcp-session-id']);
+    if (sessionId) {
+      const session = mcpSessions.get(sessionId);
+      if (!session)
+        return reply.code(404).send({ code: 'MCP_SESSION_NOT_FOUND' });
+      if (origin) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        reply.raw.setHeader('Vary', 'Origin');
+      }
+      reply.hijack();
+      await session.transport.handleRequest(
+        request.raw,
+        reply.raw,
+        request.body,
+      );
+      return;
     }
     const shopperIdentity = await resolveShopperIdentity(
       request,
@@ -321,6 +357,29 @@ export async function buildApp(
         identity: shopperIdentity,
       },
     );
+    if (isInitializeRequest(request.body)) {
+      let transport: StreamableHTTPServerTransport;
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: randomUUID,
+        enableJsonResponse: true,
+        onsessioninitialized: (initializedSessionId) => {
+          mcpSessions.set(initializedSessionId, { transport, server });
+        },
+      });
+      transport.onclose = () => {
+        const initializedSessionId = transport.sessionId;
+        if (initializedSessionId) mcpSessions.delete(initializedSessionId);
+      };
+      await server.connect(transport);
+      if (origin) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        reply.raw.setHeader('Vary', 'Origin');
+      }
+      reply.hijack();
+      await transport.handleRequest(request.raw, reply.raw, request.body);
+      return;
+    }
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -341,8 +400,22 @@ export async function buildApp(
   app.route({
     method: ['GET', 'DELETE'],
     url: '/mcp',
-    handler: async (_request, reply) =>
-      reply.code(405).send({ code: 'METHOD_NOT_ALLOWED' }),
+    handler: async (request, reply) => {
+      const origin = request.headers.origin;
+      if (!allowMcpOrigin(origin))
+        return reply.code(403).send({ code: 'FORBIDDEN' });
+      const sessionId = mcpSessionId(request.headers['mcp-session-id']);
+      const session = sessionId ? mcpSessions.get(sessionId) : undefined;
+      if (!session)
+        return reply.code(404).send({ code: 'MCP_SESSION_NOT_FOUND' });
+      if (origin) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        reply.raw.setHeader('Vary', 'Origin');
+      }
+      reply.hijack();
+      await session.transport.handleRequest(request.raw, reply.raw);
+    },
   });
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ err: error, requestId: request.id }, 'Request failed');
@@ -367,6 +440,13 @@ export async function buildApp(
     });
   });
   app.addHook('onClose', async () => {
+    await Promise.all(
+      [...mcpSessions.values()].map(async ({ server, transport }) => {
+        await transport.close();
+        await server.close();
+      }),
+    );
+    mcpSessions.clear();
     await resolvedServices.close();
     await authDatabase?.close();
   });

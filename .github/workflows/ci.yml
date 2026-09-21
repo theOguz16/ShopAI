@@ -96,12 +96,22 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
           pg_dump --version
       - run: pnpm install --frozen-lockfile
-      - run: pnpm db:migrate
-      - run: pnpm test:integration
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Run every PostgreSQL/Redis integration test
+        run: pnpm test:integration
       - name: Run TASK-023A synthetic pilot rehearsal
         env:
           PILOT_REHEARSAL_DATABASE_URL: postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_pilot_rehearsal_ci
         run: pnpm pilot:rehearsal -- --mode=ci --seed=23001
+      - name: Store TASK-023A rehearsal report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-rehearsal-${{ github.run_id }}
+          path: artifacts/pilot-rehearsal/
+          if-no-files-found: error
+          retention-days: 30
       - name: Exercise backup and restore into an isolated test database
         run: |
           mkdir -p /tmp/shopai-backups

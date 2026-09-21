@@ -53,16 +53,16 @@ Merchant analytics showed:
 
 - AI Searches: **6**
 - Product Views: **0**
-- Checkout Clicks: **2**
+- Merchant Handoffs: **2**
 - Orders: **0**
 - Attributed GMV: **₺0**
 - Net Attributed Revenue: **₺0**
-- Search -> Checkout: **33.3%**
+- Search -> Merchant: **33.3%**
 - ChatGPT surface share: **100% (2 clicks)**
 - Web: **0 clicks**
 - Other: **0 clicks**
 
-`Checkout Clicks` and `Search -> Checkout` are the dashboard's current labels for signed merchant-handoff redirect events. In this WooCommerce integration those redirects land on the source product permalink, so these metrics must not be read as confirmed checkout-session starts.
+Dashboard artık bu olayları `Merchant Handoffs` ve `Search → Merchant` olarak gösterir. Bu WooCommerce koşusunda yönlendirmeler kaynak ürün permalink'ine gider; gerçek checkout başlangıcı ayrıca doğrulanmamıştır. API'deki eski `checkoutClicks` ve oran alanları geriye uyumluluk alias'ı olarak aynı sayıları döndürür.
 
 This proves that human handoff clicks originating from ChatGPT/MCP are visible in the merchant-facing ShopAI analytics dashboard.
 

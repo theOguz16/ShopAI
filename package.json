@@ -14,7 +14,7 @@
     "build:packages": "turbo run build --filter=./packages/*",
     "build": "turbo run build",
     "typecheck": "pnpm build:packages && turbo run typecheck",
-    "lint": "biome lint . && node scripts/check-boundaries.mjs",
+    "lint": "biome lint . && node scripts/check-boundaries.mjs && node scripts/check-test-suites.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "test": "pnpm build:packages && vitest run",

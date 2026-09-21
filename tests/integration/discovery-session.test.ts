@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
 import { createServices } from '../../apps/api/src/services.js';
 import { createDatabase } from '../../packages/db/src/client.js';
 import { importCatalog } from '../../packages/db/src/import-catalog.js';
+import { productViewEvents } from '../../packages/db/src/product-view-event-repository.js';
 import {
   connections,
   discoverySessions,
@@ -81,6 +82,19 @@ describeWithDatabase('discovery sessions', () => {
           available: true,
           checkoutUrl: 'https://merchant.example/mavi-product',
         },
+        {
+          externalId: 'mavi-offer-2',
+          productKey: 'mavi-product-2',
+          title: 'Mavi Benzer Ürün',
+          description: 'Attribution zinciri ürünü',
+          category: 'test',
+          size: 'L',
+          color: 'Lacivert',
+          priceMinor: 12_000,
+          currency: 'TRY',
+          available: true,
+          checkoutUrl: 'https://merchant.example/mavi-similar-product',
+        },
       ],
     });
     await database.db
@@ -88,6 +102,132 @@ describeWithDatabase('discovery sessions', () => {
       .set({ published: true })
       .where(eq(products.merchantId, maviId));
     app = await buildApp(services, env);
+  });
+
+  it('creates a scoped context for a direct detail without manufacturing a search', async () => {
+    const [product] = await database.db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.externalKey, 'mavi-product'));
+    expect(product).toBeDefined();
+
+    const [before] = await database.db
+      .select({ value: count() })
+      .from(searchEvents);
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/v1/products/${product?.id}/detail`,
+    });
+    expect(detail.statusCode).toBe(200);
+    const body = detail.json<{
+      searchId: string;
+      discoverySessionId: string;
+      offers: Array<{ checkoutUrl: string | null }>;
+    }>();
+    expect(body.discoverySessionId).toMatch(/^[0-9a-f-]{36}$/u);
+
+    const [after] = await database.db
+      .select({ value: count() })
+      .from(searchEvents);
+    expect(after?.value).toBe(before?.value);
+
+    const [view] = await database.db
+      .select({
+        searchId: productViewEvents.searchId,
+        discoverySessionId: productViewEvents.discoverySessionId,
+      })
+      .from(productViewEvents)
+      .where(eq(productViewEvents.searchId, body.searchId));
+    expect(view).toEqual({
+      searchId: body.searchId,
+      discoverySessionId: body.discoverySessionId,
+    });
+
+    const redirect = await app.inject({
+      method: 'GET',
+      url: new URL(body.offers[0]?.checkoutUrl ?? '').pathname,
+      headers: { 'user-agent': 'Mozilla/5.0 direct detail handoff' },
+    });
+    expect(redirect.statusCode).toBe(302);
+    const [click] = await database.db
+      .select({ discoverySessionId: redirectClicks.discoverySessionId })
+      .from(redirectClicks)
+      .where(eq(redirectClicks.searchId, body.searchId));
+    expect(click?.discoverySessionId).toBe(body.discoverySessionId);
+  });
+
+  it('preserves campaign and session through search, detail, similar detail, and handoff', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      payload: {
+        merchant: 'mavi',
+        surface: 'web',
+        campaign: 'SUMMER-2026',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const session = created.json<{ id: string; campaign: string }>();
+    expect(session.campaign).toBe('summer-2026');
+
+    const search = await app.inject({
+      method: 'POST',
+      url: `/v1/stores/${maviId}/search`,
+      payload: {
+        query: 'Mavi Ürün',
+        discoverySessionId: session.id,
+        limit: 1,
+      },
+    });
+    const searchBody = search.json<{
+      searchId: string;
+      products: Array<{ productId: string }>;
+    }>();
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/v1/products/${searchBody.products[0]?.productId}/detail?searchId=${searchBody.searchId}&discoverySessionId=${session.id}`,
+    });
+    const detailBody = detail.json<{
+      discoverySessionId: string;
+      similarProducts: Array<{ productId: string }>;
+    }>();
+    expect(detailBody.discoverySessionId).toBe(session.id);
+    expect(detailBody.similarProducts.length).toBeGreaterThan(0);
+
+    const similarDetail = await app.inject({
+      method: 'GET',
+      url: `/v1/products/${detailBody.similarProducts[0]?.productId}/detail?searchId=${searchBody.searchId}&discoverySessionId=${session.id}`,
+    });
+    const similarBody = similarDetail.json<{
+      discoverySessionId: string;
+      offers: Array<{ checkoutUrl: string | null }>;
+    }>();
+    expect(similarBody.discoverySessionId).toBe(session.id);
+    const redirect = await app.inject({
+      method: 'GET',
+      url: new URL(similarBody.offers[0]?.checkoutUrl ?? '').pathname,
+      headers: { 'user-agent': 'Mozilla/5.0 attribution chain' },
+    });
+    expect(redirect.statusCode).toBe(302);
+
+    const [click] = await database.db
+      .select({
+        discoverySessionId: redirectClicks.discoverySessionId,
+        campaign: redirectClicks.campaign,
+      })
+      .from(redirectClicks)
+      .where(eq(redirectClicks.searchId, searchBody.searchId));
+    expect(click).toEqual({
+      discoverySessionId: session.id,
+      campaign: 'summer-2026',
+    });
+
+    const invalidCampaign = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      payload: { merchant: 'mavi', surface: 'web', campaign: 'bad campaign!' },
+    });
+    expect(invalidCampaign.statusCode).toBe(400);
   });
 
   afterAll(async () => {

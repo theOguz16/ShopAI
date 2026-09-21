@@ -18,6 +18,7 @@ import {
   useState,
 } from 'react';
 import { buildProductDetailHref } from '../../../lib/product-detail-href';
+import { recordProductImpressions } from '../../../lib/interaction-events';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const campaignPattern = /^[a-z0-9][a-z0-9_-]{0,127}$/u;
@@ -68,6 +69,7 @@ export default function StorePage() {
         });
         if (!response.ok) throw new Error('search_failed');
         const next = searchResponseSchema.parse(await response.json());
+        void recordProductImpressions(next);
         if (sequence === requestSequence.current) setResult(next);
       } catch {
         if (sequence === requestSequence.current)

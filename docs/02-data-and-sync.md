@@ -72,6 +72,9 @@ Bu TypeScript parçası kavramsal sözleşmedir; tipler uygulamada `contracts` i
 ## Hata ve güncellik politikası
 
 - Bağlantı başına kilit/fencing token ile eşzamanlı tam senkron engellenir.
+- Canlı katalog önce kaynak snapshot'ını toplar, ardından 1.000 satırlık transaction batch'leriyle yazar. `processedProducts`, yalnız başarıyla commit edilmiş batch'lerdeki benzersiz ürün anahtarlarının sayısıdır; transaction içindeki geçici ilerleme kalıcı sayaca yazılmaz.
+- Bir hata hiçbir batch commit edilmeden oluşursa durum `failed`, en az bir batch commit edildikten sonra oluşursa `partial` olur. `completed` yalnız bütün batch'ler ve tam snapshot sonlandırması başarıyla tamamlandığında yazılır. `failedProducts`, bulunan ürünlerden commit edilmiş benzersiz ürünlerin çıkarılmasıyla hesaplanır.
+- Mevcut retry modeli checkpoint'ten devam etmez: connector yeni denemede `cursor = null` ile snapshot'ı baştan okur. `(connection_id, external_key/external_id)` benzersizliği ve upsert'ler daha önce commit edilmiş batch'lerin tekrarını idempotent yapar; ürün veya offer çoğalmaz.
 - 429 yanıtında kaynağın Retry-After bilgisi izlenir; geçici hatalarda sınırlı exponential backoff + jitter uygulanır.
 - Kalıcı yetki hatasında bağlantı durdurulur; mağaza panelinde yeniden bağlantı istenir.
 - Eksik veya hatalı snapshot ürünleri topluca silmez. Görülmeyen kayıtlar yalnız doğrulanmış tam ve başarılı authoritative snapshot sonunda pasifleştirilir; satır hataları varsa bu adım uygulanmaz.

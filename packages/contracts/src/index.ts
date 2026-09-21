@@ -6,6 +6,7 @@ export * from './anonymous-shopping-profile.js';
 export * from './saved-products.js';
 export * from './product-alerts.js';
 export * from './search-analytics.js';
+export * from './interaction-events.js';
 
 import { z } from 'zod';
 import { searchAnalyticsIntentSchema } from './search-analytics.js';
@@ -152,6 +153,7 @@ export type ModelSearchIntent = z.infer<typeof modelSearchIntentSchema>;
 export const searchResponseSchema = z.object({
   schemaVersion: z.literal(1),
   searchId: z.string().uuid(),
+  discoverySessionId: z.string().uuid().optional(),
   items: z.array(catalogItemSchema),
   nextCursor: z.string().nullable(),
   facets: searchFacetsSchema,

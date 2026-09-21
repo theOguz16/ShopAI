@@ -1,11 +1,14 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   acceptanceFrom,
+  failureReport,
+  isRehearsalDatabaseName,
   percentile,
-  renderSummary,
-  seededRandom,
   type RehearsalMetrics,
+  renderSummary,
   type ScenarioResult,
+  seededRandom,
   verdictFrom,
 } from '../scripts/pilot-rehearsal-lib.js';
 
@@ -29,8 +32,8 @@ const metrics: RehearsalMetrics = {
   attributedOrders: 10,
   attributedGmvMinor: 100_000,
   netRevenueMinor: 90_000,
-  noResultRate: 0,
-  searchErrorRate: 0,
+  noResultRate: 1 / 202,
+  searchErrorRate: 1 / 203,
   checkoutClickRate: 0.25,
   conversionAttributionRate: 0.5,
   syncFailures: 1,
@@ -42,6 +45,8 @@ const requiredIds = [
   'synthetic-merchant-mix',
   'connector-pagination-10k',
   'search-taxonomy',
+  'search-outcomes',
+  'real-mcp-transport',
   'product-detail',
   'save-unsave',
   'checkout-attribution',
@@ -81,6 +86,7 @@ describe('pilot rehearsal reporting', () => {
       scenarios,
       webJourneys: 50,
       chatgptJourneys: 50,
+      realMcpTransportTests: 1,
     });
     expect(verdictFrom(acceptance)).toBe('PASS');
     expect(
@@ -90,6 +96,7 @@ describe('pilot rehearsal reporting', () => {
           scenarios,
           webJourneys: 50,
           chatgptJourneys: 50,
+          realMcpTransportTests: 1,
         }),
       ),
     ).toBe('FAIL');
@@ -101,6 +108,7 @@ describe('pilot rehearsal reporting', () => {
       scenarios,
       webJourneys: 50,
       chatgptJourneys: 50,
+      realMcpTransportTests: 1,
     });
     expect(
       renderSummary({
@@ -109,7 +117,67 @@ describe('pilot rehearsal reporting', () => {
         verdict: 'PASS',
         webJourneys: 50,
         chatgptJourneys: 50,
+        realMcpTransportTests: 1,
       }),
     ).toContain('does not satisfy TASK-023B');
+  });
+
+  it('keeps outcome rates and MCP transport evidence explicit in the summary', () => {
+    const acceptance = acceptanceFrom({
+      metrics,
+      scenarios,
+      webJourneys: 50,
+      chatgptJourneys: 50,
+      realMcpTransportTests: 1,
+    });
+    const summary = renderSummary({
+      metrics,
+      acceptance,
+      verdict: 'PASS',
+      webJourneys: 50,
+      chatgptJourneys: 50,
+      realMcpTransportTests: 1,
+    });
+    expect(summary).toContain('ChatGPT-attributed:     50 PASS');
+    expect(summary).toContain('Real MCP transport:     1 PASS');
+    expect(summary).toContain('No-result rate:         0.50%');
+    expect(summary).toContain('Search-error rate:      0.49%');
+  });
+
+  it('emits a machine-readable setup failure and preserves database-name safety', () => {
+    const report = failureReport({
+      seed: 23,
+      runMode: 'ci',
+      phase: 'database-preparation',
+      startedAt: new Date('2026-09-17T10:00:00.000Z'),
+      finishedAt: new Date('2026-09-17T10:00:01.000Z'),
+      error: 'database unavailable',
+    });
+    expect(report).toMatchObject({
+      schemaVersion: 'shopai-pilot-rehearsal/v1',
+      phase: 'database-preparation',
+      verdict: 'FAIL',
+      error: 'database unavailable',
+    });
+    expect(isRehearsalDatabaseName('shopai_pilot_rehearsal_ci')).toBe(true);
+    expect(isRehearsalDatabaseName('shopai_test')).toBe(false);
+    expect(isRehearsalDatabaseName('production')).toBe(false);
+  });
+
+  it('marks a newly created rehearsal database before migrations begin', async () => {
+    const runner = await readFile(
+      new URL('../scripts/pilot-rehearsal.mts', import.meta.url),
+      'utf8',
+    );
+    const placeholder = '$' + '{databaseName}';
+    const createAt = runner.indexOf(`create database ${placeholder}`);
+    const markerAt = runner.indexOf(`comment on database ${placeholder}`);
+    const migrateAt = runner.indexOf('await migrate(database.db');
+    expect(createAt).toBeGreaterThan(-1);
+    expect(markerAt).toBeGreaterThan(createAt);
+    expect(migrateAt).toBeGreaterThan(markerAt);
+    expect(runner).toContain(
+      'Existing database is not marked as a ShopAI rehearsal database.',
+    );
   });
 });

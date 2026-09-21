@@ -4,6 +4,12 @@ import { parseApiEnv } from '../../apps/api/src/env.js';
 import { createServices } from '../../apps/api/src/services.js';
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
+const demoEnv = parseApiEnv({});
+
+function buildDemoApp() {
+  return buildApp(createServices(demoEnv), demoEnv);
+}
+
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
@@ -21,7 +27,7 @@ describe('API and MCP', () => {
     expect(response.json()).toEqual({ status: 'unavailable' });
   });
   it('exposes a filtered public search and validates input', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     expect((await app.inject('/health/ready')).statusCode).toBe(200);
     const result = await app.inject({
@@ -32,11 +38,12 @@ describe('API and MCP', () => {
     expect(result.statusCode).toBe(200);
     expect(result.json().products).toHaveLength(1);
     expect(result.json().searchId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(result.json().discoverySessionId).toMatch(/^[0-9a-f-]{36}$/u);
     expect(result.json().facets.categories).toEqual([
       { value: 'tshirt', count: 1 },
     ]);
     expect(Object.keys(result.json()).sort()).toEqual(
-      ['facets', 'products', 'searchId'].sort(),
+      ['discoverySessionId', 'facets', 'products', 'searchId'].sort(),
     );
     const scoped = await app.inject({
       method: 'POST',
@@ -85,7 +92,7 @@ describe('API and MCP', () => {
     ).toBe(401);
   });
   it('calls the shared search via stateless MCP', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     const response = await app.inject({
       method: 'POST',
@@ -105,7 +112,7 @@ describe('API and MCP', () => {
     expect(response.json().result.structuredContent.products).toHaveLength(1);
   });
   it('rejects untrusted browser origins for MCP', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     expect(
       (
@@ -119,7 +126,7 @@ describe('API and MCP', () => {
     ).toBe(403);
   });
   it('protects management routes and cookie login with backend auth', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     expect(
       (
@@ -144,7 +151,7 @@ describe('API and MCP', () => {
     ).toBe(403);
   });
   it('rejects malformed login bodies without throwing', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     for (const payload of [
       { email: 42, token: 'x'.repeat(16) },

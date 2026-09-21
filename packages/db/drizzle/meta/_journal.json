@@ -27,6 +27,10 @@
     { "idx": 22, "version": "7", "when": 1789171200000, "tag": "0023_product_alerts", "breakpoints": true },
     { "idx": 23, "version": "7", "when": 1789372800000, "tag": "0024_source_sync_watermark", "breakpoints": true },
     { "idx": 24, "version": "7", "when": 1789461600000, "tag": "0025_public_visibility_rls", "breakpoints": true },
-    { "idx": 25, "version": "7", "when": 1789499400000, "tag": "0026_search_intent_metrics", "breakpoints": true }
+    { "idx": 25, "version": "7", "when": 1789499400000, "tag": "0026_search_intent_metrics", "breakpoints": true },
+    { "idx": 26, "version": "7", "when": 1789639800000, "tag": "0027_interaction_events", "breakpoints": true },
+    { "idx": 27, "version": "7", "when": 1789725600000, "tag": "0028_merchant_session_funnel", "breakpoints": true },
+    { "idx": 28, "version": "7", "when": 1789973200000, "tag": "0029_interaction_event_grants", "breakpoints": true },
+    { "idx": 29, "version": "7", "when": 1789973300000, "tag": "0030_interaction_event_public_returning", "breakpoints": true }
   ]
 }

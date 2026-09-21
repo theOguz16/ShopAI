@@ -63,15 +63,25 @@ export function buildMerchantAnalyticsMetrics(
   return {
     aiSearches: aggregate.aiSearches,
     productViews: aggregate.productViews,
+    merchantHandoffs: aggregate.checkoutClicks,
     checkoutClicks: aggregate.checkoutClicks,
     orders,
     attributedGmvMinor,
     netRevenueMinor,
     searchToCheckoutRate: ratio(aggregate.checkoutClicks, aggregate.aiSearches),
+    searchToMerchantHandoffRate: ratio(
+      aggregate.checkoutClicks,
+      aggregate.aiSearches,
+    ),
     checkoutToOrderRate:
       aggregate.measured && aggregate.checkoutClicks > 0
         ? aggregate.orders / aggregate.checkoutClicks
         : null,
+    merchantHandoffToOrderRate:
+      aggregate.measured && aggregate.checkoutClicks > 0
+        ? aggregate.orders / aggregate.checkoutClicks
+        : null,
+    merchantHandoffsBySurface: surfaceBreakdown,
     surfaceBreakdown,
   };
 }

@@ -30,6 +30,7 @@ import type {
   DiscoverySession,
   RecordedSearchIntent,
   Surface,
+  InteractionEventsRequest,
 } from '@shopai/contracts';
 import { WEB_ATTRIBUTION } from '@shopai/contracts';
 import type { AnonymousShoppingProfile } from '@shopai/contracts/anonymous-shopping-profile';
@@ -45,6 +46,7 @@ import {
   PostgresDiscoverySessionRepository,
   PostgresProductDetailRepository,
   PostgresProductViewEventRepository,
+  PostgresInteractionEventRepository,
   PostgresRedirectRepository,
   PostgresSearchEventRepository,
 } from '@shopai/db';
@@ -135,6 +137,9 @@ export function createServices(env: ApiEnv) {
   const productViews = new ProductViews(
     database ? new PostgresProductViewEventRepository(database.db) : undefined,
   );
+  const interactionEvents = database
+    ? new PostgresInteractionEventRepository(database.db)
+    : undefined;
 
   const resolveRestAttribution = async (
     input: unknown,
@@ -223,7 +228,7 @@ export function createServices(env: ApiEnv) {
           })),
         );
       }
-      return result;
+      return { ...result, discoverySessionId };
     } catch (error) {
       if (searchEventRepository && explicitMerchantIds.length) {
         await searchEventRepository.record(
@@ -251,11 +256,14 @@ export function createServices(env: ApiEnv) {
       context,
       attribution,
     );
-    return toSearchProductsResponse(result);
+    return {
+      ...toSearchProductsResponse(result),
+      discoverySessionId: result.discoverySessionId,
+    };
   };
   const executeProductDetail = async (
     input: unknown,
-    context: { merchantIds?: string[] } = {},
+    context: { merchantIds?: string[]; anonymousUserId?: string } = {},
     attribution: AttributionContext = WEB_ATTRIBUTION,
   ) => {
     const requestInput =
@@ -273,14 +281,24 @@ export function createServices(env: ApiEnv) {
       discoverySessionId = session.id;
     }
     const result = await productDetails.execute(input, scopedContext);
+    if (!discoverySessionId) {
+      const session = await discoverySessions.create(
+        { surface: attribution.surface, merchant: result.merchant.id },
+        {
+          transport: attribution.transport,
+          anonymousUserId: context.anonymousUserId,
+        },
+      );
+      discoverySessionId = session.id;
+    }
     await productViews.record({
       merchantId: result.merchant.id,
       productId: result.product.id,
       searchId: result.searchId,
-      ...(discoverySessionId ? { discoverySessionId } : {}),
+      discoverySessionId,
       ...attribution,
     });
-    return result;
+    return { ...result, discoverySessionId };
   };
   return {
     search,
@@ -291,6 +309,37 @@ export function createServices(env: ApiEnv) {
     executeProductDetail,
     resolveRestAttribution,
     discoverySessions,
+    recordInteractionEvents: async (
+      input: InteractionEventsRequest,
+      attribution: AttributionContext,
+    ) => {
+      const session = await discoverySessions.require(input.discoverySessionId);
+      discoverySessions.assertAttribution(session, attribution);
+      return interactionEvents
+        ? interactionEvents.record(input, attribution)
+        : { accepted: input.events.length, duplicates: 0 };
+    },
+    ensureInteractionSession: async (
+      productId: string,
+      discoverySessionId: string | undefined,
+      attribution: AttributionContext,
+      anonymousUserId?: string,
+    ) => {
+      const detail = await productDetails.execute({ productId });
+      if (discoverySessionId) {
+        const session = await discoverySessions.require(discoverySessionId);
+        discoverySessions.assertAttribution(session, attribution);
+        discoverySessions.applyMerchantScope(session, {
+          merchantIds: [detail.merchant.id],
+        });
+        return { merchantId: detail.merchant.id, discoverySessionId };
+      }
+      const session = await discoverySessions.create(
+        { surface: attribution.surface, merchant: detail.merchant.id },
+        { transport: attribution.transport, anonymousUserId },
+      );
+      return { merchantId: detail.merchant.id, discoverySessionId: session.id };
+    },
     repository,
     redirects: new RedirectService(
       new RedirectTokens(

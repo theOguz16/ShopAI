@@ -152,9 +152,36 @@ function Widget() {
     window.location.hostname,
   );
 
+  useEffect(() => {
+    if (!result?.discoverySessionId || !result.products.length) return;
+    const seen = new Set<string>();
+    const events = result.products.flatMap((item) => {
+      const key = `${item.merchantId}:${item.productId}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [
+        {
+          eventKey: crypto.randomUUID(),
+          type: 'product_impression' as const,
+          merchantId: item.merchantId,
+          productId: item.productId,
+        },
+      ];
+    });
+    void bridge.callInteractionEvents({
+      discoverySessionId: result.discoverySessionId,
+      events,
+    });
+  }, [bridge, result]);
+
   const applySearchResult = useCallback(
     (nextInput: WidgetSearchInput, nextResult: SearchProductsResponse) => {
-      setInput(nextInput);
+      setInput({
+        ...nextInput,
+        ...(nextResult.discoverySessionId
+          ? { discoverySessionId: nextResult.discoverySessionId }
+          : {}),
+      });
       setResult(nextResult);
       setDetail(undefined);
       setView(
@@ -224,6 +251,7 @@ function Widget() {
   }
 
   async function runSearch(nextInput: WidgetSearchInput) {
+    const previousInput = input;
     setInput(nextInput);
     setDetail(undefined);
     setLoading(true);
@@ -231,6 +259,47 @@ function Widget() {
     try {
       const nextResult = await executeSearch(nextInput);
       applySearchResult(nextInput, nextResult);
+      if (nextResult.discoverySessionId) {
+        const merchantIds = [
+          ...new Set(nextResult.products.map((item) => item.merchantId)),
+        ];
+        const categoryChanged = nextInput.category !== previousInput.category;
+        const filterKinds = [
+          nextInput.price ? 'price' : undefined,
+          nextInput.inStockOnly !== previousInput.inStockOnly
+            ? 'stock'
+            : undefined,
+          JSON.stringify(nextInput.attributes ?? {}) !==
+          JSON.stringify(previousInput.attributes ?? {})
+            ? 'attribute'
+            : undefined,
+        ].filter((value): value is 'price' | 'stock' | 'attribute' =>
+          Boolean(value),
+        );
+        const events = merchantIds.flatMap((merchantId) => [
+          ...(categoryChanged && nextInput.category
+            ? [
+                {
+                  eventKey: crypto.randomUUID(),
+                  type: 'category_selected' as const,
+                  merchantId,
+                  category: nextInput.category,
+                },
+              ]
+            : []),
+          ...filterKinds.map((filterKind) => ({
+            eventKey: crypto.randomUUID(),
+            type: 'filter_applied' as const,
+            merchantId,
+            filterKind,
+          })),
+        ]);
+        if (events.length)
+          void bridge.callInteractionEvents({
+            discoverySessionId: nextResult.discoverySessionId,
+            events,
+          });
+      }
     } catch {
       setError(
         'Filtre uygulanamadı. Bağlantıyı kontrol edip sohbetten aramayı yeniden deneyin.',

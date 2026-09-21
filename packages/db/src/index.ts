@@ -11,6 +11,7 @@ export * from './discovery-session-repository.js';
 export * from './sync-progress.js';
 export * from './merchant-conversion-repository.js';
 export * from './product-view-event-repository.js';
+export * from './interaction-event-repository.js';
 export * from './anonymous-shopping-profile-repository.js';
 export * from './saved-product-repository.js';
 export * from './product-alert-repository.js';

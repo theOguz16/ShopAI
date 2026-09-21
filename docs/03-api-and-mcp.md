@@ -67,7 +67,7 @@ Hatalar: `INVALID_INPUT`, `NOT_FOUND`, `FORBIDDEN`, `RATE_LIMITED`, `SOURCE_UNAV
 | get_facets | GetCategoryFacets | Salt okunur |
 | get_merchants | ListPublishedMerchants | Salt okunur |
 | check_availability | RefreshOrReadAvailability | Cache yenileyebilir; ödeme/sipariş oluşturmaz |
-| get_checkout_url | BuildSignedRedirect | URL üretir; tıklama veya sipariş kaydetmez |
+| get_checkout_url | BuildSignedRedirect | Geriye uyumlu tool adıdır; merchant ürün/checkout hedefi için URL üretir, tıklama veya sipariş kaydetmez |
 
 Tool giriş ve çıkış şemaları `contracts` kaynaklıdır. Annotations gerçek yan etkilere göre seçilir; envanter yenileme koşulsuz salt okunur diye etiketlenmez. Merchant yönetim araçları public MCP yüzeyine eklenmez.
 
@@ -77,7 +77,9 @@ Widget asset sürümü ve tool DTO sürümü birlikte uyumlu tutulur. Platform i
 
 ## Yönlendirme ve satış ölçümü
 
-`get_checkout_url` offer ID, kanal ve süre içeren imzalı token üretir. Gerçek GET geldiğinde redirect servisi offer/merchant durumunu yeniden doğrular, Click kaydeder ve DB'deki onaylı HTTPS hedefine yönlendirir. Token üretimi tıklama sayılmaz. Link önizlemeleri ve botlar gerçek kullanıcı sayısını şişirebileceği için ham redirect istekleri ile tahmini insan tıklamaları ayrı raporlanır.
+`get_checkout_url` adı geriye uyumluluk için korunur; hedef connector'a göre merchant ürün sayfası veya checkout URL'si olabilir. Offer ID, attribution ve süre içeren imzalı token üretir. Gerçek GET geldiğinde redirect servisi offer/merchant durumunu yeniden doğrular, merchant handoff kaydeder ve DB'deki onaylı HTTPS hedefine yönlendirir. URL üretimi checkout başlangıcı veya tıklama sayılmaz. Link önizlemeleri ve botlar gerçek kullanıcı sayısını şişirebileceği için ham redirect istekleri ile tahmini insan yönlendirmeleri ayrı raporlanır.
+
+Doğrudan ürün detayı açılışı merchant kapsamlı bir discovery session ve product-view event'i oluşturur; search event'i üretmez. Search'ten gelen `searchId` ve `discoverySessionId` detail ve benzer ürün geçişlerinde korunur. Storefront `campaign` değeri yalnız `[a-z0-9][a-z0-9_-]{0,127}` biçiminde kabul edilip normalize edilerek session'a yazılır; redirect kaydı campaign'i session'dan türetir.
 
 İstemciden serbest hedef URL kabul edilmez. İzinli hostname ve gerekiyorsa path şablonu sunucuda kontrol edilir. Token query'sinde kişisel veri bulunmaz. Kaynak stok değişmişse uygun durum mesajı gösterilir.
 

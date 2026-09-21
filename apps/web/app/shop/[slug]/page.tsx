@@ -8,7 +8,7 @@ import {
   type SearchResponse,
 } from '@shopai/contracts';
 import { ProductCard } from '@shopai/ui';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   type CSSProperties,
   type FormEvent,
@@ -18,13 +18,21 @@ import {
   useState,
 } from 'react';
 import { buildProductDetailHref } from '../../../lib/product-detail-href';
+import { recordProductImpressions } from '../../../lib/interaction-events';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
+const campaignPattern = /^[a-z0-9][a-z0-9_-]{0,127}$/u;
 
 type SearchScope = 'storefront' | 'network';
 
 export default function BrandedStorefrontPage() {
   const { slug } = useParams<{ slug: string }>();
+  const searchParams = useSearchParams();
+  const requestedCampaign = searchParams.get('campaign')?.trim().toLowerCase();
+  const campaign =
+    requestedCampaign && campaignPattern.test(requestedCampaign)
+      ? requestedCampaign
+      : undefined;
   const [storefront, setStorefront] = useState<PublicStorefront>();
   const [discoverySessionId, setDiscoverySessionId] = useState<string>();
   const [scope, setScope] = useState<SearchScope>('storefront');
@@ -37,20 +45,24 @@ export default function BrandedStorefrontPage() {
   const [error, setError] = useState('');
   const requestSequence = useRef(0);
 
-  const createDiscoverySession = useCallback(async (merchant?: string) => {
-    const response = await fetch(`${api}/discovery-session`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        surface: 'web',
-        ...(merchant ? { merchant } : {}),
-        ...(document.referrer ? { referrer: document.referrer } : {}),
-      }),
-    });
-    if (!response.ok) throw new Error('discovery_session_failed');
-    return discoverySessionSchema.parse(await response.json());
-  }, []);
+  const createDiscoverySession = useCallback(
+    async (merchant?: string) => {
+      const response = await fetch(`${api}/discovery-session`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          surface: 'web',
+          ...(merchant ? { merchant } : {}),
+          ...(campaign ? { campaign } : {}),
+          ...(document.referrer ? { referrer: document.referrer } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error('discovery_session_failed');
+      return discoverySessionSchema.parse(await response.json());
+    },
+    [campaign],
+  );
 
   const runSearch = useCallback(
     async (
@@ -83,6 +95,7 @@ export default function BrandedStorefrontPage() {
         });
         if (!response.ok) throw new Error('search_failed');
         const next = searchResponseSchema.parse(await response.json());
+        void recordProductImpressions(next);
         if (sequence === requestSequence.current) setResult(next);
       } catch {
         if (sequence === requestSequence.current)

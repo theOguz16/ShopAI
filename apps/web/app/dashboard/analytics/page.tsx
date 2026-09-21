@@ -20,12 +20,28 @@ type Report = {
   metrics: {
     aiSearches: number;
     productViews: number;
+    merchantHandoffs: number;
     checkoutClicks: number;
     orders: number | null;
     attributedGmvMinor: number | null;
     netRevenueMinor: number | null;
-    searchToCheckoutRate: number | null;
-    checkoutToOrderRate: number | null;
+    searchToMerchantHandoffRate: number | null;
+    merchantHandoffToOrderRate: number | null;
+    sessionFunnel: {
+      sessions: number;
+      searchedSessions: number;
+      detailSessions: number;
+      handoffSessions: number;
+      purchasedSessions: number | null;
+      sessionToSearchRate: number | null;
+      searchToDetailRate: number | null;
+      detailToHandoffRate: number | null;
+      handoffToPurchaseRate: number | null;
+      sessionToPurchaseRate: number | null;
+      anonymousVisitors: number;
+      repeatAnonymousVisitors: number;
+      repeatSessionRate: number | null;
+    };
     surfaceBreakdown: {
       counts: {
         chatgpt: number;
@@ -239,7 +255,11 @@ export default function AnalyticsPage() {
             {report.range.timezone}
           </p>
 
-          <section className={styles.kpiGrid} aria-label="Temel metrikler">
+          <div className={styles.sectionHeader}>
+            <h2>Event adetleri</h2>
+            <p>Tekrarlanan olayları içerir; session dönüşümü değildir</p>
+          </div>
+          <section className={styles.kpiGrid} aria-label="Event adetleri">
             <article className={styles.kpi}>
               <p className={styles.kpiLabel}>AI Searches</p>
               <p className={styles.kpiValue}>
@@ -255,11 +275,13 @@ export default function AnalyticsPage() {
               <p className={styles.kpiHint}>Gerçek ürün detay event’leri</p>
             </article>
             <article className={styles.kpi}>
-              <p className={styles.kpiLabel}>Checkout Clicks</p>
+              <p className={styles.kpiLabel}>Merchant Handoffs</p>
               <p className={styles.kpiValue}>
-                {integer.format(report.metrics.checkoutClicks)}
+                {integer.format(report.metrics.merchantHandoffs)}
               </p>
-              <p className={styles.kpiHint}>Bot preview hariç</p>
+              <p className={styles.kpiHint}>
+                Ürün/mağaza sayfasına insan çıkışı; checkout başlangıcı değildir
+              </p>
             </article>
             <article className={styles.kpi}>
               <p className={styles.kpiLabel}>Orders</p>
@@ -290,23 +312,79 @@ export default function AnalyticsPage() {
             </article>
           </section>
 
+          <section className={styles.surfaceCard} aria-label="Session funnel">
+            <div className={styles.sectionHeader}>
+              <h2>Tekil session funnel’ı</h2>
+              <p>Her aşamada aynı session en fazla bir kez sayılır</p>
+            </div>
+            <div className={styles.sessionSteps}>
+              {[
+                {
+                  label: 'Session',
+                  value: report.metrics.sessionFunnel.sessions,
+                  rate: null,
+                },
+                {
+                  label: 'Search',
+                  value: report.metrics.sessionFunnel.searchedSessions,
+                  rate: report.metrics.sessionFunnel.sessionToSearchRate,
+                },
+                {
+                  label: 'Product detail',
+                  value: report.metrics.sessionFunnel.detailSessions,
+                  rate: report.metrics.sessionFunnel.searchToDetailRate,
+                },
+                {
+                  label: 'Merchant handoff',
+                  value: report.metrics.sessionFunnel.handoffSessions,
+                  rate: report.metrics.sessionFunnel.detailToHandoffRate,
+                },
+                {
+                  label: 'Attributed purchase',
+                  value: report.metrics.sessionFunnel.purchasedSessions,
+                  rate: report.metrics.sessionFunnel.handoffToPurchaseRate,
+                },
+              ].map((step) => (
+                <article className={styles.sessionStep} key={step.label}>
+                  <p>{step.label}</p>
+                  <strong>
+                    {step.value === null
+                      ? 'Ölçülmüyor'
+                      : integer.format(step.value)}
+                  </strong>
+                  <span>{step.rate === null ? '—' : percent(step.rate)}</span>
+                </article>
+              ))}
+            </div>
+            <p className={styles.kpiHint}>
+              Session → purchase:{' '}
+              {percent(report.metrics.sessionFunnel.sessionToPurchaseRate)} ·
+              Repeat anonymous visitor rate:{' '}
+              {percent(report.metrics.sessionFunnel.repeatSessionRate)} (
+              {integer.format(
+                report.metrics.sessionFunnel.repeatAnonymousVisitors,
+              )}
+              /{integer.format(report.metrics.sessionFunnel.anonymousVisitors)})
+            </p>
+          </section>
+
           <section className={styles.funnelGrid} aria-label="Funnel oranları">
             <article className={styles.funnelCard}>
               <div>
-                <p className={styles.funnelLabel}>Search → Checkout</p>
-                <p>Aramaların checkout’a geçiş oranı</p>
+                <p className={styles.funnelLabel}>Search → Merchant</p>
+                <p>Aramaların merchant yönlendirmesine geçiş oranı</p>
               </div>
               <p className={styles.funnelValue}>
-                {percent(report.metrics.searchToCheckoutRate)}
+                {percent(report.metrics.searchToMerchantHandoffRate)}
               </p>
             </article>
             <article className={styles.funnelCard}>
               <div>
-                <p className={styles.funnelLabel}>Checkout → Order</p>
-                <p>Checkout click’lerinin siparişe dönüşümü</p>
+                <p className={styles.funnelLabel}>Merchant → Order</p>
+                <p>Merchant yönlendirmelerinin siparişe dönüşümü</p>
               </div>
               <p className={styles.funnelValue}>
-                {percent(report.metrics.checkoutToOrderRate)}
+                {percent(report.metrics.merchantHandoffToOrderRate)}
               </p>
             </article>
           </section>
@@ -317,7 +395,7 @@ export default function AnalyticsPage() {
           >
             <div className={styles.sectionHeader}>
               <h2>Surface breakdown</h2>
-              <p>İnsan checkout click’lerinin dağılımı</p>
+              <p>İnsan merchant yönlendirmelerinin dağılımı</p>
             </div>
             <div className={styles.surfaceRows}>
               {surfaces.map((surface) => (
@@ -343,7 +421,7 @@ export default function AnalyticsPage() {
           {report.measurement === 'not_configured' ? (
             <p className={styles.notice}>
               Conversion callback yapılandırılmadığı için Orders, GMV ve
-              Checkout → Order henüz ölçülmüyor.
+              Merchant → Order henüz ölçülmüyor.
             </p>
           ) : null}
         </>

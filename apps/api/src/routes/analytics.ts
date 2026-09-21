@@ -203,6 +203,26 @@ export async function registerAnalyticsRoutes(
         const measured = Boolean(
           env.CONVERSION_CALLBACK_SECRET && capability?.enabled,
         );
+        const funnelRows = await tx.execute<{
+          sessions: number;
+          searched_sessions: number;
+          detail_sessions: number;
+          handoff_sessions: number;
+          purchased_sessions: number;
+          anonymous_visitors: number;
+          repeat_anonymous_visitors: number;
+        }>(
+          sql`select * from merchant_session_funnel(${merchantId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`,
+        );
+        const funnel = funnelRows.rows[0];
+        const sessionCount = funnel?.sessions ?? 0;
+        const searchedSessionCount = funnel?.searched_sessions ?? 0;
+        const detailSessionCount = funnel?.detail_sessions ?? 0;
+        const handoffSessionCount = funnel?.handoff_sessions ?? 0;
+        const purchasedSessionCount = funnel?.purchased_sessions ?? 0;
+        const anonymousVisitorCount = funnel?.anonymous_visitors ?? 0;
+        const repeatAnonymousVisitorCount =
+          funnel?.repeat_anonymous_visitors ?? 0;
         const valueMetrics = buildMerchantAnalyticsMetrics({
           aiSearches: searches?.attempts ?? 0,
           productViews: views?.count ?? 0,
@@ -252,6 +272,37 @@ export async function registerAnalyticsRoutes(
             conversionRate: valueMetrics.checkoutToOrderRate,
             incrementalSales: null,
             currency: 'TRY',
+            sessionFunnel: {
+              sessions: sessionCount,
+              searchedSessions: searchedSessionCount,
+              detailSessions: detailSessionCount,
+              handoffSessions: handoffSessionCount,
+              purchasedSessions: measured ? purchasedSessionCount : null,
+              sessionToSearchRate:
+                sessionCount > 0 ? searchedSessionCount / sessionCount : null,
+              searchToDetailRate:
+                searchedSessionCount > 0
+                  ? detailSessionCount / searchedSessionCount
+                  : null,
+              detailToHandoffRate:
+                detailSessionCount > 0
+                  ? handoffSessionCount / detailSessionCount
+                  : null,
+              handoffToPurchaseRate:
+                measured && handoffSessionCount > 0
+                  ? purchasedSessionCount / handoffSessionCount
+                  : null,
+              sessionToPurchaseRate:
+                measured && sessionCount > 0
+                  ? purchasedSessionCount / sessionCount
+                  : null,
+              anonymousVisitors: anonymousVisitorCount,
+              repeatAnonymousVisitors: repeatAnonymousVisitorCount,
+              repeatSessionRate:
+                anonymousVisitorCount > 0
+                  ? repeatAnonymousVisitorCount / anonymousVisitorCount
+                  : null,
+            },
           },
           measurement: measured ? 'measured' : 'not_configured',
           definitions: {
@@ -260,17 +311,25 @@ export async function registerAnalyticsRoutes(
             productViews:
               'Başarıyla açılan ürün detaylarının product_view_events kayıtlarıdır.',
             checkoutClicks:
-              'Bot/preview olmayan, insan olarak sınıflandırılmış checkout yönlendirmeleridir.',
+              'Geriye dönük API alias’ıdır; merchantHandoffs ile aynıdır ve checkout başlangıcını kanıtlamaz.',
+            merchantHandoffs:
+              'Bot/preview olmayan, merchant ürün veya checkout URL’sine yapılan insan yönlendirmeleridir.',
             orders:
               'Search ve offer attribution taşıyan, iptal edilmemiş doğrulanmış conversion siparişleridir.',
             attributedGmvMinor:
               'Atfedilen ve iptal edilmemiş siparişlerin iadeden önceki brüt toplamıdır.',
             searchToCheckoutRate:
-              'İnsan checkout yönlendirmeleri / kullanıcı tarafından başlatılan aramalar.',
+              'Geriye dönük API alias’ıdır; searchToMerchantHandoffRate ile aynıdır.',
+            searchToMerchantHandoffRate:
+              'İnsan merchant yönlendirmeleri / kullanıcı tarafından başlatılan aramalar.',
             checkoutToOrderRate:
-              'Atfedilen siparişler / insan checkout yönlendirmeleri.',
+              'Geriye dönük API alias’ıdır; merchantHandoffToOrderRate ile aynıdır.',
+            merchantHandoffToOrderRate:
+              'Atfedilen siparişler / insan merchant yönlendirmeleri.',
             surfaceBreakdown:
-              'İnsan checkout yönlendirmelerinin yüzey dağılımıdır. Other = gemini + brand_widget.',
+              'Geriye dönük API alias’ıdır; merchantHandoffsBySurface ile aynıdır.',
+            merchantHandoffsBySurface:
+              'İnsan merchant yönlendirmelerinin yüzey dağılımıdır. Other = gemini + brand_widget.',
             searchAttempts:
               'explicit_search + refinement eventleridir. Mağaza açılışındaki catalog_load ve sayfalama dahil değildir.',
             catalogLoads:
@@ -290,7 +349,7 @@ export async function registerAnalyticsRoutes(
             channelScope:
               'Geriye dönük API uyumluluğu için tutulan alias; değerleri artık surface kırılımını temsil eder.',
             campaignScope:
-              'Discovery session kampanya etiketi insan checkout yönlendirmelerine taşınır; örneğin instagram_bio.',
+              'Doğrulanmış discovery session kampanya etiketi insan merchant yönlendirmelerine taşınır; örneğin instagram_bio.',
             productInteractions:
               'Geriye dönük alias; artık gerçek ürün detay görüntüleme event sayısını temsil eder.',
             conversionRate:
@@ -298,6 +357,12 @@ export async function registerAnalyticsRoutes(
             attributedSales: 'Geriye dönük alias; orders ile aynıdır.',
             incrementalSales:
               'Kontrol grubu olmadığından ölçülmüyor; atfedilen satışla aynı değildir.',
+            sessionFunnel:
+              'Seçilen [from,to) aralığında başlayan merchant ilişkili session kohortudur. Aşamalar aynı session içinde search → detail → insan handoff → doğrulanmış conversion zaman sırasını izler; her session aşama başına yalnız bir kez sayılır.',
+            repeatSessionRate:
+              'Aynı anonymousUserId ile en az iki kohort sessionı olan anonim ziyaretçiler / en az bir kohort sessionı olan anonim ziyaretçiler. Çerez temizleme, özel pencere, cihaz/yüzey değişimi ve kararlı kimlik taşımayan MCP istemcileri aynı kişiyi ayırabilir.',
+            purchaseMeasurement:
+              'Conversion callback yapılandırılmamışsa purchasedSessions ve satın alma oranları null döner; sıfır satın alma olarak yorumlanmaz.',
           },
         };
       });

@@ -66,6 +66,7 @@ export const productDetailVariantSchema = z
 export const productDetailResponseSchema = z
   .object({
     searchId: z.string().uuid(),
+    discoverySessionId: z.string().uuid().optional(),
     product: z
       .object({
         id: z.string().uuid(),

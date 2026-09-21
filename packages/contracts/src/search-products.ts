@@ -58,6 +58,7 @@ export const searchProductsResponseSchema = z
     facets: searchFacetsSchema,
     nextCursor: z.string().optional(),
     searchId: z.string().uuid(),
+    discoverySessionId: z.string().uuid().optional(),
   })
   .strict();
 
