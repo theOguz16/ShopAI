@@ -527,7 +527,7 @@ export default function ProductDetailPage() {
                 detailHref={buildProductDetailHref({
                   productId: item.productId,
                   searchId: detail.searchId,
-                  discoverySessionId: searchParams.get('discoverySessionId'),
+                  discoverySessionId: detail.discoverySessionId,
                 })}
               />
             ))}

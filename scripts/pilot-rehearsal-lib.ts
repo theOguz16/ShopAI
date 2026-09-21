@@ -1,5 +1,9 @@
 export const REPORT_SCHEMA_VERSION = 'shopai-pilot-rehearsal/v1' as const;
 
+export function isRehearsalDatabaseName(value: string) {
+  return /^shopai_(?:pilot_)?rehearsal(?:_[a-z0-9_]+)?$/u.test(value);
+}
+
 export type ScenarioResult = {
   id: string;
   status: 'pass' | 'fail';
@@ -49,6 +53,12 @@ export type Acceptance = {
   deterministicExecution: boolean;
 };
 
+export type TransportCoverage = {
+  webRestJourneys: number;
+  chatgptAttributedJourneys: number;
+  realMcpTransportTests: number;
+};
+
 export function seededRandom(seed: number) {
   let state = seed >>> 0;
   return () => {
@@ -75,6 +85,7 @@ export function acceptanceFrom(input: {
   scenarios: readonly ScenarioResult[];
   webJourneys: number;
   chatgptJourneys: number;
+  realMcpTransportTests: number;
 }) {
   const passed = new Set(
     input.scenarios
@@ -88,9 +99,13 @@ export function acceptanceFrom(input: {
     catalogScale:
       metrics.productCount >= 10_000 && all('connector-pagination-10k'),
     shopperScale: metrics.shopperJourneys >= 100,
-    surfaces: input.webJourneys > 0 && input.chatgptJourneys > 0,
+    surfaces:
+      input.webJourneys > 0 &&
+      input.chatgptJourneys > 0 &&
+      input.realMcpTransportTests > 0 &&
+      all('real-mcp-transport'),
     searchTaxonomy:
-      all('search-taxonomy') &&
+      all('search-taxonomy', 'search-outcomes') &&
       metrics.searchAttempts === metrics.explicitSearches + metrics.refinements,
     productDetail:
       metrics.productViews > 0 && all('product-detail', 'save-unsave'),
@@ -131,6 +146,7 @@ export function renderSummary(input: {
   verdict: 'PASS' | 'FAIL';
   webJourneys: number;
   chatgptJourneys: number;
+  realMcpTransportTests: number;
 }) {
   const mark = (value: boolean) => (value ? 'PASS' : 'FAIL');
   const successRate = input.metrics.requestCount
@@ -142,8 +158,9 @@ export function renderSummary(input: {
     `Synthetic merchants:   ${input.metrics.merchantCount}/5 ${mark(input.acceptance.merchantScale)}`,
     `Catalog scale:          ${input.metrics.productCount.toLocaleString('en-US')} ${mark(input.acceptance.catalogScale)}`,
     `Shopper journeys:       ${input.metrics.shopperJourneys} ${mark(input.acceptance.shopperScale)}`,
-    `Web surface:            ${input.webJourneys} ${mark(input.webJourneys > 0)}`,
-    `ChatGPT surface:        ${input.chatgptJourneys} ${mark(input.chatgptJourneys > 0)}`,
+    `Web/REST journeys:      ${input.webJourneys} ${mark(input.webJourneys > 0)}`,
+    `ChatGPT-attributed:     ${input.chatgptJourneys} ${mark(input.chatgptJourneys > 0)}`,
+    `Real MCP transport:     ${input.realMcpTransportTests} ${mark(input.realMcpTransportTests > 0)}`,
     `Search taxonomy:        ${mark(input.acceptance.searchTaxonomy)}`,
     `Product detail:         ${mark(input.acceptance.productDetail)}`,
     `Checkout attribution:   ${mark(input.acceptance.checkoutAttribution)}`,
@@ -154,6 +171,8 @@ export function renderSummary(input: {
     `Success rate:           ${successRate.toFixed(2)}%`,
     `p50 latency:            ${input.metrics.p50LatencyMs.toFixed(2)} ms`,
     `p95 latency:            ${input.metrics.p95LatencyMs.toFixed(2)} ms`,
+    `No-result rate:         ${(input.metrics.noResultRate * 100).toFixed(2)}%`,
+    `Search-error rate:      ${(input.metrics.searchErrorRate * 100).toFixed(2)}%`,
     '',
     `Verdict: ${input.verdict}`,
     '',
@@ -161,4 +180,26 @@ export function renderSummary(input: {
     'This is a synthetic rehearsal.',
     'It does not satisfy TASK-023B real merchant/user acceptance.',
   ].join('\n');
+}
+
+export function failureReport(input: {
+  seed?: number;
+  runMode?: string;
+  phase: string;
+  startedAt: Date;
+  finishedAt: Date;
+  error: string;
+}) {
+  return {
+    schemaVersion: REPORT_SCHEMA_VERSION,
+    mode: 'synthetic' as const,
+    runMode: input.runMode ?? 'unknown',
+    seed: input.seed ?? null,
+    startedAt: input.startedAt.toISOString(),
+    finishedAt: input.finishedAt.toISOString(),
+    durationMs: input.finishedAt.getTime() - input.startedAt.getTime(),
+    phase: input.phase,
+    verdict: 'FAIL' as const,
+    error: input.error,
+  };
 }

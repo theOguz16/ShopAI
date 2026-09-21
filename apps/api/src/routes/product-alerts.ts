@@ -139,6 +139,27 @@ export async function registerProductAlertRoutes(
         env,
       );
       const alert = await productAlertsApi.create(identity, parsed.data);
+      const attribution = await services.resolveRestAttribution(parsed.data);
+      const context = await services.ensureInteractionSession(
+        alert.productId,
+        parsed.data.discoverySessionId,
+        attribution,
+        identity.kind === 'anonymous' ? identity.anonymousUserId : undefined,
+      );
+      await services.recordInteractionEvents(
+        {
+          discoverySessionId: context.discoverySessionId,
+          events: [
+            {
+              eventKey: alert.id,
+              type: 'alert_created',
+              merchantId: context.merchantId,
+              productId: alert.productId,
+            },
+          ],
+        },
+        attribution,
+      );
       return reply.code(201).send(productAlertResponseSchema.parse({ alert }));
     },
   );

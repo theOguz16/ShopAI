@@ -1,20 +1,19 @@
 import { createHash, createHmac } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { fileURLToPath } from 'node:url';
 import { eq, sql } from 'drizzle-orm';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { buildApp } from '../apps/api/src/app.js';
 import { parseApiEnv } from '../apps/api/src/env.js';
 import { createServices } from '../apps/api/src/services.js';
+import { catalogConnectionHealth } from '../packages/commerce/src/catalog-health.js';
 import {
   signMerchantConversionRequest,
   verifyMerchantConversionRequestSignature,
 } from '../packages/commerce/src/merchant-conversions.js';
-import { MERCHANT_CONVERSION_HEADERS } from '../packages/contracts/src/merchant-conversions.js';
-import { catalogConnectionHealth } from '../packages/commerce/src/catalog-health.js';
 import {
   RedirectTokenError,
   RedirectTokens,
@@ -24,6 +23,7 @@ import {
   TrendyolConnector,
   WooCommerceConnector,
 } from '../packages/connectors/src/index.js';
+import { MERCHANT_CONVERSION_HEADERS } from '../packages/contracts/src/merchant-conversions.js';
 import {
   connections,
   createDatabase,
@@ -36,12 +36,14 @@ import {
 } from '../packages/db/src/index.js';
 import {
   acceptanceFrom,
+  failureReport,
+  isRehearsalDatabaseName,
   percentile,
-  renderSummary,
   REPORT_SCHEMA_VERSION,
-  seededRandom,
   type RehearsalMetrics,
+  renderSummary,
   type ScenarioResult,
+  seededRandom,
   verdictFrom,
 } from './pilot-rehearsal-lib.js';
 
@@ -53,6 +55,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifactsDirectory = resolve(root, 'artifacts/pilot-rehearsal');
 const requireFromDb = createRequire(resolve(root, 'packages/db/package.json'));
 const { Pool } = requireFromDb('pg') as typeof import('pg');
+const DATABASE_MARKER = `shopai-pilot-rehearsal:${REPORT_SCHEMA_VERSION}`;
+const processStartedAt = new Date();
+let failurePhase = 'arguments';
+let failureSeed: number | undefined;
+let failureRunMode: string | undefined;
 
 type JourneyCheckout = {
   merchantId: string;
@@ -107,7 +114,7 @@ function safeDatabaseUrl() {
       'postgres://shopai:shopai_local@127.0.0.1:54329/shopai_pilot_rehearsal',
   );
   const databaseName = url.pathname.slice(1);
-  if (!/^shopai_(?:pilot_)?rehearsal(?:_[a-z0-9_]+)?$/u.test(databaseName))
+  if (!isRehearsalDatabaseName(databaseName))
     throw new Error(
       'Refusing to use a non-rehearsal database. The database name must start with shopai_rehearsal or shopai_pilot_rehearsal.',
     );
@@ -124,18 +131,32 @@ async function prepareDatabase(target: URL, databaseName: string) {
       [databaseName],
     );
     if (existing.rowCount) {
-      const marker = new Pool({ connectionString: target.toString(), max: 1 });
-      try {
-        const marked = await marker.query(
-          "select to_regclass('public.shopai_pilot_rehearsal_marker') is not null as marked",
-        );
-        assert(
-          marked.rows[0]?.marked,
-          'Existing database is not marked as a ShopAI rehearsal database.',
-        );
-      } finally {
-        await marker.end();
+      const databaseMarker = await admin.query(
+        `select description
+         from pg_shdescription
+         where objoid = (select oid from pg_database where datname = $1)
+           and classoid = 'pg_database'::regclass`,
+        [databaseName],
+      );
+      let marked = databaseMarker.rows[0]?.description === DATABASE_MARKER;
+      if (!marked) {
+        const marker = new Pool({
+          connectionString: target.toString(),
+          max: 1,
+        });
+        try {
+          const legacyMarker = await marker.query(
+            "select to_regclass('public.shopai_pilot_rehearsal_marker') is not null as marked",
+          );
+          marked = Boolean(legacyMarker.rows[0]?.marked);
+        } finally {
+          await marker.end();
+        }
       }
+      assert(
+        marked,
+        'Existing database is not marked as a ShopAI rehearsal database.',
+      );
       await admin.query(
         'select pg_terminate_backend(pid) from pg_stat_activity where datname = $1 and pid <> pg_backend_pid()',
         [databaseName],
@@ -143,6 +164,9 @@ async function prepareDatabase(target: URL, databaseName: string) {
       await admin.query(`drop database ${databaseName}`);
     }
     await admin.query(`create database ${databaseName}`);
+    await admin.query(
+      `comment on database ${databaseName} is '${DATABASE_MARKER}'`,
+    );
   } finally {
     await admin.end();
   }
@@ -155,7 +179,7 @@ async function prepareDatabase(target: URL, databaseName: string) {
       migrationsFolder: resolve(root, 'packages/db/drizzle'),
     });
     await database.db.execute(sql`
-      create table shopai_pilot_rehearsal_marker (
+      create table if not exists shopai_pilot_rehearsal_marker (
         schema_version text primary key,
         created_at timestamptz not null default now()
       )
@@ -163,6 +187,7 @@ async function prepareDatabase(target: URL, databaseName: string) {
     await database.db.execute(sql`
       insert into shopai_pilot_rehearsal_marker (schema_version)
       values (${REPORT_SCHEMA_VERSION})
+      on conflict (schema_version) do nothing
     `);
   } finally {
     await database.close();
@@ -529,10 +554,14 @@ async function runPool(
 async function main() {
   const startedAt = new Date();
   const seed = Number(argument('seed') ?? DEFAULT_SEED);
+  failureSeed = seed;
   assert(Number.isSafeInteger(seed), 'Seed must be a safe integer.');
   const mode = argument('mode') ?? (process.env.CI ? 'ci' : 'local');
+  failureRunMode = mode;
   const { url, databaseName } = safeDatabaseUrl();
+  failurePhase = 'database-preparation';
   await prepareDatabase(url, databaseName);
+  failurePhase = 'fixture-bootstrap';
   const { database, merchantIds, connectionIds } = await bootstrapFixtures(
     url.toString(),
     seed,
@@ -558,6 +587,7 @@ async function main() {
   });
   const services = createServices(env);
   const app = await buildApp(services, env);
+  failurePhase = 'rehearsal-scenarios';
   const login = await app.inject({
     method: 'POST',
     url: '/v1/auth/login',
@@ -584,6 +614,7 @@ async function main() {
   let errorCount = 0;
   let webJourneys = 0;
   let chatgptJourneys = 0;
+  let realMcpTransportTests = 0;
 
   const measured = async <T,>(operation: () => Promise<T>) => {
     const began = performance.now();
@@ -799,13 +830,111 @@ async function main() {
       return { saved: true, unsaved: true };
     });
 
+    await scenario(scenarios, 'real-mcp-transport', async () => {
+      const response = await measured(() =>
+        app.inject({
+          method: 'POST',
+          url: '/mcp',
+          headers: { accept: 'application/json, text/event-stream' },
+          payload: {
+            jsonrpc: '2.0',
+            id: 'pilot-rehearsal-mcp',
+            method: 'tools/call',
+            params: {
+              name: 'search_products',
+              arguments: {
+                merchantIds: [merchantIds[1]],
+                query: 'Synthetic',
+                analyticsIntent: 'explicit_search',
+                limit: 3,
+              },
+            },
+          },
+        }),
+      );
+      const products = response.json().result?.structuredContent?.products;
+      assert(
+        response.statusCode === 200 &&
+          Array.isArray(products) &&
+          products.length,
+        `Real MCP tools/call search failed with ${response.statusCode}.`,
+      );
+      realMcpTransportTests += 1;
+      return {
+        endpoint: '/mcp',
+        method: 'tools/call',
+        tool: 'search_products',
+        resultCount: products.length,
+      };
+    });
+
+    await scenario(scenarios, 'search-outcomes', async () => {
+      const merchantId = merchantIds[1] as string;
+      const attribution = {
+        transport: 'rest' as const,
+        surface: 'web' as const,
+      };
+      const emptySession = await services.discoverySessions.create(
+        { surface: 'web', merchant: merchantId },
+        {
+          transport: 'rest',
+          anonymousUserId: deterministicUuid(`${seed}:empty-search`),
+        },
+      );
+      const empty = await measured(() =>
+        services.executePublicSearch(
+          {
+            discoverySessionId: emptySession.id,
+            query: '__no_synthetic_product_can_match_this__',
+            analyticsIntent: 'explicit_search',
+          },
+          { merchantIds: [merchantId] },
+          attribution,
+        ),
+      );
+      assert(
+        empty.products.length === 0,
+        'No-result fixture returned products.',
+      );
+
+      const errorSession = await services.discoverySessions.create(
+        { surface: 'web', merchant: merchantId },
+        {
+          transport: 'rest',
+          anonymousUserId: deterministicUuid(`${seed}:error-search`),
+        },
+      );
+      let rejected = false;
+      try {
+        await measured(() =>
+          services.executeSearch(
+            {
+              discoverySessionId: errorSession.id,
+              query: 'Synthetic',
+              filters: { minPriceMinor: 20_000, maxPriceMinor: 10_000 },
+              analyticsIntent: 'explicit_search',
+            },
+            { merchantIds: [merchantId] },
+            attribution,
+          ),
+        );
+      } catch {
+        rejected = true;
+      }
+      assert(rejected, 'Search error fixture unexpectedly succeeded.');
+      return { emptySearches: 1, failedSearches: 1 };
+    });
+
     const eventCounts = await database.db.execute(sql`
       select
         count(*) filter (where intent = 'catalog_load')::int as "catalogLoads",
         count(*) filter (where intent = 'explicit_search')::int as "explicitSearches",
         count(*) filter (where intent = 'refinement')::int as refinements,
         count(*) filter (where intent = 'pagination')::int as "paginationRequests",
-        count(*) filter (where intent in ('explicit_search','refinement'))::int as "searchAttempts"
+        count(*) filter (where intent in ('explicit_search','refinement'))::int as "searchAttempts",
+        count(*) filter (where intent in ('explicit_search','refinement') and outcome <> 'error')::int as "successfulSearches",
+        count(*) filter (where intent in ('explicit_search','refinement') and outcome = 'empty')::int as "emptySearches",
+        count(*) filter (where intent in ('explicit_search','refinement') and outcome = 'error')::int as "failedSearches"
       from search_events
     `);
     const taxonomy = eventCounts.rows[0] as Record<string, number>;
@@ -815,7 +944,7 @@ async function main() {
         'catalog_load count mismatch.',
       );
       assert(
-        taxonomy.explicitSearches === JOURNEY_COUNT,
+        taxonomy.explicitSearches === JOURNEY_COUNT + 3,
         'explicit_search count mismatch.',
       );
       assert(
@@ -830,6 +959,10 @@ async function main() {
         taxonomy.searchAttempts ===
           taxonomy.explicitSearches + taxonomy.refinements,
         'catalog_load or pagination leaked into searchAttempts.',
+      );
+      assert(
+        taxonomy.emptySearches === 1 && taxonomy.failedSearches === 1,
+        'Controlled empty/error search outcomes were not persisted.',
       );
       return taxonomy;
     });
@@ -1069,10 +1202,15 @@ async function main() {
       };
     });
     await scenario(scenarios, 'merchant-analytics', async () => {
+      const analyticsFrom = new Date(startedAt.getTime() - 60_000);
+      const analyticsTo = new Date(Date.now() + 60_000);
       const response = await measured(() =>
         app.inject({
           method: 'GET',
-          url: `/v1/merchants/${merchantIds[0]}/analytics?from=2026-09-15T00:00:00.000Z&to=2026-09-16T00:00:00.000Z`,
+          url:
+            `/v1/merchants/${merchantIds[0]}/analytics` +
+            `?from=${encodeURIComponent(analyticsFrom.toISOString())}` +
+            `&to=${encodeURIComponent(analyticsTo.toISOString())}`,
           headers: { cookie: ownerCookie },
         }),
       );
@@ -1279,8 +1417,10 @@ async function main() {
       attributedOrders: Number(total.orders),
       attributedGmvMinor: Number(total.gmv),
       netRevenueMinor: Number(total.net),
-      noResultRate: 0,
-      searchErrorRate: 0,
+      noResultRate:
+        Number(taxonomy.emptySearches) / Number(taxonomy.successfulSearches),
+      searchErrorRate:
+        Number(taxonomy.failedSearches) / Number(taxonomy.searchAttempts),
       checkoutClickRate: Number(total.clicks) / Number(taxonomy.searchAttempts),
       conversionAttributionRate: Number(total.orders) / conversionCallbacks,
       syncFailures: scenarios.find(
@@ -1306,6 +1446,7 @@ async function main() {
       scenarios,
       webJourneys,
       chatgptJourneys,
+      realMcpTransportTests,
     });
     const verdict = verdictFrom(acceptance);
     const finishedAt = new Date();
@@ -1328,7 +1469,12 @@ async function main() {
         products: metrics.productCount,
         shopperJourneys: JOURNEY_COUNT,
         webJourneys,
-        chatgptJourneys,
+        chatgptAttributedJourneys: chatgptJourneys,
+      },
+      transportCoverage: {
+        webRestJourneys: webJourneys,
+        chatgptAttributedJourneys: chatgptJourneys,
+        realMcpTransportTests,
       },
       metrics,
       scenarios,
@@ -1340,6 +1486,7 @@ async function main() {
         'Fake checkout destinations; no payment is attempted',
         'Trendyol Product V2 responses are synthetic; no real seller is contacted',
         'No real merchant/user acceptance; TASK-023B remains pending',
+        'ChatGPT-attributed service journeys are not real MCP transport calls; real MCP HTTP tools/call coverage is reported separately',
       ],
     };
     const summary = renderSummary({
@@ -1348,6 +1495,7 @@ async function main() {
       verdict,
       webJourneys,
       chatgptJourneys,
+      realMcpTransportTests,
     });
     await mkdir(artifactsDirectory, { recursive: true });
     await writeFile(
@@ -1367,6 +1515,18 @@ main().catch(async (error) => {
   await mkdir(artifactsDirectory, { recursive: true });
   const message =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const failed = failureReport({
+    seed: failureSeed,
+    runMode: failureRunMode,
+    phase: failurePhase,
+    startedAt: processStartedAt,
+    finishedAt: new Date(),
+    error: message,
+  });
+  await writeFile(
+    resolve(artifactsDirectory, 'report.json'),
+    `${JSON.stringify(failed, null, 2)}\n`,
+  );
   await writeFile(
     resolve(artifactsDirectory, 'summary.txt'),
     `ShopAI Synthetic Pilot Rehearsal\n\nVerdict: FAIL\n\n${message}\n`,

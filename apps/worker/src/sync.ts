@@ -190,49 +190,33 @@ export async function syncCatalogConnection(
       const processedProductKeys = new Set<string>();
       try {
         for (const rows of chunkCatalogRows(snapshot.rows)) {
-          let lastProcessedRows = 0;
-          await importCatalog(
+          await importCatalog(db, {
+            schemaVersion: 1,
+            runId: randomUUID(),
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
+            rows,
+          });
+          for (const row of rows) processedProductKeys.add(row.productKey);
+          progress = {
+            status: 'running',
+            foundProducts: snapshot.progress.foundProducts,
+            processedProducts: processedProductKeys.size,
+            failedProducts: 0,
+            variants: snapshot.progress.variants,
+          };
+          await writeConnectionSyncProgress(
             db,
+            job.merchantId,
+            job.connectionId,
             {
-              schemaVersion: 1,
-              runId: randomUUID(),
-              merchantId: job.merchantId,
-              connectionId: job.connectionId,
-              observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
-              rows,
+              ...progress,
+              startedAt,
+              completedAt: null,
+              error: null,
             },
-            {
-              onProgress: async ({ processedRows }) => {
-                for (
-                  let index = lastProcessedRows;
-                  index < processedRows;
-                  index += 1
-                ) {
-                  const row = rows[index];
-                  if (row) processedProductKeys.add(row.productKey);
-                }
-                lastProcessedRows = processedRows;
-                progress = {
-                  status: 'running',
-                  foundProducts: snapshot.progress.foundProducts,
-                  processedProducts: processedProductKeys.size,
-                  failedProducts: 0,
-                  variants: snapshot.progress.variants,
-                };
-                await writeConnectionSyncProgress(
-                  db,
-                  job.merchantId,
-                  job.connectionId,
-                  {
-                    ...progress,
-                    startedAt,
-                    completedAt: null,
-                    error: null,
-                  },
-                  now(),
-                );
-              },
-            },
+            now(),
           );
         }
       } catch (error) {

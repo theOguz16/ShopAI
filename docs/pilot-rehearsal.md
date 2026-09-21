@@ -13,7 +13,10 @@ provided through `PILOT_REHEARSAL_DATABASE_URL` or `--database-url=...`, but
 the database name must begin with `shopai_rehearsal` or
 `shopai_pilot_rehearsal`. The runner refuses arbitrary database names. It
 recreates an existing database only when the previous run left the explicit
-`shopai_pilot_rehearsal_marker` table.
+database comment or legacy `shopai_pilot_rehearsal_marker` table. The database
+comment is written immediately after database creation, before migrations, so
+an interrupted first setup can be safely recreated on the next run. A matching
+name without either marker is still refused and never dropped.
 
 ## Simulated
 
@@ -25,8 +28,12 @@ recreates an existing database only when the previous run left the explicit
 - 10,050 products in one large merchant plus small catalogs for the other
   merchants. Product identity, category, size, color, price, inventory, image
   availability and checkout URLs vary deterministically.
-- One hundred shoppers split evenly between web/REST and ChatGPT/MCP-shaped
-  attribution. The shoppers, clicks, orders, refunds and cancellations are
+- One hundred shoppers split evenly between web/REST and ChatGPT-shaped
+  attribution. These direct service journeys validate persisted
+  `surface=chatgpt` / `transport=mcp` attribution but are not described as HTTP
+  MCP transport tests. A separate `/mcp` JSON-RPC `tools/call` scenario invokes
+  the real `search_products` transport path, and both counts are reported
+  independently. The shoppers, clicks, orders, refunds and cancellations are
   generated evidence, not people or commercial activity.
 - Checkout destinations under `checkout.synthetic.invalid`. No payment or
   external request is made.
@@ -44,7 +51,9 @@ import API into a parallel fake importer while keeping the 10k setup bounded.
   product detail and product-view persistence.
 - TASK-022 `catalog_load`, `explicit_search`, `refinement` and `pagination`
   event persistence. Assertions prove that only explicit search plus
-  refinement enter `searchAttempts`.
+  refinement enter `searchAttempts`. Controlled empty-result and rejected
+  search requests ensure `noResultRate` and `searchErrorRate` are non-zero and
+  calculated from persisted `search_events.outcome` rows rather than constants.
 - Redirect HMAC creation/verification, published-offer resolution, human click
   attribution and click persistence.
 - Merchant-derived conversion signatures, conversion persistence,
@@ -56,7 +65,10 @@ import API into a parallel fake importer while keeping the 10k setup bounded.
 
 Every required acceptance field is derived from recorded metrics and scenario
 assertions. A failed required field produces `verdict: "FAIL"` and a non-zero
-exit status; PASS is not hard-coded.
+exit status; PASS is not hard-coded. Failures before scenario execution also
+write a minimal machine-readable `report.json` with `verdict`, failure phase
+and error whenever the artifact directory is writable. CI uploads both report
+and summary with `if: always()` so FAIL evidence is retained.
 
 ## Not validated
 
@@ -69,5 +81,6 @@ exit status; PASS is not hard-coded.
   rehearsal.
 
 Runtime reports are ignored by Git. The report includes the seed, timestamps,
-scale, request latency distribution, TASK-022 metrics, conversion metrics,
-scenario evidence, acceptance booleans, limitations and the final verdict.
+scale, explicit attribution-vs-real-MCP transport coverage, request latency
+distribution, TASK-022 outcome-derived metrics, conversion metrics, scenario
+evidence, acceptance booleans, limitations and the final verdict.

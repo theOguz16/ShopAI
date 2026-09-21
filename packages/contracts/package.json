@@ -43,6 +43,10 @@
     "./product-alerts": {
       "types": "./dist/product-alerts.d.ts",
       "import": "./dist/product-alerts.js"
+    },
+    "./interaction-events": {
+      "types": "./dist/interaction-events.d.ts",
+      "import": "./dist/interaction-events.js"
     }
   },
   "dependencies": {

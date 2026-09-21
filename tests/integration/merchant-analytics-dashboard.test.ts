@@ -10,6 +10,7 @@ import { productViewEvents } from '../../packages/db/src/product-view-event-repo
 import {
   connections,
   conversionOrders,
+  discoverySessions,
   memberships,
   merchants,
   offers,
@@ -452,6 +453,161 @@ describeWithDatabase('merchant analytics dashboard', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ code: 'FORBIDDEN' });
+  });
+
+  it('reports an exact ordered funnel without inflating sessions for repeat events', async () => {
+    const base = Date.now() - 20 * DAY_MS;
+    const from = new Date(base);
+    const to = new Date(base + DAY_MS);
+    const at = (minutes: number) => new Date(base + minutes * 60_000);
+    const repeatVisitor = randomUUID();
+    const sessionFixtures = [
+      { id: randomUUID(), anonymousUserId: repeatVisitor },
+      { id: randomUUID(), anonymousUserId: repeatVisitor },
+      { id: randomUUID(), anonymousUserId: randomUUID() },
+      { id: randomUUID(), anonymousUserId: randomUUID() },
+      { id: randomUUID(), anonymousUserId: randomUUID() },
+      { id: randomUUID(), anonymousUserId: randomUUID() },
+    ];
+    const sessionIds = sessionFixtures.map(({ id }) => id);
+
+    await database.db.insert(discoverySessions).values(
+      sessionFixtures.map(({ id, anonymousUserId }, index) => ({
+        id,
+        anonymousUserId,
+        merchantScope: [merchantA],
+        transport: 'rest',
+        surface: 'web',
+        createdAt: at(index + 1),
+        updatedAt: at(index + 1),
+      })),
+    );
+
+    const searches = [
+      [0, 10],
+      [0, 11],
+      [1, 12],
+      [2, 13],
+      [4, 14],
+    ] as const;
+    await database.db.insert(searchEvents).values(
+      searches.map(([sessionIndex, minute]) => ({
+        merchantId: merchantA,
+        discoverySessionId: sessionIds[sessionIndex],
+        searchId: randomUUID(),
+        transport: 'rest',
+        surface: 'web',
+        requestKind: 'initial',
+        intent: 'explicit_search',
+        outcome: 'results',
+        occurredAt: at(minute),
+      })),
+    );
+
+    await database.db.insert(productViewEvents).values(
+      [
+        [0, 20],
+        [0, 21],
+        [1, 22],
+        [3, 23],
+        [4, 24],
+      ].map(([sessionIndex, minute]) => ({
+        merchantId: merchantA,
+        discoverySessionId: sessionIds[sessionIndex],
+        productId: productA,
+        searchId: randomUUID(),
+        transport: 'rest',
+        surface: 'web',
+        occurredAt: at(minute),
+      })),
+    );
+
+    await database.db.insert(redirectClicks).values(
+      [
+        [0, 30, 'human'],
+        [0, 31, 'human'],
+        [1, 32, 'human'],
+        [1, 33, 'bot'],
+        [3, 34, 'human'],
+        [4, 35, 'human'],
+      ].map(([sessionIndex, minute, classification]) => ({
+        merchantId: merchantA,
+        discoverySessionId: sessionIds[Number(sessionIndex)],
+        productId: productA,
+        offerId: offerA,
+        searchId: randomUUID(),
+        transport: 'rest',
+        surface: 'web',
+        classification: classification as 'human' | 'bot',
+        occurredAt: at(Number(minute)),
+      })),
+    );
+
+    await database.db.insert(conversionOrders).values([
+      {
+        merchantId: merchantA,
+        connectionId: connectionA,
+        externalOrderId: `funnel-paid-${randomUUID()}`,
+        status: 'paid',
+        currency: 'TRY',
+        grossMinor: 10_000,
+        discoverySessionId: sessionIds[0],
+        searchId: randomUUID(),
+        offerId: offerA,
+        occurredAt: at(40),
+      },
+      {
+        merchantId: merchantA,
+        connectionId: connectionA,
+        externalOrderId: `funnel-refunded-${randomUUID()}`,
+        status: 'refunded',
+        currency: 'TRY',
+        grossMinor: 8_000,
+        refundedMinor: 8_000,
+        discoverySessionId: sessionIds[1],
+        searchId: randomUUID(),
+        offerId: offerA,
+        occurredAt: at(41),
+      },
+      {
+        merchantId: merchantA,
+        connectionId: connectionA,
+        externalOrderId: `funnel-cancelled-${randomUUID()}`,
+        status: 'cancelled',
+        currency: 'TRY',
+        grossMinor: 7_000,
+        discoverySessionId: sessionIds[4],
+        searchId: randomUUID(),
+        offerId: offerA,
+        occurredAt: at(42),
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url:
+        `/v1/merchants/${merchantA}/analytics` +
+        `?from=${encodeURIComponent(from.toISOString())}` +
+        `&to=${encodeURIComponent(to.toISOString())}`,
+      headers: { cookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().metrics.sessionFunnel).toEqual({
+      sessions: 6,
+      searchedSessions: 4,
+      detailSessions: 3,
+      handoffSessions: 3,
+      purchasedSessions: 2,
+      sessionToSearchRate: 4 / 6,
+      searchToDetailRate: 3 / 4,
+      detailToHandoffRate: 1,
+      handoffToPurchaseRate: 2 / 3,
+      sessionToPurchaseRate: 2 / 6,
+      anonymousVisitors: 5,
+      repeatAnonymousVisitors: 1,
+      repeatSessionRate: 1 / 5,
+    });
   });
 
   it('rejects ranges longer than the analytics window', async () => {

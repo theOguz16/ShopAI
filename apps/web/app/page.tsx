@@ -13,6 +13,10 @@ import {
 import { ProductCard } from '@shopai/ui';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { buildProductDetailHref } from '../lib/product-detail-href';
+import {
+  recordProductImpressions,
+  recordSelectionEvents,
+} from '../lib/interaction-events';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const SEARCH_TIMEOUT_MS = 10_000;
@@ -174,6 +178,19 @@ export default function Home() {
       });
       if (!response.ok) throw new Error('request_failed');
       const next = searchResponseSchema.parse(await response.json());
+      void recordProductImpressions(next);
+      if (!append)
+        void recordSelectionEvents(next, {
+          category: payload.filters.category,
+          filterKinds: [
+            payload.filters.sizes?.length ? 'size' : undefined,
+            payload.filters.colors?.length ? 'color' : undefined,
+            payload.filters.maxPriceMinor !== undefined ? 'price' : undefined,
+            payload.filters.inStockOnly ? 'stock' : undefined,
+          ].filter((value): value is 'size' | 'color' | 'price' | 'stock' =>
+            Boolean(value),
+          ),
+        });
       if (sequence !== requestSequence.current) return;
       setResult((current) => {
         if (!append) return next;

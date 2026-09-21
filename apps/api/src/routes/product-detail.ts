@@ -1,5 +1,6 @@
 import { productDetailRequestSchema } from '@shopai/contracts/product-detail';
 import type { FastifyInstance } from 'fastify';
+import { ensureAnonymousUserId } from '../plugins/anonymous-user.js';
 import type { Services } from '../services.js';
 
 type Params = { productId: string };
@@ -25,9 +26,10 @@ export async function registerProductDetailRoutes(
         .send({ code: 'INVALID_INPUT', requestId: request.id });
 
     const attribution = await services.resolveRestAttribution(parsed.data);
+    const anonymousUserId = ensureAnonymousUserId(request, reply);
     const result = await services.executeProductDetail(
       parsed.data,
-      {},
+      { anonymousUserId },
       attribution,
     );
     return {

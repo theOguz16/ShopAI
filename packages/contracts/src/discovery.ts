@@ -8,12 +8,20 @@ const merchantSlugSchema = z
   .max(80)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 
+export const discoveryCampaignSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z0-9][a-z0-9_-]{0,127}$/u);
+
 export const discoverySessionCreateRequestSchema = z
   .object({
     surface: surfaceSchema,
     merchant: z.union([z.string().uuid(), merchantSlugSchema]).optional(),
     referrer: z.string().trim().min(1).max(2048).optional().nullable(),
-    campaign: z.string().trim().min(1).max(128).optional().nullable(),
+    campaign: discoveryCampaignSchema.optional().nullable(),
     anonymousUserId: z.string().uuid().optional(),
   })
   .strict();

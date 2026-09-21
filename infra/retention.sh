@@ -19,6 +19,7 @@ DELETE FROM import_outbox_events WHERE run_id IN (
 );
 DELETE FROM import_runs WHERE status IN ('completed','failed') AND observed_at < now() - interval '7 days';
 DELETE FROM redirect_clicks WHERE occurred_at < now() - interval '30 days';
+DELETE FROM interaction_events WHERE occurred_at < now() - interval '90 days';
 DELETE FROM conversion_orders WHERE occurred_at < now() - interval '365 days';
 DELETE FROM sessions WHERE expires_at < now() - interval '7 days';
 COMMIT;

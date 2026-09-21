@@ -1,5 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { CHATGPT_ATTRIBUTION } from '@shopai/contracts';
+import {
+  CHATGPT_ATTRIBUTION,
+  interactionEventsRequestSchema,
+  interactionEventsResponseSchema,
+} from '@shopai/contracts';
 import {
   cancelProductAlertResponseSchema,
   createProductAlertRequestSchema,
@@ -144,6 +148,28 @@ export function createMcpServer(
     }),
   );
   server.registerTool(
+    'record_interaction_events',
+    {
+      title: 'ShopAI etkileşimlerini kaydet',
+      description:
+        'Widget kategori, filtre ve ürün gösterimlerini idempotent anahtarlarla kaydeder; conversion veya merchant handoff üretemez.',
+      inputSchema: interactionEventsRequestSchema.shape,
+      outputSchema: interactionEventsResponseSchema.shape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input) => ({
+      content: [{ type: 'text' as const, text: 'Etkileşimler kaydedildi.' }],
+      structuredContent: await services.recordInteractionEvents(
+        interactionEventsRequestSchema.parse(input),
+        CHATGPT_ATTRIBUTION,
+      ),
+    }),
+  );
+  server.registerTool(
     'search_products',
     {
       title: 'ShopAI ürün arama',
@@ -273,6 +299,28 @@ export function createMcpServer(
       },
       async (input) => {
         const item = await shopper.savedProducts.save(shopper.identity, input);
+        const context = await services.ensureInteractionSession(
+          item.productId,
+          input.discoverySessionId,
+          CHATGPT_ATTRIBUTION,
+          shopper.identity.kind === 'anonymous'
+            ? shopper.identity.anonymousUserId
+            : undefined,
+        );
+        await services.recordInteractionEvents(
+          {
+            discoverySessionId: context.discoverySessionId,
+            events: [
+              {
+                eventKey: item.id,
+                type: 'product_saved',
+                merchantId: context.merchantId,
+                productId: item.productId,
+              },
+            ],
+          },
+          CHATGPT_ATTRIBUTION,
+        );
         const structuredContent = savedProductResponseSchema.parse({ item });
         return {
           content: [
@@ -403,6 +451,28 @@ export function createMcpServer(
         const alert = await shopper.productAlerts.create(
           shopper.identity,
           input,
+        );
+        const context = await services.ensureInteractionSession(
+          alert.productId,
+          input.discoverySessionId,
+          CHATGPT_ATTRIBUTION,
+          shopper.identity.kind === 'anonymous'
+            ? shopper.identity.anonymousUserId
+            : undefined,
+        );
+        await services.recordInteractionEvents(
+          {
+            discoverySessionId: context.discoverySessionId,
+            events: [
+              {
+                eventKey: alert.id,
+                type: 'alert_created',
+                merchantId: context.merchantId,
+                productId: alert.productId,
+              },
+            ],
+          },
+          CHATGPT_ATTRIBUTION,
         );
         const structuredContent = productAlertResponseSchema.parse({ alert });
         return {

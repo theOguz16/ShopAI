@@ -1,14 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
+import { parseApiEnv } from '../../apps/api/src/env.js';
 import { SHOPAI_WIDGET_URI } from '../../apps/api/src/mcp.js';
+import { createServices } from '../../apps/api/src/services.js';
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
+const demoEnv = parseApiEnv({});
+
+function buildDemoApp() {
+  return buildApp(createServices(demoEnv), demoEnv);
+}
+
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
 async function rpc(method: string, params?: unknown) {
-  const app = await buildApp();
+  const app = await buildDemoApp();
   apps.push(app);
   return app.inject({
     method: 'POST',
@@ -101,7 +109,7 @@ describe('MCP Apps product widget', () => {
   });
 
   it('produces the same commerce result set for the same REST and MCP request', async () => {
-    const app = await buildApp();
+    const app = await buildDemoApp();
     apps.push(app);
     const request = {
       query: 'siyah tişört',
@@ -140,10 +148,10 @@ describe('MCP Apps product widget', () => {
     );
     expect(mcpResult.facets).toEqual(restResult.facets);
     expect(Object.keys(restResult).sort()).toEqual(
-      ['facets', 'products', 'searchId'].sort(),
+      ['discoverySessionId', 'facets', 'products', 'searchId'].sort(),
     );
     expect(Object.keys(mcpResult).sort()).toEqual(
-      ['facets', 'products', 'searchId'].sort(),
+      ['discoverySessionId', 'facets', 'products', 'searchId'].sort(),
     );
   });
 });

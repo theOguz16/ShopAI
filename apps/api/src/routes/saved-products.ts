@@ -154,6 +154,27 @@ export async function registerSavedProductRoutes(
         env,
       );
       const item = await savedProductsApi.save(identity, parsed.data);
+      const attribution = await services.resolveRestAttribution(parsed.data);
+      const context = await services.ensureInteractionSession(
+        item.productId,
+        parsed.data.discoverySessionId,
+        attribution,
+        identity.kind === 'anonymous' ? identity.anonymousUserId : undefined,
+      );
+      await services.recordInteractionEvents(
+        {
+          discoverySessionId: context.discoverySessionId,
+          events: [
+            {
+              eventKey: item.id,
+              type: 'product_saved',
+              merchantId: context.merchantId,
+              productId: item.productId,
+            },
+          ],
+        },
+        attribution,
+      );
       return reply.code(201).send(savedProductResponseSchema.parse({ item }));
     },
   );

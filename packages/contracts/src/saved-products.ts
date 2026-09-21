@@ -4,6 +4,7 @@ export const saveProductRequestSchema = z
   .object({
     productId: z.string().uuid(),
     variantId: z.string().uuid().nullable().optional(),
+    discoverySessionId: z.string().uuid().optional(),
   })
   .strict();
 

@@ -221,6 +221,64 @@ describeWithDatabase('saved products', () => {
     });
   });
 
+  it('keeps the anonymous shopper stable across a stateful MCP session without cookies', async () => {
+    const initialize = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { accept: 'application/json, text/event-stream' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'chatgpt-host-test', version: '1.0.0' },
+        },
+      },
+    });
+    expect(initialize.statusCode).toBe(200);
+    const sessionId = initialize.headers['mcp-session-id'];
+    expect(sessionId).toEqual(expect.any(String));
+    const headers = {
+      accept: 'application/json, text/event-stream',
+      'mcp-session-id': String(sessionId),
+    };
+    await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers,
+      payload: { jsonrpc: '2.0', method: 'notifications/initialized' },
+    });
+
+    const save = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers,
+      payload: mcpPayload('save_product', { productId, variantId }),
+    });
+    expect(save.statusCode).toBe(200);
+    const sessionSavedId = save.json().result.structuredContent.item.id;
+
+    const list = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers,
+      payload: mcpPayload('list_saved_products'),
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().result.structuredContent.items).toEqual([
+      expect.objectContaining({ id: sessionSavedId, productId, variantId }),
+    ]);
+
+    const close = await app.inject({
+      method: 'DELETE',
+      url: '/mcp',
+      headers,
+    });
+    expect(close.statusCode).toBe(200);
+  });
+
   it('supports anonymous REST save → unsave with state-idempotent repeat', async () => {
     const save = await app.inject({
       method: 'POST',

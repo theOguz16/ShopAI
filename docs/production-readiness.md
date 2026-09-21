@@ -2,6 +2,8 @@
 
 Bu belge production'a çıkış için **tek kaynak checklist** olarak kullanılmalıdır. Kodun var olması ile gerçek production kabulü aynı şey değildir. Bir madde yalnız kanıtı varsa tamamlanır.
 
+TASK-021'in görev seviyesi mühendislik/dış kabul özeti `docs/06-implementation-status.md` içindeki kanonik tabloda tutulur. Bu dosya production gate'lerinin ayrıntılı checklist'idir.
+
 ## 1. Otomatik teknik kontroller
 
 - [x] HTTPS-only hosted origin validation API startup'ta enforce ediliyor.
@@ -19,6 +21,8 @@ Bu belge production'a çıkış için **tek kaynak checklist** olarak kullanılm
 - [x] Normal deploy backup → forward migration → rollout → exact release readiness sırasını izliyor.
 - [x] Rollback explicit eski image SHA'sına application rollback yapıyor; migration otomatik geri alınmıyor.
 - [x] Production deploy exact release için başarılı `Staging hosted smoke` workflow kanıtı istiyor.
+
+Buradaki AES-256-GCM maddesi uygulamanın yerel managed-secret dosyalarını şifrelemesini kanıtlar. Vault/KMS/managed secret provider, key rotation, secret access audit'i ve pilot plaintext migration/safe deletion kapsamını kanıtlamaz; bunlar [issue #9](https://github.com/theOguz16/ShopAI/issues/9) açıkken production secret lifecycle kabulü sayılmaz.
 
 ## 2. GitHub `production` environment kurulumu — OPERATÖR GATE
 

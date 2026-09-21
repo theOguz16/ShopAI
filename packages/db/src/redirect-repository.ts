@@ -10,6 +10,7 @@ import {
   redirectClicks,
   variants,
 } from './schema.js';
+import { productViewEvents } from './product-view-event-repository.js';
 
 export class PostgresRedirectRepository implements RedirectRepository {
   constructor(private readonly db: Database) {}
@@ -55,24 +56,39 @@ export class PostgresRedirectRepository implements RedirectRepository {
 
   async recordClick(input: Parameters<RedirectRepository['recordClick']>[0]) {
     return this.db.transaction(async (tx) => {
+      const [detailAttribution] = await tx
+        .select({ discoverySessionId: productViewEvents.discoverySessionId })
+        .from(productViewEvents)
+        .where(
+          and(
+            eq(productViewEvents.searchId, input.claims.searchId),
+            eq(productViewEvents.merchantId, input.merchantId),
+            eq(productViewEvents.productId, input.productId),
+            eq(productViewEvents.surface, input.claims.surface),
+            eq(productViewEvents.transport, input.claims.transport),
+          ),
+        )
+        .limit(1);
       await tx.execute(sql`set local role shopai_public`);
-      const attributionResult = await tx.execute(
-        sql`
-          select shopai_discovery_session_for_search(
-            ${input.claims.searchId},
-            ${input.merchantId}
-          ) as "discoverySessionId"
-        `,
-      );
-      const attribution = attributionResult.rows[0] as
-        | { discoverySessionId: string | null }
-        | undefined;
-      const discoverySessionId = attribution?.discoverySessionId ?? null;
-      if (discoverySessionId) {
+      let discoverySessionId = detailAttribution?.discoverySessionId ?? null;
+      if (!discoverySessionId) {
+        const attributionResult = await tx.execute(
+          sql`
+            select shopai_discovery_session_for_search(
+              ${input.claims.searchId},
+              ${input.merchantId}
+            ) as "discoverySessionId"
+          `,
+        );
+        const attribution = attributionResult.rows[0] as
+          | { discoverySessionId: string | null }
+          | undefined;
+        discoverySessionId = attribution?.discoverySessionId ?? null;
+      }
+      if (discoverySessionId)
         await tx.execute(
           sql`select set_config('app.discovery_session_id', ${discoverySessionId}, true)`,
         );
-      }
       const [session] = discoverySessionId
         ? await tx
             .select({ campaign: discoverySessions.campaign })
