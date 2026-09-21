@@ -207,6 +207,23 @@ describe('ChatGPT widget host bridge', () => {
     bridge.destroy();
   });
 
+  it('normalizes nested initial tool output during widget hydration', () => {
+    const search = publicSearch({ query: 'tişört' });
+    const host = fakeHost(() => undefined);
+    host.openai = {
+      toolInput: { query: 'tişört' },
+      toolOutput: { result: { structuredContent: search } },
+    };
+
+    const bridge = createHostBridge({ hostWindow: host, timeoutMs: 1000 });
+
+    expect(bridge.snapshot()).toEqual({
+      input: { query: 'tişört' },
+      output: search,
+    });
+    bridge.destroy();
+  });
+
   it('times out pending requests and removes listeners on destroy', async () => {
     vi.useFakeTimers();
     try {
