@@ -1,5 +1,18 @@
 export const REPORT_SCHEMA_VERSION = 'shopai-pilot-rehearsal/v1' as const;
 
+export function rehearsalMcpSearchArguments(merchantId: string) {
+  return {
+    merchantIds: [merchantId],
+    query: 'Synthetic',
+    analyticsIntent: 'explicit_search' as const,
+    // This probe verifies the MCP transport and response envelope. Keeping the
+    // default inStockOnly=true would also make it a wall-clock freshness test:
+    // a slow rehearsal can age otherwise valid fixtures past the 15m window.
+    inStockOnly: false,
+    limit: 3,
+  };
+}
+
 export function isRehearsalDatabaseName(value: string) {
   return /^shopai_(?:pilot_)?rehearsal(?:_[a-z0-9_]+)?$/u.test(value);
 }

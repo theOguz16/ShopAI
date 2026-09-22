@@ -1,5 +1,7 @@
 # TASK-024 — Web/ChatGPT account linking ve MCP principal sürekliliği
 
+> Kimlik çakışması notu: Görsel kabul artık TASK-025'tir. Bu görev yalnız account-linking ve principal sürekliliğini kapsar.
+
 Öncelik: P0 (TASK-011B pilot kapısı)
 
 ## Problem

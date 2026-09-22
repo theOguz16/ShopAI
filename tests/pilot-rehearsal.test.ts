@@ -1,11 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { toInternalSearchInput } from '../packages/commerce/src/public-search.js';
+import { searchRequestSchema } from '../packages/contracts/src/index.js';
 import {
   acceptanceFrom,
   failureReport,
   isRehearsalDatabaseName,
   percentile,
   type RehearsalMetrics,
+  rehearsalMcpSearchArguments,
   renderSummary,
   type ScenarioResult,
   seededRandom,
@@ -72,6 +75,25 @@ const scenarios: ScenarioResult[] = requiredIds.map((id) => ({
 }));
 
 describe('pilot rehearsal reporting', () => {
+  it('keeps the bounded MCP transport probe independent of fixture age', () => {
+    const merchantId = '11111111-1111-4111-a111-111111111111';
+    const oldProbe = searchRequestSchema.parse(
+      toInternalSearchInput({
+        merchantIds: [merchantId],
+        query: 'Synthetic',
+        analyticsIntent: 'explicit_search',
+        limit: 3,
+      }),
+    );
+    const fixedProbe = searchRequestSchema.parse(
+      toInternalSearchInput(rehearsalMcpSearchArguments(merchantId)),
+    );
+
+    expect(oldProbe.filters.inStockOnly).toBe(true);
+    expect(fixedProbe.filters.inStockOnly).toBe(false);
+    expect(fixedProbe.merchantIds).toEqual([merchantId]);
+  });
+
   it('keeps seeded generation deterministic and calculates nearest-rank latency', () => {
     expect(Array.from({ length: 5 }, seededRandom(23))).toEqual(
       Array.from({ length: 5 }, seededRandom(23)),

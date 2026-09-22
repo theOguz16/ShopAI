@@ -41,6 +41,7 @@ import {
   percentile,
   REPORT_SCHEMA_VERSION,
   type RehearsalMetrics,
+  rehearsalMcpSearchArguments,
   renderSummary,
   type ScenarioResult,
   seededRandom,
@@ -52,7 +53,10 @@ const PRODUCT_COUNT = 10_050;
 const JOURNEY_COUNT = 100;
 const CONCURRENCY = 5;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const artifactsDirectory = resolve(root, 'artifacts/pilot-rehearsal');
+const artifactsDirectory = resolve(
+  root,
+  argument('artifacts-directory') ?? 'artifacts/pilot-rehearsal',
+);
 const requireFromDb = createRequire(resolve(root, 'packages/db/package.json'));
 const { Pool } = requireFromDb('pg') as typeof import('pg');
 const DATABASE_MARKER = `shopai-pilot-rehearsal:${REPORT_SCHEMA_VERSION}`;
@@ -350,6 +354,12 @@ async function bootstrapFixtures(databaseUrl: string, seed: number) {
         .set({ published: true })
         .where(eq(products.merchantId, merchantIds[merchantIndex] as string));
     }
+    // The rehearsal immediately queries a freshly bulk-loaded 10k+ catalog.
+    // Do not race PostgreSQL auto-analyze: stale/default planner estimates made
+    // identical seeded runs vary from seconds to tens of minutes in CI.
+    await database.db.execute(
+      sql`analyze merchants, products, variants, offers, inventory`,
+    );
     return { database, merchantIds, connectionIds };
   } catch (error) {
     await database.close();
@@ -842,22 +852,21 @@ async function main() {
             method: 'tools/call',
             params: {
               name: 'search_products',
-              arguments: {
-                merchantIds: [merchantIds[1]],
-                query: 'Synthetic',
-                analyticsIntent: 'explicit_search',
-                limit: 3,
-              },
+              arguments: rehearsalMcpSearchArguments(merchantIds[1] as string),
             },
           },
         }),
       );
-      const products = response.json().result?.structuredContent?.products;
+      const responseBody = response.json();
+      const products = responseBody.result?.structuredContent?.products;
+      const observedProductCount = Array.isArray(products)
+        ? products.length
+        : 'missing';
       assert(
         response.statusCode === 200 &&
           Array.isArray(products) &&
           products.length,
-        `Real MCP tools/call search failed with ${response.statusCode}.`,
+        `Real MCP tools/call invariant failed: observed status=${response.statusCode}, products=${observedProductCount}; expected status=200, products>=1.`,
       );
       realMcpTransportTests += 1;
       return {
@@ -941,19 +950,19 @@ async function main() {
     await scenario(scenarios, 'search-taxonomy', () => {
       assert(
         taxonomy.catalogLoads === JOURNEY_COUNT,
-        'catalog_load count mismatch.',
+        `catalog_load count mismatch: observed=${taxonomy.catalogLoads}, expected=${JOURNEY_COUNT}.`,
       );
       assert(
         taxonomy.explicitSearches === JOURNEY_COUNT + 3,
-        'explicit_search count mismatch.',
+        `explicit_search count mismatch: observed=${taxonomy.explicitSearches}, expected=${JOURNEY_COUNT + 3}.`,
       );
       assert(
         taxonomy.refinements === JOURNEY_COUNT,
-        'refinement count mismatch.',
+        `refinement count mismatch: observed=${taxonomy.refinements}, expected=${JOURNEY_COUNT}.`,
       );
       assert(
         taxonomy.paginationRequests === JOURNEY_COUNT,
-        'pagination count mismatch.',
+        `pagination count mismatch: observed=${taxonomy.paginationRequests}, expected=${JOURNEY_COUNT}.`,
       );
       assert(
         taxonomy.searchAttempts ===
@@ -962,7 +971,7 @@ async function main() {
       );
       assert(
         taxonomy.emptySearches === 1 && taxonomy.failedSearches === 1,
-        'Controlled empty/error search outcomes were not persisted.',
+        `Controlled search outcomes mismatch: observed empty=${taxonomy.emptySearches}, error=${taxonomy.failedSearches}; expected empty=1, error=1.`,
       );
       return taxonomy;
     });

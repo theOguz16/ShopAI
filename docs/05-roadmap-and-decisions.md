@@ -1,5 +1,7 @@
 # Uygulama sırası ve karar kaydı
 
+> Ürün kapsamı ve görev kimlikleri için kanonik kayıt `docs/06-implementation-status.md` içindeki **Ürün-001** bölümüdür. S01–S11 adları tarihsel uygulama sırasıdır; yeni kabul veya yayın kapısı olarak tek başına yorumlanmaz.
+
 ## İş sırası
 
 | İş | Kapsam | Durum | Tamamlanma ölçütü |
@@ -17,6 +19,12 @@
 | S11 | Staging/pilot yayını ve operasyon kontrolü | Bekliyor | TLS E2E, gerçek ChatGPT host ve rollback kanıtı tamamlanır |
 
 S10 satış kanıtı yoksa ertelenir; demo ve tıklama raporu buna bağımlı değildir. S07 erken teknik risk denemesi için sentetik veriyle S03 sürerken ayrıca yapılabilir. Bu iş sıralaması kişi veya süre taahhüdü değildir.
+
+## Ürün-001 ilk sürüm kararı
+
+İlk sürüm Türkçe, TRY ve fiziksel ürünlerle sınırlıdır. Desteklenen katalog türleri WooCommerce `simple`/`variable` ile Shopify standart ürün/varyanttır. Abonelik ürünü, bundle/kit, kişiye özel fiyat ve karmaşık ürün oluşturucuları kapsam dışıdır. Trendyol ve Hepsiburada erişim bekleyen, bu sürümün yayınını engellemeyen entegrasyonlardır.
+
+WooCommerce teknik kabulü ile gerçek mağaza ve gerçek satış kabulü ayrı kapılardır. Sentetik/staging/VDS kanıtı yalnız teknik akışı doğrular; gerçek merchant, checkout, sipariş ve conversion iddiası TASK-023B ve ilgili gerçek kaynak mutabakatı olmadan yapılamaz.
 
 ## İlk geliştirme dilimi — tamamlanan başlangıç hedefi
 

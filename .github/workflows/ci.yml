@@ -100,10 +100,12 @@ jobs:
         run: pnpm db:migrate
       - name: Run every PostgreSQL/Redis integration test
         run: pnpm test:integration
-      - name: Run TASK-023A synthetic pilot rehearsal
+      - name: Run TASK-023A synthetic pilot rehearsal twice
         env:
           PILOT_REHEARSAL_DATABASE_URL: postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_pilot_rehearsal_ci
-        run: pnpm pilot:rehearsal -- --mode=ci --seed=23001
+        run: |
+          pnpm pilot:rehearsal -- --mode=ci --seed=23001 --artifacts-directory=artifacts/pilot-rehearsal/run-1
+          pnpm pilot:rehearsal -- --mode=ci --seed=23001 --artifacts-directory=artifacts/pilot-rehearsal/run-2
       - name: Store TASK-023A rehearsal report
         if: always()
         uses: actions/upload-artifact@v4
