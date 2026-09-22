@@ -23,4 +23,4 @@ for (const [path, relative] of [
     .replaceAll('await fetch(', 'await authenticatedFetch(');
   writeFileSync(path, content);
 }
-console.log('Auth0 redirect local-path validation and CSRF-aware merchant fetch patched.');
+console.log('Auth0 redirect local-path validation and CSRF-aware merchant fetch patched; integration required.');
