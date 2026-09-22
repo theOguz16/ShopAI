@@ -1,0 +1,30 @@
+name: ÜRÜN-003 branch-only source update
+on:
+  push:
+    branches: [feat/urun-003-auth-foundation]
+    paths: [scripts/urun003-apply.mjs]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'theOguz16/ShopAI' && github.ref == 'refs/heads/feat/urun-003-auth-foundation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/urun003-apply.mjs
+      - run: pnpm add --filter @shopai/api openid-client@6.8.4 --save-exact
+      - name: Verify scope and commit only to feature branch
+        run: |
+          git add apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml
+          git diff --cached --check
+          git config user.name 'shopai-auth-branch-bot'
+          git config user.email 'shopai-auth-branch-bot@users.noreply.github.com'
+          git commit -m 'feat(auth): integrate Auth0 OIDC library and atomic callback'
+          git push origin HEAD:feat/urun-003-auth-foundation
