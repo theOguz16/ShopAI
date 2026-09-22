@@ -14,6 +14,15 @@ END $$;
 --> statement-breakpoint
 ALTER TABLE users ADD COLUMN IF NOT EXISTS closed_at timestamptz;
 --> statement-breakpoint
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS client_kind text NOT NULL DEFAULT 'pilot';
+--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sessions_client_kind_check') THEN
+    ALTER TABLE sessions ADD CONSTRAINT sessions_client_kind_check
+      CHECK (client_kind IN ('pilot','shopper','merchant'));
+  END IF;
+END $$;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS sessions_user_revoked_idx ON sessions (user_id, revoked_at, expires_at);
 --> statement-breakpoint
 -- Authentication transaction tables stay unavailable to the public role.
