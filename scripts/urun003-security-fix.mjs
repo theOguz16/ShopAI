@@ -8,7 +8,11 @@ const end = route.indexOf(marker, begin);
 if (begin < 0 || end < begin || route.indexOf(marker, end + marker.length) !== -1)
   throw new Error('safeReturnTo source no longer matches');
 const header = `function safeReturnTo(value: string, origin: string): string | null {\n  if (\n    !value.startsWith('/') ||\n    value.startsWith('//') ||\n    value.includes(String.fromCharCode(92)) ||\n    [...value].some((character) => character.charCodeAt(0) < 32)\n  ) return null;\n`;
-writeFileSync(routePath, route.slice(0, begin) + header + route.slice(end));
+let fixedRoute = route.slice(0, begin) + header + route.slice(end);
+const badCiphertext = "encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier";
+if (fixedRoute.split(badCiphertext).length !== 2) throw new Error('PKCE ciphertext source mismatch');
+fixedRoute = fixedRoute.replace(badCiphertext, 'pending.pkce_verifier_ciphertext AS encrypted_verifier');
+writeFileSync(routePath, fixedRoute);
 
 for (const [path, relative] of [
   ['apps/web/app/dashboard/merchant-context.tsx', '../../lib/authenticated-fetch'],
@@ -41,4 +45,4 @@ const test = readFileSync(testPath, 'utf8');
 const importOld = "import { createDatabase } from '@shopai/db';";
 if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
 writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
-console.log('Patched safe redirect, CSRF-aware merchant requests, pilot logout and DB test import.');
+console.log('Patched callback ciphertext, safe redirect, CSRF-aware merchant requests, pilot logout and DB test import.');
