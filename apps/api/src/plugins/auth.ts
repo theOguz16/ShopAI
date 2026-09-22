@@ -254,7 +254,8 @@ export function registerAuth(
       return { ok: true };
     },
     async membership(request, merchantId) {
-      if (!request.auth || !db) return undefined;
+      if (!request.auth || request.auth.clientKind === 'shopper' || !db)
+        return undefined;
       return db.transaction(async (tx) => {
         await setTenantContext(tx, merchantId);
         const [membership] = await tx
@@ -270,7 +271,8 @@ export function registerAuth(
       });
     },
     async listMerchants(request) {
-      if (!request.auth || !db) return [];
+      if (!request.auth || request.auth.clientKind === 'shopper' || !db)
+        return [];
       const rows = await db
         .select({
           id: merchants.id,
@@ -337,6 +339,8 @@ export const requireRole =
       : undefined;
     if (!request.auth)
       return void reply.code(401).send({ code: 'UNAUTHENTICATED' });
+    if (request.auth.clientKind === 'shopper')
+      return void reply.code(403).send({ code: 'FORBIDDEN' });
     if (!role || !allowed.includes(role))
       return void reply.code(403).send({ code: 'FORBIDDEN' });
     if (

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
@@ -228,6 +228,48 @@ describe('Ürün-003 OIDC account and session integration (mock provider)', () =
     expect(active.json().user.authLevel).toBe('mfa');
     const csrf = active.json().csrfToken;
     expect(csrf).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    // The same verified user may also have a shopper session. That browser
+    // session must not inherit merchant authority from the user's membership.
+    const shopperRaw = randomBytes(32).toString('base64url');
+    const shopperHash = createHash('sha256').update(shopperRaw).digest('hex');
+    await database.db.execute(sql`
+      INSERT INTO sessions (user_id, token_hash, expires_at, absolute_expires_at,
+        last_active_at, auth_level, authenticated_at, client_kind)
+      VALUES (${pilotId}::uuid, ${shopperHash}, now() + interval '12 hours',
+        now() + interval '12 hours', now(), 'mfa', now(), 'shopper')
+    `);
+    const shopperCookie = `shopai_oidc_session=${shopperRaw}`;
+    const shopperSession = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: shopperCookie },
+    });
+    expect(shopperSession.statusCode).toBe(200);
+    expect(shopperSession.json().user.clientKind).toBe('shopper');
+    const shopperCsrf = shopperSession.json().csrfToken;
+    const shopperMerchants = await app.inject({
+      method: 'GET',
+      url: '/v1/merchants',
+      headers: { cookie: shopperCookie },
+    });
+    expect(shopperMerchants.statusCode).toBe(403);
+    const shopperSetup = await app.inject({
+      method: 'POST',
+      url: '/v1/setup/merchant',
+      headers: {
+        cookie: shopperCookie,
+        origin,
+        'x-shopai-csrf': shopperCsrf,
+      },
+      payload: { name: 'Unauthorized shopper merchant' },
+    });
+    expect(shopperSetup.statusCode).toBe(403);
+    const shopperMerchantDetail = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${randomUUID()}`,
+      headers: { cookie: shopperCookie },
+    });
+    expect(shopperMerchantDetail.statusCode).toBe(403);
     const missingCsrf = await app.inject({
       method: 'POST',
       url: '/v1/auth/logout-all',

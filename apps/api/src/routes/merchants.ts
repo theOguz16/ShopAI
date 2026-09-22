@@ -53,6 +53,8 @@ export async function registerMerchantRoutes(
   });
   app.get('/v1/merchants', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ code: 'UNAUTHENTICATED' });
+    if (request.auth.clientKind === 'shopper')
+      return reply.code(403).send({ code: 'FORBIDDEN' });
     if (!app.authApi.db)
       return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
     return { merchants: await app.authApi.listMerchants(request) };
@@ -63,6 +65,8 @@ export async function registerMerchantRoutes(
     async (request, reply) => {
       if (!request.auth || !app.authApi.db)
         return reply.code(401).send({ code: 'UNAUTHENTICATED' });
+      if (request.auth.clientKind === 'shopper')
+        return reply.code(403).send({ code: 'FORBIDDEN' });
       const body = request.body as { name?: string };
       if (!body?.name?.trim())
         return reply.code(400).send({ code: 'INVALID_INPUT' });
