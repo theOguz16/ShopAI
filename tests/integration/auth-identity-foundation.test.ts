@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import {
-  authAuditEvents,
-  createDatabase,
-  oidcAuthTransactions,
-  userIdentities,
-  users,
-} from '@shopai/db';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { createDatabase } from '../../packages/db/src/client.js';
+import {
+  authAuditEvents,
+  oidcAuthTransactions,
+  userIdentities,
+} from '../../packages/db/src/auth-schema.js';
+import { users } from '../../packages/db/src/schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -97,18 +97,21 @@ if (!databaseUrl) {
         `);
         expect(rights.rows[0]?.can_read).toBe(false);
       } finally {
-        await database.db
-          .delete(oidcAuthTransactions)
-          .where(eq(oidcAuthTransactions.stateHash, stateHash));
-        await database.db
-          .delete(authAuditEvents)
-          .where(eq(authAuditEvents.requestId, `test-${suffix}`));
-        await database.db
-          .delete(userIdentities)
-          .where(eq(userIdentities.subject, subject));
-        if (ids.length)
-          await database.db.delete(users).where(inArray(users.id, ids));
-        await database.close();
+        try {
+          await database.db
+            .delete(oidcAuthTransactions)
+            .where(eq(oidcAuthTransactions.stateHash, stateHash));
+          await database.db
+            .delete(authAuditEvents)
+            .where(eq(authAuditEvents.requestId, `test-${suffix}`));
+          await database.db
+            .delete(userIdentities)
+            .where(eq(userIdentities.subject, subject));
+          if (ids.length)
+            await database.db.delete(users).where(inArray(users.id, ids));
+        } finally {
+          await database.close();
+        }
       }
     });
   });
