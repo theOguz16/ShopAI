@@ -26,4 +26,4 @@ const line = parts.findIndex((part) => part.includes('u0000') && part.includes('
 if (line < 0) throw new Error('Return path validation was not found');
 parts[line] = "    (value.includes('\\\\') || [...value].some((character) => character.charCodeAt(0) < 32))";
 writeFileSync(route, parts.join('\n'));
-console.log('Prepared proof-bound redirect and strict return-path validation');
+console.log('Prepared proof-bound redirect, normalized return paths and source validation');
