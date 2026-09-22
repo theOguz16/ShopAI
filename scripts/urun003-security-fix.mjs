@@ -9,9 +9,15 @@ if (begin < 0 || end < begin || route.indexOf(marker, end + marker.length) !== -
   throw new Error('safeReturnTo source no longer matches');
 const header = `function safeReturnTo(value: string, origin: string): string | null {\n  if (\n    !value.startsWith('/') ||\n    value.startsWith('//') ||\n    value.includes(String.fromCharCode(92)) ||\n    [...value].some((character) => character.charCodeAt(0) < 32)\n  ) return null;\n`;
 let fixedRoute = route.slice(0, begin) + header + route.slice(end);
-const badCiphertext = "encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier";
-if (fixedRoute.split(badCiphertext).length !== 2) throw new Error('PKCE ciphertext source mismatch');
-fixedRoute = fixedRoute.replace(badCiphertext, 'pending.pkce_verifier_ciphertext AS encrypted_verifier');
+const replacements = [
+  ["encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier", 'pending.pkce_verifier_ciphertext AS encrypted_verifier'],
+  ["decode(${encrypt(verifier, config!.encryptionKey)},'base64')", '${encrypt(verifier, config!.encryptionKey)}'],
+  ["pkce_verifier_ciphertext=decode('','hex')", "pkce_verifier_ciphertext=''"],
+];
+for (const [before, after] of replacements) {
+  if (fixedRoute.split(before).length !== 2) throw new Error(`PKCE source mismatch: ${before.slice(0, 20)}`);
+  fixedRoute = fixedRoute.replace(before, after);
+}
 writeFileSync(routePath, fixedRoute);
 
 for (const [path, relative] of [
@@ -45,4 +51,4 @@ const test = readFileSync(testPath, 'utf8');
 const importOld = "import { createDatabase } from '@shopai/db';";
 if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
 writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
-console.log('Patched callback ciphertext, safe redirect, CSRF-aware merchant requests, pilot logout and DB test import.');
+console.log('Patched PKCE ciphertext storage/consume, redirect, merchant CSRF requests, pilot logout and test import.');
