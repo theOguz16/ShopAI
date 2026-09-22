@@ -2,7 +2,7 @@
 
 Öncelik: P0 (TASK-011B dış kabul kapısı)
 
-Bu görev, eski belgelerde TASK-024 diye anılan görsel kabul işinin tek kimliğidir. TASK-024 account-linking ile karıştırılamaz.
+Bu görev, eski belgelerde TASK-024 diye anılan görsel kabul işinin tek kimliğidir. TASK-024 account-linking ile karıştırılamaz. [Issue #41](https://github.com/theOguz16/ShopAI/issues/41) tarihsel başlığında hâlâ “TASK-024” ve daha geniş web/host QA kapsamı taşır; issue başlığı bu kanonik kimliği değiştirmez. Ürün planındaki **ÜRÜN-020** arayüz yenilemesinin gerçek-host kabulünde bu görevden kanıt alınır; **ÜRÜN-025** ise Shopify sipariş attribution işidir ve bu görsel görevle aynı iş değildir. Bkz. [kanonik görev eşlemesi](../06-implementation-status.md).
 
 ## Kapsam
 

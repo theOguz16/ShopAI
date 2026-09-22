@@ -1,6 +1,6 @@
 # Uygulama sırası ve karar kaydı
 
-> Ürün kapsamı ve görev kimlikleri için kanonik kayıt `docs/06-implementation-status.md` içindeki **Ürün-001** bölümüdür. S01–S11 adları tarihsel uygulama sırasıdır; yeni kabul veya yayın kapısı olarak tek başına yorumlanmaz.
+> Ürün kapsamı ve görev kimlikleri için kanonik kayıt [ÜRÜN-001 görev eşlemesi](./06-implementation-status.md) içindedir. S01–S11 adları tarihsel uygulama sırasıdır; yeni kabul veya yayın kapısı olarak tek başına yorumlanmaz. ÜRÜN-001–032 ile TASK-001–025 aynı numara uzayını paylaşmaz; ilişki yalnız kanonik eşleme tablosuyla kurulur.
 
 ## İş sırası
 
@@ -20,11 +20,11 @@
 
 S10 satış kanıtı yoksa ertelenir; demo ve tıklama raporu buna bağımlı değildir. S07 erken teknik risk denemesi için sentetik veriyle S03 sürerken ayrıca yapılabilir. Bu iş sıralaması kişi veya süre taahhüdü değildir.
 
-## Ürün-001 ilk sürüm kararı
+## ÜRÜN-001 ilk sürüm kararı
 
 İlk sürüm Türkçe, TRY ve fiziksel ürünlerle sınırlıdır. Desteklenen katalog türleri WooCommerce `simple`/`variable` ile Shopify standart ürün/varyanttır. Abonelik ürünü, bundle/kit, kişiye özel fiyat ve karmaşık ürün oluşturucuları kapsam dışıdır. Trendyol ve Hepsiburada erişim bekleyen, bu sürümün yayınını engellemeyen entegrasyonlardır.
 
-WooCommerce teknik kabulü ile gerçek mağaza ve gerçek satış kabulü ayrı kapılardır. Sentetik/staging/VDS kanıtı yalnız teknik akışı doğrular; gerçek merchant, checkout, sipariş ve conversion iddiası TASK-023B ve ilgili gerçek kaynak mutabakatı olmadan yapılamaz.
+WooCommerce teknik kabulü ile gerçek mağaza ve gerçek satış kabulü ayrı kapılardır. Sentetik/staging/VDS kanıtı yalnız teknik akışı doğrular; gerçek merchant, checkout, sipariş ve conversion iddiası TASK-023B ve ilgili gerçek kaynak mutabakatı olmadan yapılamaz. TASK-024 yalnız [account linking](./follow-ups/task-024-account-linking.md), TASK-025 yalnız [gerçek-host görsel kabulü](./follow-ups/task-025-visual-acceptance.md) işidir; ÜRÜN-024 ve ÜRÜN-025 farklı ürün görevleridir.
 
 ## İlk geliştirme dilimi — tamamlanan başlangıç hedefi
 

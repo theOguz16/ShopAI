@@ -1,10 +1,10 @@
-# Uygulama ve kabul durumu — 21 Eylül 2026
+# Uygulama ve kabul durumu — 22 Eylül 2026
 
-Bu dosya TASK-001–023B ve takip görevleri için **tek kanonik durum tablosudur**. Mimari belgeler hedefi, bu tablo ise kanıtlanmış mevcut durumu gösterir. Bir PR'ın merge edilmiş olması mühendislik uygulamasını; gerçek mağaza, kullanıcı, hosted ortam veya hukuki onay gerektiren dış kabulü tek başına kanıtlamaz.
+Bu dosya TASK-001–023B, takip görevleri ve ÜRÜN-001–032 için **tek kanonik durum ve eşleme kaydıdır**. Mimari belgeler hedefi, bu tablo ise kanıtlanmış mevcut durumu gösterir. Bir PR'ın merge edilmiş olması mühendislik uygulamasını; gerçek mağaza, kullanıcı, hosted ortam veya hukuki onay gerektiren dış kabulü tek başına kanıtlamaz.
 
 ## ÜRÜN-001 — tek kapsam ve görev kimliği
 
-Bu bölüm eski pilot adlarını yeni ürün kapsamıyla eşler. Aynı kabul kanıtı birden fazla görevi tamamlamış sayılmaz; her satır kendi kapsamı ve kanıtıyla kapanır.
+Bu bölüm eski pilot adlarını yeni ürün kapsamıyla eşler. **ÜRÜN-NNN ve TASK-NNN farklı kimlik dizileridir.** Bir işin eski teknik altyapısının tamamlanması yeni ürün görevinin tamamlandığı anlamına gelmez; aynı kabul kanıtı iki farklı kapsamdaki işi tamamlamış sayılmaz. Eski görevlerin numarası, durumu ve geçmiş kanıtı bu revizyonla değiştirilmez. ÜRÜN-001–032 görevleri ayrı ürün planının görevleridir; aşağıdaki eşleme yeni GitHub issue açıldığı anlamına gelmez.
 
 ### İlk sürüm sınırı
 
@@ -16,23 +16,70 @@ Bu bölüm eski pilot adlarını yeni ürün kapsamıyla eşler. Aynı kabul kan
 
 WooCommerce teknik kabulü ayrı tutulur. Sentetik/staging veya VDS read-only kanıtı teknik kabuldür; gerçek mağaza kabulü ve gerçek satış kabulü değildir. Gerçek merchant/user pilotu TASK-023B'dir.
 
-### Eski iş adları → kanonik görevler
+### Eski iş adları → kanonik teknik görevler
 
-| Eski ad / referans | Tek kanonik kimlik | Kapsam, bağımlılık ve tamamlanma kanıtı |
+| Eski ad / referans | Tek kanonik teknik kimlik | Kapsam, bağımlılık ve tamamlanma kanıtı |
 |---|---|---|
 | S07 / TASK-011B hosted ChatGPT pilotu | TASK-011B | Gerçek host, widget ve hosted operasyon kanıtı; görsel alt kapısı TASK-025, kimlik sürekliliği TASK-024. Exact release/run, console/CSP ve ekran kaydı gerekir. |
-| “TASK-024 görsel kabul” / v4 iframe kabulü | **TASK-025 — gerçek-host görsel kabulü** | v4 iframe, kontrollü timeout, ShopAI-origin console/CSP ve ekran kaydı; `docs/follow-ups/task-025-visual-acceptance.md`. |
-| TASK-024 account-linking takip işi | **TASK-024 — Web/ChatGPT account linking** | OAuth/bağlı principal, web ↔ ChatGPT save/list ve alert sürekliliği; `docs/follow-ups/task-024-account-linking.md` kabul maddeleri. |
-| S09 / TASK-018 teknik WooCommerce pilotu | TASK-018 + TASK-018C | WooCommerce simple/variable teknik sync; `docs/evidence/task-018c-woocommerce-staging-acceptance.md`. Gerçek merchant sonucu değildir. |
-| “Gerçek WooCommerce mağazası” | TASK-018B | İzinli gerçek mağaza, kaynak–ShopAI mutabakatı ve public HTTPS; staging kanıtına ek dış kabul. |
+| “TASK-024 görsel kabul” / v4 iframe kabulü | **TASK-025 — gerçek-host görsel kabulü** | v4 iframe, kontrollü timeout, ShopAI-origin console/CSP ve ekran kaydı; [görsel takip belgesi](follow-ups/task-025-visual-acceptance.md). [Issue #41](https://github.com/theOguz16/ShopAI/issues/41) tarihsel TASK-024 başlığını ve daha geniş web QA kapsamını taşır; issue başlığı yeni kimlik değildir. |
+| TASK-024 account-linking takip işi | **TASK-024 — Web/ChatGPT account linking** | OAuth/bağlı principal, web ↔ ChatGPT save/list ve alert sürekliliği; [account-linking kabul maddeleri](follow-ups/task-024-account-linking.md). |
+| S09 / TASK-018 teknik WooCommerce pilotu | TASK-018 + TASK-018C | WooCommerce simple/variable teknik sync; [sentetik staging kabulü](evidence/task-018c-woocommerce-staging-acceptance.md). Gerçek merchant sonucu değildir. |
+| “Gerçek WooCommerce mağazası” | TASK-018B | İzinli gerçek mağaza, kaynak–ShopAI mutabakatı ve public HTTPS ayrıca doğrulanır. [PR #53](https://github.com/theOguz16/ShopAI/pull/53) başlığında TASK-018B geçse de **ayrı sentetik VPS fixture** sunar; gerçek mağaza dış kabulünü kapatmaz. |
 | S10 / checkout ve satış | TASK-012 + TASK-013 + TASK-023B | Redirect/callback mühendisliği ayrı; gerçek checkout, sipariş ve conversion kanıtı ayrı. |
-| S11 / yayın ve operasyon | TASK-021 | Production readiness, rollback, alert, secret ve legal kanıtları `docs/production-readiness.md` içindedir. |
-| TASK-019/020 Trendyol | TASK-019 + TASK-020 | Teknik connector/onboarding mevcut; gerçek seller erişimi bekliyor, yayın engeli değil. |
+| S11 / yayın ve operasyon | TASK-021 | Production readiness, rollback, alert, secret ve legal kanıtları [production readiness](production-readiness.md) içindedir. |
+| TASK-019/020 Trendyol | TASK-019 + TASK-020 | Teknik connector/onboarding mevcut; gerçek seller erişimi bekliyor, yayın engeli değil. Shopify yerine geçmez. |
 | Hepsiburada erişimi | Yeni görev açılmadı | Bu sürümde erişim bekliyor; kapsamı ve yayın kabulü yok. Erişim gelirse ayrı kimlik açılır. |
 
-### #53 değerlendirmesi
+### ÜRÜN-001–032 → mevcut teknik işler ve yeni ürün kabulü
 
-Yerel görev ve kanıt belgelerinde `#53` için mevcut VDS kabulüne ek zorunlu bir kabul maddesi, yeni metrik veya yeni yayın kapısı bulunmuyor. Mevcut VDS kanıtı zaten aktif WooCommerce bağlantısı, merchant kapsamı, ürün/varyant/offer sayıları, DB/API/dashboard mutabakatı ve read-only SQL yöntemini kapsıyor (`docs/evidence/task-018c-woocommerce-staging-acceptance.md`). Bu nedenle #53 ana dala körlemesine eklenmemiştir; yeni gereksinim belgelenirse ayrı kimlik ve bağımlılık olarak kaydedilmelidir.
+**Okuma kuralı:** “İlişkili” eski kodun veya kabul kanıtının dayanak olduğunu belirtir; ürün görevinin bittiği anlamına gelmez. “Yeni ürün görevi” eski işte birebir tamamlanma karşılığı olmayan yeni kapsamdır. Issue bağlantıları yalnız gerçekten mevcut issue'lara gider; yeni ÜRÜN görevleri için issue numarası uydurulmaz.
+
+| Ürün görevi | Gerçek eski ilişki / takip kaydı | Kapsam farkı ve ürün kabulü |
+|---|---|---|
+| ÜRÜN-001 — kapsam ve kimlik | TASK-001–023B durumları; TASK-024/025 takip belgeleri | **Yeni dokümantasyon kapanış işi**; teknik görevlerin tamamlandığını yeniden ilan etmez. Bu tablo, commit/CI ve #53 kontrolüyle kapanır. |
+| ÜRÜN-002 — kararsız sentetik pilot | TASK-023A; [issue #54](https://github.com/theOguz16/ShopAI/issues/54); [determinism kanıtı](evidence/task-023a-determinism.md) | Eski sentetik pilotun PASS kaydı yeni determinism regresyon kabulünü tek başına kapatmaz. Kod/CI düzeltmesi ayrı; #54 açık durumunu korur. |
+| ÜRÜN-003 — gerçek hesap | TASK-004 pilot onboarding; TASK-015 anonim profil; [auth kararı](07-auth-decision.md) | **Yeni ürün görevi:** OIDC, doğrulanmış e-posta, kurtarma, MFA, migration ve oturum iptali; pilot kimlik uygulaması eşdeğer değildir. |
+| ÜRÜN-004 — secret yaşam döngüsü | TASK-004, TASK-021; [issue #9](https://github.com/theOguz16/ShopAI/issues/9) | İlişkili fakat açık: Vault/KMS, rotation, audit ve migration. Mevcut AES dosyası ürün kabulü değildir. |
+| ÜRÜN-005 — genel ürün/varyant | TASK-009, TASK-018/018C ürün-varyant teknik testleri | **Yeni ürün görevi:** giyim dışı özellik/birim modeli ve geriye uyum; Woo simple/variable testi bu kapsamı tek başına kanıtlamaz. |
+| ÜRÜN-006 — ortak kategori ağacı | TASK-008 sürümlü pilot facet/kategori MVP | **Yeni ürün görevi:** kaynak ID/mağaza bazlı eşleme, ortak kategori ağacı ve eşleme ekranı; mevcut MVP generic taxonomy değildir. |
+| ÜRÜN-007 — sınırlı bellekli sync | TASK-005; [issue #11](https://github.com/theOguz16/ShopAI/issues/11), [issue #12](https://github.com/theOguz16/ShopAI/issues/12) | İlişkili açık teknik borç: configurable limit, durable chunk/stream, recovery ve bellek kanıtı; batch import streaming değildir. |
+| ÜRÜN-008 — Woo eklentisiyle bağlantı | TASK-004 onboarding, TASK-018 Woo connector | **Yeni ürün görevi:** WordPress eklentisi, güvenli tek kullanımlık onay ve bağlantı yaşam döngüsü; API anahtarlı onboarding aynı kabul değildir. |
+| ÜRÜN-009 — geniş Woo katalog kabulü | TASK-018/018C; [Woo staging kanıtı](evidence/task-018c-woocommerce-staging-acceptance.md) | İlişkili teknik temel; ÜRÜN-005/006/008 sonrası genel özellik, varyant görseli, kategori, silme ve iki mağaza izolasyonu ayrı kabul edilir. |
+| ÜRÜN-010 — Shopify uygulaması | TASK-004 yalnız genel merchant onboarding altyapısı | **Yeni ürün görevi:** Shopify public app, OAuth/install/uninstall ve mağaza bağlama; eski Woo/Trendyol provider'ları Shopify değildir. |
+| ÜRÜN-011 — Shopify connector | TASK-005 sync/import altyapısı; TASK-019 yalnız Trendyol connector | **Yeni ürün görevi:** Shopify GraphQL katalog ve varyant sayfalaması; TASK-019'un tamamlanması eşdeğer sayılmaz. |
+| ÜRÜN-012 — iki sağlayıcı webhook sync | TASK-005 retry/sync altyapısı, TASK-018 Woo teknik akışı | **Yeni ürün görevi:** Woo+Shopify doğrulanmış event, silme, sıralama ve periyodik mutabakat; ilk import kabulünden farklıdır. |
+| ÜRÜN-013 — ortak katalog keşfi | TASK-007 discovery API, TASK-008 facets, TASK-022 taksonomi | **Yeni ürün kabulü:** mağazalar arası public kategori/sayı/filtre ve kararlı ilk ekran; eski API'nin varlığı tek başına yetmez. |
+| ÜRÜN-014 — mağazaya kilitli keşif | TASK-002 session, TASK-003 branded storefront | İlişkili temel; sunucu tarafı tüm alışveriş zincirinde merchant scope ve açık marketplace geçişi ayrıca kabul edilir. |
+| ÜRÜN-015 — bio → ChatGPT giriş | TASK-003 campaign; [issue #6](https://github.com/theOguz16/ShopAI/issues/6); TASK-011B host koşusu | **Yeni ürün görevi:** gerçek cihaz/hesaplarda deep-link doğrulaması veya dürüst web alternatifi; campaign aktarımı ChatGPT deep-link kanıtı değildir. |
+| ÜRÜN-016 — Web/ChatGPT kullanıcı kimliği | **[TASK-024 account-linking](follow-ups/task-024-account-linking.md)**; TASK-015/016 anonim/save altyapısı | **Doğrudan teknik eşleme TASK-024 ↔ ÜRÜN-016; ÜRÜN-003'e bağımlı.** OAuth principal ve web ↔ ChatGPT hesap sürekliliği hâlâ kabul bekler. TASK-025 görsel kabulü ve ÜRÜN-024 Woo sipariş işi bu kapsam değildir. |
+| ÜRÜN-017 — kategori tercihleri | TASK-015 anonim profil, TASK-008 facet MVP | **Yeni ürün görevi:** kalıcı hesap bazlı kategori/özellik tercihi, silme ve açık sorgu önceliği; bütün eski sohbetlere erişim iddiası yoktur. |
+| ÜRÜN-018 — gerçek save/alert teslimi | TASK-016 saved products, TASK-017 alerts; TASK-024 principal / ÜRÜN-016 | İlişkili çalışan kod; gerçek kullanıcıya bildirim teslimi, unsubscribe ve iki yüzeyde aynı kayıt için yeni dış kabul gerekir. |
+| ÜRÜN-019 — ortak görsel tasarım | TASK-010 widget ve mevcut UI paketleri yalnız başlangıç | **Yeni ürün görevi:** sürümlü tasarım token'ları ve ekran referansları. TASK-025 gerçek-host görsel QA bunun yerine geçmez. |
+| ÜRÜN-020 — ChatGPT UI revizyonu | TASK-010 widget; [TASK-025 görsel kabul](follow-ups/task-025-visual-acceptance.md); [issue #41](https://github.com/theOguz16/ShopAI/issues/41) | **Yeni UI uygulama kapsamı:** tema, kart, filtre, varyant, mobil; TASK-025 yalnız gerçek iframe alt kabul kanıtıdır. |
+| ÜRÜN-021 — günlük merchant dashboard | TASK-006 health, TASK-014 analytics, TASK-004 onboarding | **Yeni ürün görevi:** operasyon odaklı menü, rol ve satış/komisyon durumu; mevcut dashboard ekranları tam kabul değildir. |
+| ÜRÜN-022 — çok mağazalı görsel hattı | [issue #19](https://github.com/theOguz16/ShopAI/issues/19), TASK-010 CSP, TASK-025 görsel QA | **Yeni ürün görevi:** kontrollü image proxy/CDN, kaynak güvenliği ve cache; mevcut allowlist ya da sentetik resim yeterli değildir. |
+| ÜRÜN-023 — satır bazlı attribution | TASK-012 redirect, TASK-013 callback, TASK-022 event taksonomisi | **Yeni ürün görevi:** iki sağlayıcı ve kalem bazında sipariş/iade ortak sözleşmesi; eski callback testi komisyon kanıtı değildir. |
+| ÜRÜN-024 — Woo sipariş eşleme | TASK-012/013 redirect/callback teknik temeli | **Yeni ürün görevi:** Woo plugin classic/Blocks, HPOS, doğrulanmış paid/refund ve tekrar deneme. **TASK-024 account-linking değildir.** |
+| ÜRÜN-025 — Shopify sipariş eşleme | TASK-012/013 ortak redirect/callback teknik temeli | **Yeni ürün görevi:** Shopify checkout/webhook order attribution; **TASK-025 görsel kabul değildir.** |
+| ÜRÜN-026 — komisyon defteri | TASK-013 dönüşüm, TASK-014 analitik yalnız veri altyapısı | **Yeni ürün görevi:** sürümlü oran, hak ediş, gölge hesap, satır/iade ledger; eski conversion sayımı eşdeğer değildir. |
+| ÜRÜN-027 — komisyon tahsilatı | TASK-014 raporlama yalnız başlangıç | **Yeni ürün görevi:** dönem mutabakatı, itiraz, ücretlendirme ve ödeme kaydı; ölçülen satış tahsilat değildir. |
+| ÜRÜN-028 — gelir analitiği | TASK-014 merchant analytics; TASK-022 metrik/funnel | **Yeni ürün görevi:** doğrulanmış sipariş, net satış, komisyon ve tahsilat mutabakatı; sentetik funnel gerçek gelir değildir. |
+| ÜRÜN-029 — iki sağlayıcı E2E | TASK-011B host, TASK-018/018C staging, TASK-023A rehearsal, TASK-025 iframe | **Yeni yayın kabulü:** Woo+Shopify gerçek ortamda full zincir; sentetik PASS, skipped veya erişim bekleyen senaryo PASS değildir. |
+| ÜRÜN-030 — dağıtım | TASK-011 hosted staging, TASK-021 readiness altyapısı | **Yeni yayın görevi:** Woo plugin ZIP, Shopify public app ve ChatGPT dağıtım başvuruları; başvuru onay değildir. |
+| ÜRÜN-031 — production kapıları | TASK-021 readiness; [issue #9](https://github.com/theOguz16/ShopAI/issues/9); [production checklist](production-readiness.md) | İlişkili otomasyon tamam; gerçek production secrets, alert delivery, rollback, retention ve hukuki onay **yeni dış kabul** gerektirir. |
+| ÜRÜN-032 — gerçek ürün/gelir pilotu | TASK-023B; [issue #38](https://github.com/theOguz16/ShopAI/issues/38); [pilot checklist](pilot-checklist.md) | Gerçek merchant/user kısmı **TASK-023B ↔ ÜRÜN-032** ile ilişkilidir; Shopify ve komisyon gelir kabulü genişletilmiştir. TASK-023A/018C sentetik teknik prova gerçek pilotu bitirmez. |
+
+### ÜRÜN-001 özgün commit ve CI kapanış kanıtı
+
+- Özgün karma commit: [`8b9064bf420cddcc9eb0fc9f78210bb180b456e2`](https://github.com/theOguz16/ShopAI/commit/8b9064bf420cddcc9eb0fc9f78210bb180b456e2) — `fix pilot rehearsal determinism and unify product scope`, 22 Eylül 2026. Bu commit'in **dokümantasyon değişiklikleri**: `docs/05-roadmap-and-decisions.md`, `docs/06-implementation-status.md`, `docs/evidence/task-023a-determinism.md`, `docs/follow-ups/task-024-account-linking.md`, `docs/follow-ups/task-025-visual-acceptance.md`. **Dokümantasyon dışı ayrı ÜRÜN-002 kapsamı**: `.github/workflows/ci.yml`, `scripts/pilot-rehearsal-lib.ts`, `scripts/pilot-rehearsal.mts`, `tests/pilot-rehearsal.test.ts`. ÜRÜN-001'e uygulama/test kodu değişikliği atfedilmez; kod/CI testleri yalnız aynı karma commit nedeniyle ayrıca doğrulanır.
+- [Exact-SHA main CI #35751049301](https://github.com/theOguz16/ShopAI/actions/runs/35751049301), `push`, `completed/success`: `check` PASS (`pnpm check`, production deployment artifact validation), `integration` PASS (PostgreSQL/Redis entegrasyonları, TASK-023A rehearsal **iki ayrı koşu**, isolated backup/restore). Bu kayıt bu commit içindir; gerçek merchant/host/production kabulü değildir. [Issue #54](https://github.com/theOguz16/ShopAI/issues/54) GitHub'da **açık**; aynı commit'in CI PASS sonucu issue'nun kapatıldığını kanıtlamaz.
+- Bu **mini revizyon dalı yalnız Markdown dokümantasyonu** değiştirir; bu revizyonun kendisi için yeni uygulama/test kodu yoktur ve sırf doküman değişikliği için yerelde test/build çalıştırılmamıştır. PR oluşturulduğunda oluşacak CI, yalnız o PR'ın exact head SHA'sı ve gerçek sonuçlarıyla ayrıca yorumlanır; bekleyen veya skipped iş başarılı diye raporlanmaz.
+
+### PR #53 — ayrık sentetik VPS / güvenlik gözlemi
+
+[PR #53](https://github.com/theOguz16/ShopAI/pull/53) `feat/woo-vps-synthetic-pilot`, head [`6fcc783e136a0ddc9df21a27cd777203d9c21a76`](https://github.com/theOguz16/ShopAI/commit/6fcc783e136a0ddc9df21a27cd777203d9c21a76), **draft/açık, merge edilmedi**. Bu sentetik 520 ürünlük ayrı WordPress/WooCommerce VPS kaynağı mevcut TASK-018C VDS sentetik teknik kabulüne ek zorunlu metrik, yeni gerçek mağaza veya gerçek satış kabulü oluşturmaz. [Exact-head CI #35653030707](https://github.com/theOguz16/ShopAI/actions/runs/35653030707) `check` ve `integration` PASS, ancak gerçek WordPress konteyner koşusu, VDS dağıtımı, kaynak sync ve gerçek iframe kabulü değildir. [Issue #54](https://github.com/theOguz16/ShopAI/issues/54) ayrıdır.
+
+[GitGuardian kontrolü](https://github.com/theOguz16/ShopAI/pull/53/checks) `completed/failure`: aynı olay kimliği `37503679` için dört `Generic Password` bulgusu `infra/woocommerce-vps.compose.yaml` geçmiş commit `5912aa734b4d8eab2b18f85a311764208b1e561a` satır 12, 13, 33, 70 üzerinden **Triggered** durumunda. İncelenen [PR head Compose dosyasında](https://github.com/theOguz16/ShopAI/blob/feat/woo-vps-synthetic-pilot/infra/woocommerce-vps.compose.yaml) bu konumlar `${WOO_DB_PASSWORD:?...}` / `${WOO_DB_ROOT_PASSWORD:?...}` ortam değişkeni referanslarıdır; dosyada gerçek/parola test değeri hardcode edilmemiştir. Referansların kendisi sır değildir ve görünen dört bulgu **yanlış pozitif adayıdır**; GitGuardian incident panelinde resmî false-positive/resolved durumu ve runtime'da kullanılan gerçek sırların geçmişi doğrulanamadığı için bulgular giderildi sayılmaz. Aktif gerçek sır sızıntısı **doğrulanmadı**; doğrulanırsa değerini kayda almadan iptal/rotation için **PR #53'ten ayrı güvenlik takibi** açılmalıdır. PR #53 otomatik merge edilmez.
 
 Durumlar:
 
@@ -106,4 +153,4 @@ Sonraki her görev veya follow-up PR'ı bu tabloyu aynı değişiklik setinde g�
 | REV-006 — session bazlı pilot funnel | Tamamlandı | [PR #42](https://github.com/theOguz16/ShopAI/pull/42) · `023f1a2`. Kontrollü 6-session veri setinde event adetleri/tekil funnel, tekrarlar, bot, iptal/iade, pencere ve repeat identity paydaları birebir; conversion yoksa oran ölçülmüyor. 24/24 integration PASS. | Gerçek pilot session/conversion mutabakatı TASK-022/TASK-023B dış kabul kapısıdır |
 | REV-007 — sentetik pilot raporu ve recovery | Tamamlandı | [PR #42](https://github.com/theOguz16/ShopAI/pull/42) · `023f1a2`; [CI run](https://github.com/theOguz16/ShopAI/actions/runs/35601051437). Persisted outcome oranları, non-zero empty/error senaryoları, makine-okur setup FAIL, güvenli recovery marker'ı, MCP/attribution ayrımı ve CI artifact PASS. #40 kapatıldı. | Yok; sentetik sonuç gerçek pilot kabulü değildir |
 | REV-008 — WooCommerce staging kabul sertleştirmesi | Tamamlandı | [PR #55](https://github.com/theOguz16/ShopAI/pull/55); deployed `3cf084a`; `docs/evidence/task-018c-woocommerce-staging-acceptance.md`. CI, exact-release smoke, aktif connection DB sayımı, authenticated API ve oturumlu dashboard PASS. | Yok; gerçek merchant/user pilotu ayrı TASK-023B kapsamıdır |
-| ÜRÜN-002 — TASK-023A determinism | Tamamlandı; commit CI kanıtı merge koşusunda üretilecek | #54 FAIL/PASS rapor karşılaştırması, sınırlı regresyon testi ve aynı kaynak durumunda iki temiz tam koşu: `docs/evidence/task-023a-determinism.md`. Fixture sonrası explicit `ANALYZE`; MCP transport probu stok tazeliği kabulünden ayrıldı. | CI aynı commit üzerinde iki raporu ayrı artifact dizinlerinde saklar; bu iş TASK-023B gerçek pilot kabulü değildir |
+| ÜRÜN-002 — TASK-023A determinism | Kod/CI doğrulaması mevcut; issue #54 açık | [Özgün commit](https://github.com/theOguz16/ShopAI/commit/8b9064bf420cddcc9eb0fc9f78210bb180b456e2) ve [main CI #35751049301](https://github.com/theOguz16/ShopAI/actions/runs/35751049301) PASS; iki rehearsal job adımı başarılı ve ayrı artifact dizinleri mevcut. Kök neden ve yerel koşular [determinism kanıtında](evidence/task-023a-determinism.md). | [#54](https://github.com/theOguz16/ShopAI/issues/54) GitHub'da açık; kapanışını ÜRÜN-001'e taşımadan ÜRÜN-002'de takip et. Bu iş TASK-023B gerçek pilot kabulü değildir. |
