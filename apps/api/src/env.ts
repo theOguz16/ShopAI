@@ -63,7 +63,7 @@ const baseSchema = z.object({
         const result = z
           .record(z.string().email(), z.string().min(16))
           .safeParse(parsed);
-        if (result.success && Object.keys(result.data).length) {
+        if (result.success) {
           const normalized: Record<string, string> = {};
           for (const [email, credential] of Object.entries(result.data)) {
             const key = email.trim().toLowerCase();
@@ -82,6 +82,7 @@ const baseSchema = z.object({
       });
       return z.NEVER;
     }),
+  AUTH_PILOT_LOGIN_ENABLED: z.enum(['true', 'false']).default('true'),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
@@ -159,6 +160,7 @@ const apiEnvSchema = z
       });
     if (
       env.DEPLOY_ENV !== 'local' &&
+      env.AUTH_PILOT_LOGIN_ENABLED === 'true' &&
       env.AUTH_PILOT_CREDENTIALS['pilot@shopai.local'] ===
         'shopai-local-pilot-token'
     )

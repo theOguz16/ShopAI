@@ -14,15 +14,19 @@ const email = `auth0-pilot-${randomUUID()}@example.invalid`;
 const token = 'integration-pilot-code-do-not-use-outside-ci';
 const key = Buffer.alloc(32, 7).toString('base64');
 const stubVariables = {
-  AUTH0_ENABLED: 'true', AUTH0_ISSUER: issuer,
+  AUTH0_ENABLED: 'true',
+  AUTH0_ISSUER: issuer,
   AUTH0_WEB_ORIGIN: origin,
   AUTH0_TRANSACTION_KEY: key,
   AUTH0_SHOPPER_CLIENT_ID: 'test-shopper-client',
   AUTH0_SHOPPER_CLIENT_SECRET: 'test-only-shopper-secret-1234567890-1234567890',
-  AUTH0_SHOPPER_REDIRECT_URI: 'https://api.auth0-test.example/v1/auth/oidc/callback/shopper',
+  AUTH0_SHOPPER_REDIRECT_URI:
+    'https://api.auth0-test.example/v1/auth/oidc/callback/shopper',
   AUTH0_MERCHANT_CLIENT_ID: 'test-merchant-client',
-  AUTH0_MERCHANT_CLIENT_SECRET: 'test-only-merchant-secret-1234567890-1234567890',
-  AUTH0_MERCHANT_REDIRECT_URI: 'https://api.auth0-test.example/v1/auth/oidc/callback/merchant',
+  AUTH0_MERCHANT_CLIENT_SECRET:
+    'test-only-merchant-secret-1234567890-1234567890',
+  AUTH0_MERCHANT_REDIRECT_URI:
+    'https://api.auth0-test.example/v1/auth/oidc/callback/merchant',
   AUTH0_DATABASE_CONNECTION: 'test-database',
 } as const;
 
@@ -30,17 +34,26 @@ const stubVariables = {
 // openid-client signature checks. A real Auth0/HTTPS test remains mandatory.
 vi.mock('openid-client', () => ({
   ClientSecretPost: () => () => undefined,
-  discovery: async () => ({ serverMetadata: () => ({
-    issuer: 'https://auth.auth0-test.example/',
-    authorization_endpoint: 'https://auth.auth0-test.example/authorize',
-    token_endpoint: 'https://auth.auth0-test.example/oauth/token',
-    jwks_uri: 'https://auth.auth0-test.example/.well-known/jwks.json',
-  }) }),
+  discovery: async () => ({
+    serverMetadata: () => ({
+      issuer: 'https://auth.auth0-test.example/',
+      authorization_endpoint: 'https://auth.auth0-test.example/authorize',
+      token_endpoint: 'https://auth.auth0-test.example/oauth/token',
+      jwks_uri: 'https://auth.auth0-test.example/.well-known/jwks.json',
+    }),
+  }),
   authorizationCodeGrant: async (_config: unknown, url: URL) => ({
     claims: () => ({
-      iss: 'https://auth.auth0-test.example/', aud: url.searchParams.get('code') === 'wrong-audience' ? 'other-client' : 'test-merchant-client',
-      sub: 'auth0|verified-fixture', email, email_verified: url.searchParams.get('code') !== 'unverified',
-      auth_time: Math.floor(Date.now() / 1000), amr: ['pwd', 'mfa'],
+      iss: 'https://auth.auth0-test.example/',
+      aud:
+        url.searchParams.get('code') === 'wrong-audience'
+          ? 'other-client'
+          : 'test-merchant-client',
+      sub: 'auth0|verified-fixture',
+      email,
+      email_verified: url.searchParams.get('code') !== 'unverified',
+      auth_time: Math.floor(Date.now() / 1000),
+      amr: ['pwd', 'mfa'],
     }),
   }),
 }));
@@ -48,12 +61,15 @@ vi.mock('openid-client', () => ({
 describe('Ürün-003 OIDC account and session integration (mock provider)', () => {
   const database = createDatabase(databaseUrl!);
   const env = parseApiEnv({
-    CATALOG_MODE: 'postgres', DATABASE_URL: databaseUrl,
-    DEPLOY_ENV: 'test', RELEASE_VERSION: 'test-auth0',
+    CATALOG_MODE: 'postgres',
+    DATABASE_URL: databaseUrl,
+    DEPLOY_ENV: 'test',
+    RELEASE_VERSION: 'test-auth0',
     MCP_PUBLIC_ORIGIN: 'https://api.auth0-test.example',
     MCP_ALLOWED_ORIGINS: `${origin},https://chatgpt.com`,
     WIDGET_ORIGIN: 'https://widget.auth0-test.example',
-    REDIRECT_SIGNING_SECRET: 'test-only-auth0-redirect-signing-secret-1234567890',
+    REDIRECT_SIGNING_SECRET:
+      'test-only-auth0-redirect-signing-secret-1234567890',
     AUTH_PILOT_CREDENTIALS: JSON.stringify({ [email]: token }),
     AUTH_PILOT_LOGIN_ENABLED: 'true',
     LOG_LEVEL: 'silent',
@@ -61,33 +77,60 @@ describe('Ürün-003 OIDC account and session integration (mock provider)', () =
   let app: Awaited<ReturnType<typeof buildApp>>;
   let pilotId: string;
   beforeEach(async () => {
-    for (const [name, value] of Object.entries(stubVariables)) vi.stubEnv(name, value);
-    vi.stubGlobal('fetch', vi.fn(async (resource: URL) => {
-      const url = String(resource);
-      if (url.includes('openid-configuration')) return Response.json({
-        issuer, authorization_endpoint: `${issuer}authorize`,
-        token_endpoint: `${issuer}oauth/token`, jwks_uri: `${issuer}.well-known/jwks.json`,
-      });
-      return Response.json({});
-    }));
+    for (const [name, value] of Object.entries(stubVariables))
+      vi.stubEnv(name, value);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (resource: URL) => {
+        const url = String(resource);
+        if (url.includes('openid-configuration'))
+          return Response.json({
+            issuer,
+            authorization_endpoint: `${issuer}authorize`,
+            token_endpoint: `${issuer}oauth/token`,
+            jwks_uri: `${issuer}.well-known/jwks.json`,
+          });
+        return Response.json({});
+      }),
+    );
     app = await buildApp(undefined, env);
-    const [pilot] = await database.db.insert(users).values({ email }).onConflictDoNothing({ target: users.email }).returning();
+    const [pilot] = await database.db
+      .insert(users)
+      .values({ email })
+      .onConflictDoNothing({ target: users.email })
+      .returning();
     if (!pilot) throw new Error('pilot setup failed');
     pilotId = pilot.id;
   });
   afterEach(async () => {
     await app?.close();
-    await database.db.execute(sql`DELETE FROM oidc_auth_transactions WHERE claim_user_id=${pilotId}::uuid OR stepup_user_id=${pilotId}::uuid`);
-    await database.db.delete(userIdentities).where(eq(userIdentities.userId, pilotId));
-    await database.db.execute(sql`DELETE FROM sessions WHERE user_id=${pilotId}::uuid`);
-    await database.db.execute(sql`DELETE FROM auth_audit_events WHERE user_id=${pilotId}::uuid`);
+    await database.db.execute(
+      sql`DELETE FROM oidc_auth_transactions WHERE claim_user_id=${pilotId}::uuid OR stepup_user_id=${pilotId}::uuid`,
+    );
+    await database.db
+      .delete(userIdentities)
+      .where(eq(userIdentities.userId, pilotId));
+    await database.db.execute(
+      sql`DELETE FROM sessions WHERE user_id=${pilotId}::uuid`,
+    );
+    await database.db.execute(
+      sql`DELETE FROM auth_audit_events WHERE user_id=${pilotId}::uuid`,
+    );
     await database.db.delete(users).where(eq(users.id, pilotId));
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
   async function claim() {
-    const response = await app.inject({ method: 'POST', url: '/v1/auth/oidc/claim',
-      headers: { origin }, payload: { client: 'merchant', returnTo: '/dashboard', pilotEmail: email, pilotToken: token },
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/oidc/claim',
+      headers: { origin },
+      payload: {
+        client: 'merchant',
+        returnTo: '/dashboard',
+        pilotEmail: email,
+        pilotToken: token,
+      },
     });
     expect(response.statusCode).toBe(200);
     const redirect = new URL(response.json().authorizationUrl);
@@ -96,41 +139,82 @@ describe('Ürün-003 OIDC account and session integration (mock provider)', () =
     const cookies = response.headers['set-cookie'];
     const binding = Array.isArray(cookies) ? cookies[0] : cookies;
     expect(binding).toContain('shopai_oidc_state=');
-    return { state: redirect.searchParams.get('state')!, cookie: binding!.split(';')[0]! };
+    return {
+      state: redirect.searchParams.get('state')!,
+      cookie: binding!.split(';')[0]!,
+    };
   }
   it('denies wrong pilot proof and an unverified callback without linking or replay', async () => {
-    const wrong = await app.inject({ method: 'POST', url: '/v1/auth/oidc/claim',
-      headers: { origin }, payload: { client: 'merchant', pilotEmail: email, pilotToken: 'wrong-pilot-proof-long-enough' },
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/oidc/claim',
+      headers: { origin },
+      payload: {
+        client: 'merchant',
+        pilotEmail: email,
+        pilotToken: 'wrong-pilot-proof-long-enough',
+      },
     });
     expect(wrong.statusCode).toBe(401);
     const { state, cookie } = await claim();
-    const wrongBrowser = await app.inject({ method: 'GET', url: `/v1/auth/oidc/callback/merchant?state=${state}&code=unverified` });
+    const wrongBrowser = await app.inject({
+      method: 'GET',
+      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=unverified`,
+    });
     expect(wrongBrowser.statusCode).toBe(401);
-    const response = await app.inject({ method: 'GET',
-      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=unverified`, headers: { cookie },
+    const response = await app.inject({
+      method: 'GET',
+      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=unverified`,
+      headers: { cookie },
     });
     expect(response.statusCode).toBe(401);
-    const replay = await app.inject({ method: 'GET',
-      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=verified`, headers: { cookie },
+    const replay = await app.inject({
+      method: 'GET',
+      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=verified`,
+      headers: { cookie },
     });
     expect(replay.statusCode).toBe(401);
-    const identities = await database.db.select().from(userIdentities).where(eq(userIdentities.userId, pilotId));
+    const identities = await database.db
+      .select()
+      .from(userIdentities)
+      .where(eq(userIdentities.userId, pilotId));
     expect(identities).toHaveLength(0);
   });
   it('binds proven pilot account to issuer + subject, keeps UUID, revokes pilot sessions', async () => {
-    const legacy = await app.inject({ method: 'POST', url: '/v1/auth/login', headers: { origin }, payload: { email, token } });
+    const legacy = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { origin },
+      payload: { email, token },
+    });
     expect(legacy.statusCode).toBe(200);
     const legacyCookie = String(legacy.headers['set-cookie']).split(';')[0];
     const { state, cookie } = await claim();
-    const callback = await app.inject({ method: 'GET',
-      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=verified`, headers: { cookie },
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/v1/auth/oidc/callback/merchant?state=${state}&code=verified`,
+      headers: { cookie },
     });
     expect(callback.statusCode).toBe(303);
-    const [linked] = await database.db.select().from(userIdentities).where(eq(userIdentities.userId, pilotId));
-    expect(linked).toMatchObject({ userId: pilotId, issuer, subject: 'auth0|verified-fixture' });
-    const [row] = await database.db.select().from(users).where(eq(users.id, pilotId));
+    const [linked] = await database.db
+      .select()
+      .from(userIdentities)
+      .where(eq(userIdentities.userId, pilotId));
+    expect(linked).toMatchObject({
+      userId: pilotId,
+      issuer,
+      subject: 'auth0|verified-fixture',
+    });
+    const [row] = await database.db
+      .select()
+      .from(users)
+      .where(eq(users.id, pilotId));
     expect(row?.id).toBe(pilotId);
-    const stale = await app.inject({ method: 'GET', url: '/v1/auth/session', headers: { cookie: legacyCookie } });
+    const stale = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: legacyCookie },
+    });
     expect(stale.statusCode).toBe(401);
   });
 });
