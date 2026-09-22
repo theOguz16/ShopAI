@@ -2,13 +2,40 @@ name: ÜRÜN-003 branch-only source update
 on:
   push:
     branches: [feat/urun-003-auth-foundation]
-    paths: [scripts/urun003-apply.mjs]
+    paths: [scripts/urun003-security-fix.mjs]
 permissions:
   contents: write
 jobs:
   apply:
     if: github.repository == 'theOguz16/ShopAI' && github.ref == 'refs/heads/feat/urun-003-auth-foundation'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: shopai
+          POSTGRES_PASSWORD: shopai_test
+          POSTGRES_DB: shopai_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U shopai -d shopai_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CATALOG_MODE: postgres
+      DATABASE_URL: postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_test
+      REDIS_URL: redis://127.0.0.1:6379
+      MCP_PUBLIC_ORIGIN: https://api.staging.shopai.example
+      WIDGET_ORIGIN: https://widget.staging.shopai.example
+      MCP_ALLOWED_ORIGINS: https://chatgpt.com,https://chat.openai.com
+      WIDGET_RESOURCE_DOMAINS: https://widget.staging.shopai.example,https://images.staging.shopai.example
+      REDIRECT_SIGNING_SECRET: ci-only-redirect-signing-key-000000000000000000
+      CONVERSION_CALLBACK_SECRET: ci-only-conversion-callback-secret-000000000000000
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,18 +45,23 @@ jobs:
         with:
           node-version-file: .node-version
       - run: pnpm install --frozen-lockfile
-      - run: node scripts/urun003-apply.mjs
-      - name: Format and lint changed source files
+      - name: Patch security and merchant CSRF requests
+        run: node scripts/urun003-security-fix.mjs
+      - name: Format changed files
         run: |
-          pnpm exec biome check --write apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
-          pnpm exec biome format --write apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
-      - name: Run all checks before commit
+          pnpm exec biome check --write apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx scripts/urun003-security-fix.mjs
+          pnpm exec biome format --write apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx scripts/urun003-security-fix.mjs
+      - name: Full type/unit/build checks
         run: pnpm check
-      - name: Verify scope and commit only to feature branch
+      - name: Migrate PostgreSQL
+        run: pnpm db:migrate
+      - name: PostgreSQL and Redis integration tests
+        run: pnpm test:integration
+      - name: Commit validated changes to same feature branch only
         run: |
-          git add apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
+          git add apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx
           git diff --cached --check
           git config user.name 'shopai-auth-branch-bot'
           git config user.email 'shopai-auth-branch-bot@users.noreply.github.com'
-          git commit -m 'feat(auth): harden and test Auth0 integration'
+          git commit -m 'fix(auth): secure return paths and enable CSRF-protected merchant workflows'
           git push origin HEAD:feat/urun-003-auth-foundation
