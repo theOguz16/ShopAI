@@ -1,36 +1,23 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const routePath = 'apps/api/src/auth0-routes.ts';
-const route = readFileSync(routePath, 'utf8');
+let route = readFileSync(routePath, 'utf8');
 const begin = route.indexOf('function safeReturnTo(value: string, origin: string): string | null {');
 const marker = '  const target = new URL(value, origin);';
 const end = route.indexOf(marker, begin);
 if (begin < 0 || end < begin || route.indexOf(marker, end + marker.length) !== -1)
-  throw new Error('safeReturnTo source no longer matches');
+  throw new Error('Return-path validation source mismatch');
 const header = `function safeReturnTo(value: string, origin: string): string | null {\n  if (\n    !value.startsWith('/') ||\n    value.startsWith('//') ||\n    value.includes(String.fromCharCode(92)) ||\n    [...value].some((character) => character.charCodeAt(0) < 32)\n  ) return null;\n`;
-let fixedRoute = route.slice(0, begin) + header + route.slice(end);
-const replacements = [
+route = route.slice(0, begin) + header + route.slice(end);
+for (const [before, after] of [
   ["encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier", 'pending.pkce_verifier_ciphertext AS encrypted_verifier'],
   ["decode(${encrypt(verifier, config!.encryptionKey)},'base64')", '${encrypt(verifier, config!.encryptionKey)}'],
   ["pkce_verifier_ciphertext=decode('','hex')", "pkce_verifier_ciphertext=''"],
-];
-for (const [before, after] of replacements) {
-  if (fixedRoute.split(before).length !== 2) throw new Error(`PKCE source mismatch: ${before.slice(0, 20)}`);
-  fixedRoute = fixedRoute.replace(before, after);
+]) {
+  if (route.split(before).length !== 2) throw new Error(`PKCE source mismatch: ${before.slice(0, 20)}`);
+  route = route.replace(before, after);
 }
-const phases = [
-  ["      try {\n        const verifier = decrypt(", "      let phase = 'decrypt_verifier';\n      try {\n        const verifier = decrypt("],
-  ["        const nonce = decrypt(\n", "        phase = 'decrypt_nonce';\n        const nonce = decrypt(\n"],
-  ["        const identity = await verifyAuth0Grant(\n", "        phase = 'verify_grant';\n        const identity = await verifyAuth0Grant(\n"],
-  ["        const userId = await resolveAccount(\n", "        phase = 'resolve_account';\n        const userId = await resolveAccount(\n"],
-  ["        await app.authApi.issueOidcSession(\n", "        phase = 'issue_session';\n        await app.authApi.issueOidcSession(\n"],
-  ["      } catch {\n        return authError(reply);\n      }", "      } catch (error) {\n        if (env.DEPLOY_ENV === 'test') {\n          const reason = error instanceof Error && /^[A-Z_]{3,80}$/u.test(error.message) ? error.message : 'OTHER';\n          const pg = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : '';\n          const name = error instanceof Error && ['Error', 'TypeError', 'SyntaxError', 'RangeError'].includes(error.name) ? error.name : 'OTHER';\n          const text = error instanceof Error ? error.message : '';\n          const hints = ['discovery', 'serverMetadata', 'authorizationCodeGrant', 'issuer', 'client', 'nonce', 'state', 'code', 'idToken', 'claims', 'undefined', 'not a function', 'Invalid URL', 'fetch', 'scope', 'token', 'email'].filter((item) => text.includes(item)).join(',');\n          console.warn('OIDC_TEST_FAILURE', phase, reason, pg, name, hints);\n        }\n        return authError(reply);\n      }"],
-];
-for (const [before, after] of phases) {
-  if (fixedRoute.split(before).length !== 2) throw new Error(`Callback diagnostic anchor mismatch: ${before.slice(0, 22)}`);
-  fixedRoute = fixedRoute.replace(before, after);
-}
-writeFileSync(routePath, fixedRoute);
+writeFileSync(routePath, route);
 
 for (const [path, relative] of [
   ['apps/web/app/dashboard/merchant-context.tsx', '../../lib/authenticated-fetch'],
@@ -59,8 +46,14 @@ auth = auth.replaceAll(call, '      clearCookies(reply, Boolean(cookie(request, 
 writeFileSync(authPath, auth);
 
 const testPath = 'tests/integration/auth0-flows.test.ts';
-const test = readFileSync(testPath, 'utf8');
+let test = readFileSync(testPath, 'utf8');
 const importOld = "import { createDatabase } from '@shopai/db';";
-if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
-writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
-console.log('Patched PKCE; mock-library stages diagnose the grant without exposing credentials.');
+if (test.split(importOld).length !== 2) throw new Error('OIDC test database import mismatch');
+test = test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';");
+const mockStart = test.indexOf("vi.mock('openid-client', () => ({");
+const mockEnd = test.indexOf('\n\ndescribe(', mockStart);
+if (mockStart < 0 || mockEnd < mockStart) throw new Error('OIDC mock fixture mismatch');
+const mock = `// Business integration fixture: simulate the *output* of an already verified\n// provider, not token signatures, discovery or nonce verification. Those require\n// separate cryptographic tests and an actual Auth0/HTTPS staging acceptance.\nvi.mock('../../apps/api/src/auth0-client-library.js', () => ({\n  verifyAuth0Grant: async (\n    _configuration: unknown,\n    _kind: unknown,\n    code: string,\n  ) => {\n    if (code === 'unverified') throw new Error('OIDC_EMAIL_UNVERIFIED');\n    if (code === 'wrong-audience') throw new Error('OIDC_WRONG_AUDIENCE');\n    return {\n      issuer,\n      subject: 'auth0|verified-fixture',\n      email,\n      emailVerified: true,\n      mfa: true,\n      authenticatedAt: new Date(),\n    };\n  },\n}));`;
+test = test.slice(0, mockStart) + mock + test.slice(mockEnd);
+writeFileSync(testPath, test);
+console.log('Prepared PKCE text storage, CSRF-aware merchant requests and an explicitly post-provider business test fixture.');
