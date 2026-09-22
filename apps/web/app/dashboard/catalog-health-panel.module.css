@@ -86,6 +86,20 @@
   font-size: 0.95rem;
 }
 
+.history {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+
+.connections .historyNote {
+  margin: -4px 0 12px;
+}
+
+.connectionHeading .archived {
+  color: var(--muted);
+}
+
 .connection {
   padding: 16px;
   border: 1px solid var(--line);

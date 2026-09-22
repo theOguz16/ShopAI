@@ -1,8 +1,8 @@
 import {
-  catalogSyncFailureStatus,
-  isCatalogSyncStatus,
   type CatalogSyncProgress,
   type CatalogSyncStatus,
+  catalogSyncFailureStatus,
+  isCatalogSyncStatus,
 } from '@shopai/commerce';
 import { and, eq, sql } from 'drizzle-orm';
 import {
@@ -16,7 +16,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { Database } from './client.js';
-import { connections } from './schema.js';
+import { connections, products, variants } from './schema.js';
 import { setTenantContext } from './tenant-context.js';
 
 const at = (name: string) =>
@@ -59,6 +59,9 @@ export const connectionSyncProgress = pgTable(
 
 export type ConnectionSyncProgressView = CatalogSyncProgress & {
   connectionId: string;
+  syncMode: 'full' | 'incremental';
+  catalogProducts: number;
+  catalogVariants: number;
   startedAt: Date | null;
   completedAt: Date | null;
   updatedAt: Date | null;
@@ -129,6 +132,7 @@ export async function readConnectionSyncProgress(
       .select({
         id: connections.id,
         provider: connections.provider,
+        syncMode: connections.syncMode,
         authorizationStatus: connections.authorizationStatus,
         lastSyncStartedAt: connections.lastSyncStartedAt,
         lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt,
@@ -145,6 +149,31 @@ export async function readConnectionSyncProgress(
       );
     if (!connection) return null;
 
+    const [catalog] = await tx
+      .select({
+        products: sql<number>`count(distinct ${products.id})::integer`,
+        variants: sql<number>`count(distinct ${variants.id})::integer`,
+      })
+      .from(products)
+      .leftJoin(
+        variants,
+        and(
+          eq(variants.productId, products.id),
+          eq(variants.merchantId, merchantId),
+          eq(variants.connectionId, connectionId),
+        ),
+      )
+      .where(
+        and(
+          eq(products.merchantId, merchantId),
+          eq(products.connectionId, connectionId),
+        ),
+      );
+    const catalogProducts = catalog?.products ?? 0;
+    const catalogVariants = catalog?.variants ?? 0;
+    const syncMode =
+      connection.syncMode === 'full' ? 'full' : ('incremental' as const);
+
     const [progress] = await tx
       .select()
       .from(connectionSyncProgress)
@@ -160,6 +189,9 @@ export async function readConnectionSyncProgress(
         : catalogSyncFailureStatus(progress);
       return {
         connectionId,
+        syncMode,
+        catalogProducts,
+        catalogVariants,
         status,
         foundProducts: progress.foundProducts,
         processedProducts: progress.processedProducts,
@@ -181,6 +213,9 @@ export async function readConnectionSyncProgress(
         : 'completed';
     return {
       connectionId,
+      syncMode,
+      catalogProducts,
+      catalogVariants,
       status,
       foundProducts: 0,
       processedProducts: 0,

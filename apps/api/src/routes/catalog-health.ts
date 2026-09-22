@@ -1,6 +1,6 @@
 import {
-  catalogConnectionHealth,
   type CatalogConnectionHealth,
+  catalogConnectionHealth,
 } from '@shopai/commerce/catalog-health';
 import {
   connections,
@@ -19,6 +19,7 @@ type Params = { merchantId: string };
 type ConnectionHealthView = {
   id: string;
   provider: string;
+  active: boolean;
   status: CatalogConnectionHealth;
   authorizationStatus: string;
   lastSuccessfulSyncAt: string | null;
@@ -93,6 +94,7 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
             return {
               id: connection.id,
               provider: connection.provider,
+              active: connection.active,
               status: catalogConnectionHealth(connection, now.getTime()),
               authorizationStatus: connection.authorizationStatus,
               lastSuccessfulSyncAt: lastSuccessfulSyncAt?.toISOString() ?? null,
@@ -105,7 +107,9 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
         );
         const latestSuccessfulSync = connectionRows.reduce<Date | null>(
           (latest, connection) => {
-            const candidate = connection.lastSuccessfulSyncAt;
+            const candidate = connection.active
+              ? connection.lastSuccessfulSyncAt
+              : null;
             if (!candidate || (latest && candidate <= latest)) return latest;
             return candidate;
           },

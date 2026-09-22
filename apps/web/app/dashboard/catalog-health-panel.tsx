@@ -22,6 +22,7 @@ export type CatalogHealthSnapshot = {
   connections: Array<{
     id: string;
     provider: string;
+    active: boolean;
     status: CatalogConnectionHealth;
     authorizationStatus: string;
     lastSuccessfulSyncAt: string | null;
@@ -69,6 +70,12 @@ export function CatalogHealthPanel({
 }: {
   health: CatalogHealthSnapshot;
 }) {
+  const activeConnections = health.connections.filter(
+    (connection) => connection.active,
+  );
+  const historicalConnections = health.connections.filter(
+    (connection) => !connection.active,
+  );
   const metrics = [
     ['Toplam ürün', health.totalProducts],
     ['Aktif ürün', health.activeProducts],
@@ -100,9 +107,9 @@ export function CatalogHealthPanel({
       </dl>
 
       <div className={styles.connections}>
-        <h3>Connection</h3>
-        {health.connections.length ? (
-          health.connections.map((connection) => (
+        <h3>Aktif bağlantılar</h3>
+        {activeConnections.length ? (
+          activeConnections.map((connection) => (
             <article className={styles.connection} key={connection.id}>
               <div className={styles.connectionHeading}>
                 <strong>{providerName(connection.provider)}</strong>
@@ -123,8 +130,29 @@ export function CatalogHealthPanel({
             </article>
           ))
         ) : (
-          <p className={styles.empty}>Henüz bağlı katalog kaynağı yok.</p>
+          <p className={styles.empty}>Aktif katalog bağlantısı yok.</p>
         )}
+        {historicalConnections.length ? (
+          <div className={styles.history}>
+            <h3>Bağlantı geçmişi</h3>
+            <p className={styles.historyNote}>
+              İptal edilmiş bağlantılar geçmiş kaydı olarak saklanır ve aktif
+              katalog sağlığını etkilemez.
+            </p>
+            {historicalConnections.map((connection) => (
+              <article className={styles.connection} key={connection.id}>
+                <div className={styles.connectionHeading}>
+                  <strong>{providerName(connection.provider)}</strong>
+                  <span className={styles.archived}>İptal edildi</span>
+                </div>
+                <p>
+                  Son başarılı sync:{' '}
+                  {relativeAge(connection.lastSuccessfulSyncAgeMs, 'tr')}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
