@@ -18,12 +18,14 @@ const database = createDatabase(databaseUrl);
 const env = parseApiEnv({
   CATALOG_MODE: 'postgres',
   DATABASE_URL: databaseUrl,
-  DEPLOY_ENV: 'test',
+  // Exercise staging cookie policy with HTTPS origins and an isolated test DB.
+  DEPLOY_ENV: 'staging',
   RELEASE_VERSION: 'test-better-auth',
   MCP_PUBLIC_ORIGIN: apiOrigin,
   MCP_ALLOWED_ORIGINS: `${origin},https://chatgpt.com`,
   WIDGET_ORIGIN: 'https://widget.better-auth-test.example',
   REDIRECT_SIGNING_SECRET: 'test-only-better-auth-redirect-secret-1234567890',
+  CONNECTOR_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   AUTH_PILOT_CREDENTIALS: JSON.stringify({ [email]: pilotToken }),
   BETTER_AUTH_ENABLED: 'true',
   BETTER_AUTH_SECRET: 'test-only-better-auth-secret-1234567890',
@@ -141,6 +143,10 @@ describe('Better Auth API ve pilot bağlama', () => {
     });
     expect(signIn.statusCode).toBe(200);
     const cookies = signIn.headers['set-cookie'];
+    expect(cookies).toBeDefined();
+    expect((Array.isArray(cookies) ? cookies : [cookies]).join('; ')).toMatch(
+      /Secure/u,
+    );
     const baCookie = (Array.isArray(cookies) ? cookies : [cookies])
       .filter(Boolean)
       .map((item) => item!.split(';')[0])
@@ -198,9 +204,15 @@ describe('Better Auth API ve pilot bağlama', () => {
     expect(completed.statusCode).toBe(200);
     expect(completed.json().user.id).toBe(pilotId);
     const issued = completed.headers['set-cookie'];
-    const shopaiCookie = (Array.isArray(issued) ? issued : [issued])
-      .find((item) => item?.startsWith('shopai_oidc_session='))
-      ?.split(';')[0];
+    const issuedCookies = Array.isArray(issued) ? issued : [issued];
+    const shopaiSession = issuedCookies.find((item) =>
+      item?.startsWith('__Host-shopai_session='),
+    );
+    expect(shopaiSession).toContain('Secure');
+    expect(shopaiSession).toContain('HttpOnly');
+    expect(shopaiSession).toContain('SameSite=Lax');
+    expect(shopaiSession).toContain('Path=/');
+    const shopaiCookie = shopaiSession?.split(';')[0];
     expect(shopaiCookie).toBeTruthy();
     const session = await app.inject({
       method: 'GET',
@@ -212,6 +224,23 @@ describe('Better Auth API ve pilot bağlama', () => {
       userId: pilotId,
       authLevel: 'mfa',
     });
+    const csrf = session.json().csrfToken as string;
+    const missingCsrf = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout-all',
+      headers: { origin, cookie: shopaiCookie! },
+    });
+    expect(missingCsrf.statusCode).toBe(403);
+    const wrongOrigin = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout-all',
+      headers: {
+        origin: 'https://evil.example',
+        cookie: shopaiCookie!,
+        'x-shopai-csrf': csrf,
+      },
+    });
+    expect(wrongOrigin.statusCode).toBe(403);
     const stored = await database.db.execute(
       sql`SELECT token_hash FROM sessions WHERE user_id = ${pilotId}::uuid AND auth_level = 'mfa'`,
     );
