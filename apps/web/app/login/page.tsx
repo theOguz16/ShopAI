@@ -2,6 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import {
+  betterAuthSignInBody,
+  betterAuthSignUpBody,
+} from '../../lib/better-auth-requests';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const safeReturn = () => {
@@ -35,6 +39,12 @@ export default function LoginPage() {
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     setResetToken(query.get('token') ?? '');
+    if (query.has('error'))
+      setError('E-posta doğrulama bağlantısı geçersiz veya süresi dolmuş.');
+    else if (query.get('verification') === 'complete')
+      setMessage(
+        'Doğrulama bağlantısı işlendi. E-posta ve parolanızla devam edin.',
+      );
     if (query.get('reason') === 'session_expired')
       setSessionMessage(
         'Oturumunuzun süresi doldu veya erişiminiz iptal edildi. Lütfen yeniden giriş yapın.',
@@ -87,11 +97,13 @@ export default function LoginPage() {
     event.preventDefault();
     setError('');
     try {
-      const response = await betterRequest('sign-up/email', {
-        name: accountName,
-        email,
-        password,
-      });
+      const response = await betterRequest(
+        'sign-up/email',
+        betterAuthSignUpBody(
+          { name: accountName, email, password },
+          window.location.origin,
+        ),
+      );
       if (!response.ok) {
         setError(
           'Hesap oluşturulamadı. Bilgileri kontrol edip yeniden deneyin.',
@@ -109,10 +121,10 @@ export default function LoginPage() {
     event.preventDefault();
     setError('');
     try {
-      const response = await betterRequest('sign-in/email', {
-        email,
-        password,
-      });
+      const response = await betterRequest(
+        'sign-in/email',
+        betterAuthSignInBody({ email, password }, window.location.origin),
+      );
       if (!response.ok) {
         setError('Giriş yapılamadı. E-postanızı doğruladığınızdan emin olun.');
         return;

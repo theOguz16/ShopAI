@@ -121,19 +121,39 @@ describe('Better Auth API ve pilot bağlama', () => {
   });
 
   it('yalnız MFA + pilot kanıtı ile eski UUID için hashli oturum verir', async () => {
+    const verificationReturn = `${origin}/login?verification=complete`;
     const signup = await app.inject({
       method: 'POST',
       url: '/v1/auth/better/sign-up/email',
       headers: { origin },
-      payload: { name: 'Pilot Merchant', email, password },
+      payload: {
+        name: 'Pilot Merchant',
+        email,
+        password,
+        callbackURL: verificationReturn,
+      },
     });
     expect(signup.statusCode).toBe(200);
     expect(verificationUrl).toContain('/v1/auth/better/verify-email');
+    expect(new URL(verificationUrl).searchParams.get('callbackURL')).toBe(
+      verificationReturn,
+    );
+    const unverifiedSignIn = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/better/sign-in/email',
+      headers: { origin },
+      payload: { email, password, callbackURL: verificationReturn },
+    });
+    expect(unverifiedSignIn.statusCode).toBe(403);
+    expect(new URL(verificationUrl).searchParams.get('callbackURL')).toBe(
+      verificationReturn,
+    );
     const verify = await app.inject({
       method: 'GET',
       url: new URL(verificationUrl).pathname + new URL(verificationUrl).search,
     });
-    expect(verify.statusCode).toBeLessThan(400);
+    expect(verify.statusCode).toBe(302);
+    expect(verify.headers.location).toBe(verificationReturn);
 
     const signIn = await app.inject({
       method: 'POST',
