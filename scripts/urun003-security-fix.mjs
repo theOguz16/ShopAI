@@ -23,4 +23,22 @@ for (const [path, relative] of [
     .replaceAll('await fetch(', 'await authenticatedFetch(');
   writeFileSync(path, content);
 }
-console.log('Auth0 redirect local-path validation and CSRF-aware merchant fetch patched; integration required.');
+
+const authPath = 'apps/api/src/plugins/auth.ts';
+let auth = readFileSync(authPath, 'utf8');
+const a = auth.indexOf('  const clearCookies = (reply: FastifyReply) => {');
+const b = auth.indexOf('  const authApi: AuthApi = {', a);
+if (a < 0 || b < 0) throw new Error('Pilot cookie cleanup source mismatch');
+const clear = `  const clearCookies = (reply: FastifyReply, oidcSession: boolean) => {\n    const secure = env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production';\n    const pilotExpiry = \`\${legacyCookie}=; HttpOnly; SameSite=Lax\${secure ? '; Secure' : ''}; Max-Age=0; Path=/\`;\n    const oauthExpiry = \`\${oauthCookie(env)}=; \${cookieAttributes(env)}; Max-Age=0\`;\n    reply.header('Set-Cookie', oidcSession ? [pilotExpiry, oauthExpiry] : pilotExpiry);\n  };\n`;
+auth = auth.slice(0, a) + clear + auth.slice(b);
+const call = '      clearCookies(reply);';
+if (auth.split(call).length !== 3) throw new Error('Unexpected logout cookie call count');
+auth = auth.replaceAll(call, '      clearCookies(reply, Boolean(cookie(request, oauthCookie(env))));');
+writeFileSync(authPath, auth);
+
+const testPath = 'tests/integration/auth0-flows.test.ts';
+const test = readFileSync(testPath, 'utf8');
+const importOld = "import { createDatabase } from '@shopai/db';";
+if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
+writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
+console.log('Patched safe redirect, CSRF-aware merchant requests, pilot logout and DB test import.');
