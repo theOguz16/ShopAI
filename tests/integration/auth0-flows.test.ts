@@ -212,5 +212,46 @@ describe('Ürün-003 OIDC account and session integration (mock provider)', () =
       headers: { cookie: legacyCookie },
     });
     expect(stale.statusCode).toBe(401);
+    const issued = callback.headers['set-cookie'];
+    const cookies = Array.isArray(issued) ? issued : [issued];
+    const oidcCookie = cookies
+      .find((item) => item?.startsWith('shopai_oidc_session='))
+      ?.split(';')[0];
+    expect(oidcCookie).toBeTruthy();
+    const active = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: oidcCookie! },
+    });
+    expect(active.statusCode).toBe(200);
+    expect(active.json().user.userId).toBe(pilotId);
+    expect(active.json().user.authLevel).toBe('mfa');
+    const csrf = active.json().csrfToken;
+    expect(csrf).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    const missingCsrf = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout-all',
+      headers: { cookie: oidcCookie!, origin },
+    });
+    expect(missingCsrf.statusCode).toBe(403);
+    const revoked = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout-all',
+      headers: { cookie: oidcCookie!, origin, 'x-shopai-csrf': csrf },
+    });
+    expect(revoked.statusCode).toBe(200);
+    const noLongerActive = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: oidcCookie! },
+    });
+    expect(noLongerActive.statusCode).toBe(401);
+    const oldPilotLogin = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { origin },
+      payload: { email, token },
+    });
+    expect(oldPilotLogin.statusCode).toBe(403);
   });
 });

@@ -1,6 +1,6 @@
 # Kimlik ve oturum kararı — ÜRÜN-003
 
-> **Durum: aşamalı geçiş, henüz kabul edilmedi.** Bu belge hedef mimariyi ve mevcut pilotun gerçek durumunu ayırır. `0031_auth0_identity_foundation.sql` yalnız geriye uyumlu şema kurar; Auth0 girişi, MFA, session enforcement, kullanıcının sahiplik kanıtı ve pilot girişini kapatma henüz uygulanmış değildir. Gerçek staging/production kimlik geçişi yapılmış gibi yorumlanamaz.
+> **Durum: ÜRÜN-003 kod düzeyinde aşamalı olarak uygulandı, gerçek Auth0/HTTPS staging kabulü BEKLİYOR.** 0031+0032 migration, iki-client OIDC giriş/callback, verified-email ve issuer+subject kimliği, kanıtlı pilot claim, şifreli tek kullanımlık PKCE/nonce, opaque session/CSRF, logout-all, owner MFA/step-up ve hesap kapatma kodları branch üzerindedir. Test sağlayıcısı gerçek imzalı Auth0 tokenı değil doğrulanmış sağlayıcı çıktısını taklit eder. Gerçek recovery e-postası, MFA cihazı, HTTPS tarayıcı ve anonimleştirilmiş gerçek veride migrasyon kabulü yapılmadı. Pilot giriş kontrollü geçiş için açık, ÜRÜN-003 KISMİ / AÇIK.
 
 ## Geçerli pilotun davranışı (tarihsel, henüz kaldırılmadı)
 
@@ -38,13 +38,12 @@ Development, staging ve production için ayrı uygulama kimlikleri/secrets, tam 
 | Gizli veri ifşası/IdP kesintisi | Redacted audit ve operasyon alarmı; Auth0 sorununda pilot'a otomatik geri dönüş yok. |
 | Hesap kapatma/son owner | Önce owner transferi/mağaza kapama, yeni login engeli, bütün oturumların iptali, ayrı kişisel veri ve ticari retention kuralları. |
 
-## Geriye uyumlu veri geçişi ve kapılar
+## Uygulanan kod ve güvenli geçiş kapıları
 
-1. **Phase 1 — şema (bu PR):** `0031_auth0_identity_foundation.sql`, Drizzle kimlik/işlem/audit modelleri ve izolasyon testi. Pilot kullanıcıları `account_status='pilot'` olarak kalır. `email_verified_at` NULL'dır. Mevcut sessions verisi silinmez, politika sütunları yalnız hazırlanır. `user_identities` ve diğer yeni tablolar public DB rolüne kapalıdır. Yeni MFA/TTL sütunları mevcut handler tarafından **henüz enforce edilmez**.
-2. **Phase 2 — backend:** `openid-client` bağımlılığı ve lockfile, iki Auth0 client, doğrulanan start/callback, server-only token exchange, encrypted PKCE transaction store, session rotation, `logout-all`, CSRF, single-use pilot claim ve denetimli audit. Yeni kullanıcı başlangıcında email çakışması otomatik merge değil kanıt kapısıdır. Gerçek code/token/PKCE materyali loglanmaz.
-3. **Phase 3 — web/merchant:** Universal Login ve doğrulama UX, ayrı shopper/merchant girişleri aynı ShopAI user ID, MFA/step-up, mağaza daveti, session yönetimi, hesap kapama. Tenant testleri ve eski `owner/editor/viewer` semantiği korunur.
-4. **Phase 4 — kontrollü cutover:** Anonimleştirilmiş gerçek DB kopyasında migration + çift kimlik/race testleri, kullanıcı/üyelik/merchant/bağlantı sayısı ve FK mutabakatı, yedek/restore deneyi; Auth0 staging HTTPS tarayıcı E2E, üretim e-postası ve owner MFA. Operatör pilot secret'larını kaldırır; yeni pilot login kapanır, eski session'lar iptal edilir. Rollback eski güvensiz login'i açmaz. Dış kabul kanıtları olmadan ÜRÜN-003 kapatılmaz.
+1. Veri temeli: 0031 ve 0032 additive migration; mevcut kullanıcı UUIDleri, üyelikler ve pilot oturumları silinmez. Kimlik anahtarı doğrulanmış issuer + subject. E-posta eşleşmesi tek başına hesap birleştirmez.
+2. OIDC: openid-client 6.8.4 Authorization Code + PKCE S256, state ve nonce doğrulamasına yönelik sunucu kodu; encrypted browser-bound, 5 dakika geçerli ve atomik tek kullanımlık callback. Sağlayıcı tokenları tarayıcıya aktarılmaz. Gerçek Auth0 imza/JWKS doğrulaması staging ortamında ayrıca sınanmalıdır.
+3. Hesap ve oturum: Pilot credential kanıtı ve doğrulanmış e-posta sonrası transaction içinde eski UUIDye link; pilot session iptali; hashlenmiş OAuth cookie, idle/mutlak süre, revocation, CSRF+origin, backend membership ve owner MFA kontrolü. Entegrasyon testleri doğrulanmış sağlayıcı çıktısını mocklar.
+4. Çıkış ve kapatma: logout-all session iptali; son owner için ownership transfer zorunluluğu. Auth0 SSO logout, recovery e-postası ve MFA cihazı dış ortamda ayrıca doğrulanmalıdır.
+5. Kontrollü cutover (YAPILMADI): Gerçek Auth0 tenant, ayrı shopper/merchant client ID ve secrets, HTTPS callback/logout allowlist, MFA Action ve e-posta sağlayıcısı; anonimleştirilmiş gerçek veride migrasyon/UUID/üyelik mutabakatı, backup-restore, gerçek tarayıcı negatif testleri gerekir. Operatör ve kullanıcı doğrulaması olmadan AUTH_PILOT_LOGIN_ENABLED kapatılmaz veya pilot credentials kaldırılmaz.
 
-Mevcut pilot erişimini kaldırma işlemi bu PR'da **yapılmaz**: yetkili operatör ilgili credential'ı güvenli secret store'dan kaldırmalı, eşleşen kullanıcı session'larını aynı bakım işleminde iptal etmeli, eski cookie ile `/v1/auth/session` ve yönetim route'larında 401'i doğrulamalıdır. Gerçek e-posta/kod SQL veya shell geçmişine yazılmaz. Sadece üyeliği silmek login'i iptal etmez; sadece session silmek de pilot kodunu geçersiz kılmaz.
-
-**İlgili belgeler:** [kanonik durum](06-implementation-status.md), [hesap bağlama / ÜRÜN-016](follow-ups/task-024-account-linking.md), [production readiness](production-readiness.md). Bu aşama ÜRÜN-016 Web/ChatGPT OAuth principal sürekliliğini, ÜRÜN-018 gerçek teslimi veya ÜRÜN-032 gerçek kullanıcı pilotunu karşılamaz.
+Gerçek ortam kabul matrisi: [ÜRÜN-003 Auth0 staging kabulü](follow-ups/urun-003-auth0-staging-acceptance.md). ÜRÜN-016 Web/ChatGPT principal sürekliliği ve ÜRÜN-032 gerçek kullanıcı pilotu bu PR ile karşılanmış sayılmaz.
