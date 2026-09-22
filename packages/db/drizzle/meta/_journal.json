@@ -31,6 +31,7 @@
     { "idx": 26, "version": "7", "when": 1789639800000, "tag": "0027_interaction_events", "breakpoints": true },
     { "idx": 27, "version": "7", "when": 1789725600000, "tag": "0028_merchant_session_funnel", "breakpoints": true },
     { "idx": 28, "version": "7", "when": 1789973200000, "tag": "0029_interaction_event_grants", "breakpoints": true },
-    { "idx": 29, "version": "7", "when": 1789973300000, "tag": "0030_interaction_event_public_returning", "breakpoints": true }
+    { "idx": 29, "version": "7", "when": 1789973300000, "tag": "0030_interaction_event_public_returning", "breakpoints": true },
+    { "idx": 30, "version": "7", "when": 1790097300000, "tag": "0031_auth0_identity_foundation", "breakpoints": true }
   ]
 }
