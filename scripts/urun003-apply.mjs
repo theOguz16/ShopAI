@@ -20,4 +20,10 @@ change(env,
 change(route,
   "    return reply.redirect(authorizationUrl(config!, authorizationEndpoint, input.client, {\n      state, nonce, verifier, signup: input.signup === 'true', stepup: flowKind === 'stepup',\n    }), 303);",
   "    const authorization = authorizationUrl(config!, authorizationEndpoint, input.client, {\n      state, nonce, verifier, signup: input.signup === 'true', stepup: flowKind === 'stepup',\n    });\n    // POST claim is called via fetch; a cross-site redirect from fetch does not\n    // navigate the browser. Return the URL after binding the browser cookie.\n    if (claimUserId) return reply.send({ authorizationUrl: authorization });\n    return reply.redirect(authorization, 303);");
-console.log('Prepared Auth0 configuration and proof-bound browser redirect');
+const original = readFileSync(route, 'utf8');
+const parts = original.split('\n');
+const line = parts.findIndex((part) => part.includes('u0000') && part.includes('u001f') && part.includes('test(value)'));
+if (line < 0) throw new Error('Return path validation was not found');
+parts[line] = "    (value.includes('\\\\') || [...value].some((character) => character.charCodeAt(0) < 32))";
+writeFileSync(route, parts.join('\n'));
+console.log('Prepared proof-bound redirect and strict return-path validation');
