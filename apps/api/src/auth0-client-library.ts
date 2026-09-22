@@ -16,13 +16,19 @@ export async function verifyAuth0Grant(
   nonce: string,
   verifier: string,
 ): Promise<VerifiedIdentity> {
+  const diagnostic = config.issuer === 'https://auth.auth0-test.example/';
+  const stage = (name: string) => {
+    if (diagnostic) console.warn('OIDC_MOCK_STAGE', name);
+  };
   const client = config.clients[kind];
+  stage('begin');
   const configuration = await oidc.discovery(
     new URL(config.issuer),
     client.clientId,
     client.clientSecret,
     oidc.ClientSecretPost(client.clientSecret),
   );
+  stage('discovered');
   if (configuration.serverMetadata().issuer !== config.issuer)
     throw new Error('OIDC_INVALID_ISSUER');
   for (const endpoint of [
@@ -37,16 +43,20 @@ export async function verifyAuth0Grant(
     )
       throw new Error('OIDC_INVALID_ENDPOINT');
   }
+  stage('metadata_validated');
   const callback = new URL(client.redirectUri);
   callback.searchParams.set('state', state);
   callback.searchParams.set('code', code);
+  stage('grant_start');
   const tokens = await oidc.authorizationCodeGrant(configuration, callback, {
     pkceCodeVerifier: verifier,
     expectedNonce: nonce,
     expectedState: state,
     idTokenExpected: true,
   });
+  stage('grant_resolved');
   const rawClaims: unknown = tokens.claims();
+  stage('claims_read');
   if (!rawClaims || typeof rawClaims !== 'object')
     throw new Error('OIDC_MISSING_CLAIMS');
   const claims = rawClaims as Record<string, unknown>;
@@ -72,12 +82,11 @@ export async function verifyAuth0Grant(
   const recent =
     typeof time === 'number' && time <= now + 60 && time >= now - 5 * 60;
   const amr = claims.amr;
-  // Auth0 must emit a signed MFA indication (e.g. from a Post-Login Action).
-  // Unknown/absent or stale MFA context is never elevated to MFA.
   const mfa =
     recent &&
     ((Array.isArray(amr) && amr.includes('mfa')) ||
       claims['https://shopai.example/claims/mfa'] === true);
+  stage('identity_verified');
   return {
     issuer: config.issuer,
     subject: claims.sub,
