@@ -22,8 +22,7 @@ jobs:
       - name: Format and lint changed source files
         run: |
           pnpm exec biome check --write apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
-      - name: Typecheck
-        run: pnpm typecheck
+          pnpm exec biome format --write apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
       - name: Run all checks before commit
         run: pnpm check
       - name: Verify scope and commit only to feature branch
