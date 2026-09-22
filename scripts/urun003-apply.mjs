@@ -20,4 +20,4 @@ change(env,
 change(route,
   "    return reply.redirect(authorizationUrl(config!, authorizationEndpoint, input.client, {\n      state, nonce, verifier, signup: input.signup === 'true', stepup: flowKind === 'stepup',\n    }), 303);",
   "    const authorization = authorizationUrl(config!, authorizationEndpoint, input.client, {\n      state, nonce, verifier, signup: input.signup === 'true', stepup: flowKind === 'stepup',\n    });\n    // POST claim is called via fetch; a cross-site redirect from fetch does not\n    // navigate the browser. Return the URL after binding the browser cookie.\n    if (claimUserId) return reply.send({ authorizationUrl: authorization });\n    return reply.redirect(authorization, 303);");
-console.log('Prepared Auth0 configuration and proof-bound redirect');
+console.log('Prepared Auth0 configuration and proof-bound browser redirect');
