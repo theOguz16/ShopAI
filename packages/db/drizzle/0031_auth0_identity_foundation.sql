@@ -50,15 +50,15 @@ CREATE TABLE IF NOT EXISTS user_identities (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS user_identities_user_idx ON user_identities (user_id);
 --> statement-breakpoint
--- Only encrypted verifier bytes may be persisted here; the calling service must
--- verify and atomically consume the state, bind it to the initiating browser,
--- and discard the ciphertext at consumption or expiry.
+-- Only encrypted and encoded verifier ciphertext may be persisted here; the
+-- calling service must atomically consume the state, bind it to the browser,
+-- and discard ciphertext on consumption or expiry. Never store a raw verifier.
 CREATE TABLE IF NOT EXISTS oidc_auth_transactions (
   state_hash text PRIMARY KEY,
   browser_binding_hash text NOT NULL,
   client_kind text NOT NULL CHECK (client_kind IN ('shopper', 'merchant')),
   nonce_hash text NOT NULL,
-  pkce_verifier_ciphertext bytea NOT NULL,
+  pkce_verifier_ciphertext text NOT NULL,
   return_to text NOT NULL,
   expires_at timestamptz NOT NULL,
   consumed_at timestamptz,
