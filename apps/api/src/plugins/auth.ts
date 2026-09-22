@@ -14,8 +14,6 @@ import {
 } from '@shopai/db';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type Auth0ClientKind, parseAuth0Config } from '../auth0-oidc.js';
-import { registerAuth0Routes } from '../auth0-routes.js';
 import type { ApiEnv } from '../env.js';
 
 export type Role = 'owner' | 'editor' | 'viewer';
@@ -25,7 +23,7 @@ export type AuthContext = {
   authLevel?: 'pilot' | 'password' | 'mfa';
   authenticatedAt?: Date | null;
   sessionId?: string;
-  clientKind?: 'pilot' | Auth0ClientKind;
+  clientKind?: 'pilot' | 'shopper' | 'merchant';
 };
 export type AuthenticatedMerchant = {
   id: string;
@@ -63,15 +61,14 @@ const safeEqual = (a: string, b: string) =>
 export interface AuthApi {
   db: Database | undefined;
   allowedOrigins: ReadonlySet<string>;
-  oidcEnabled: boolean;
   pilotEnabled: boolean;
   login(email: string, token: string, reply: FastifyReply): Promise<unknown>;
   authenticate(request: FastifyRequest): Promise<AuthContext | null>;
   logout(request: FastifyRequest, reply: FastifyReply): Promise<{ ok: true }>;
   logoutAll(request: FastifyRequest, reply: FastifyReply): Promise<unknown>;
-  issueOidcSession(
+  issueIdentitySession(
     userId: string,
-    kind: Auth0ClientKind,
+    kind: 'shopper' | 'merchant',
     level: 'password' | 'mfa',
     authenticatedAt: Date | null,
     reply: FastifyReply,
@@ -89,24 +86,8 @@ export function registerAuth(
   app: FastifyInstance,
   db: Database | undefined,
   env: ApiEnv,
-  oidcEnabled = false,
-  pilotEnabled = true,
 ) {
-  const auth0Config = parseAuth0Config(process.env);
-  oidcEnabled = Boolean(auth0Config);
-  pilotEnabled = env.AUTH_PILOT_LOGIN_ENABLED !== 'false';
-  if (
-    auth0Config &&
-    (!db ||
-      !env.MCP_ALLOWED_ORIGINS.includes(auth0Config.webOrigin) ||
-      Object.values(auth0Config.clients).some(
-        (client) =>
-          new URL(client.redirectUri).origin !== env.MCP_PUBLIC_ORIGIN,
-      ))
-  )
-    throw new Error(
-      'Auth0 origins or PostgreSQL are not configured for this API',
-    );
+  const pilotEnabled = env.AUTH_PILOT_LOGIN_ENABLED !== 'false';
   app.decorateRequest('auth', null);
   const requireDb = () => {
     if (!db)
@@ -129,7 +110,6 @@ export function registerAuth(
   const authApi: AuthApi = {
     db,
     allowedOrigins: new Set(env.MCP_ALLOWED_ORIGINS),
-    oidcEnabled,
     pilotEnabled,
     verifyPilotCredential(email: string, token: string) {
       const configured = env.AUTH_PILOT_CREDENTIALS[email.trim().toLowerCase()];
@@ -145,7 +125,7 @@ export function registerAuth(
       const normalized = email.trim().toLowerCase();
       if (!authApi.verifyPilotCredential(normalized, token))
         return reply.code(401).send({ code: 'INVALID_CREDENTIALS' });
-      // Do not reactivate, overwrite or create a pilot login for an OIDC-linked user.
+      // Do not reactivate, overwrite or create a pilot login for a linked user.
       const existing = await database.execute(
         sql`SELECT id, account_status FROM users WHERE email = ${normalized}`,
       );
@@ -212,7 +192,7 @@ export function registerAuth(
         clientKind: row.client_kind as AuthContext['clientKind'],
       };
     },
-    async issueOidcSession(userId, kind, level, authenticatedAt, reply) {
+    async issueIdentitySession(userId, kind, level, authenticatedAt, reply) {
       const database = requireDb();
       const raw = randomBytes(32).toString('base64url');
       const expiry = new Date(Date.now() + 12 * 3600000);
@@ -291,7 +271,7 @@ export function registerAuth(
   app.addHook('preHandler', async (request, reply) => {
     request.auth = await app.authApi.authenticate(request);
     // A verified Origin + an unforgeable session-bound CSRF header are both
-    // required for OIDC cookie mutations. Existing pilot sessions remain on
+    // required for identity cookie mutations. Existing pilot sessions remain on
     // their old contract until an explicit operator-controlled cutover.
     if (
       !request.auth ||
@@ -303,6 +283,7 @@ export function registerAuth(
     // callable with or without an ambient browser cookie.
     const path = request.url.split('?')[0];
     if (
+      path?.startsWith('/v1/auth/better/') ||
       path === '/mcp' ||
       path === '/v1/search' ||
       path === '/discovery-session' ||
@@ -321,7 +302,6 @@ export function registerAuth(
     )
       return void reply.code(403).send({ code: 'CSRF_REJECTED' });
   });
-  registerAuth0Routes(app, db, env, auth0Config);
 }
 
 declare module 'fastify' {

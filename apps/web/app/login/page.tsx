@@ -15,7 +15,7 @@ const safeReturn = () => {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [auth0, setAuth0] = useState(false);
+  const [betterAuth, setBetterAuth] = useState(false);
   const [pilotEnabled, setPilotEnabled] = useState(true);
   const [email, setEmail] = useState('');
   const [token, setToken] = useState('');
@@ -23,8 +23,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [sessionMessage, setSessionMessage] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [backupCode, setBackupCode] = useState('');
+  const [pilotProof, setPilotProof] = useState('');
+  const [totpUri, setTotpUri] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
+    setResetToken(query.get('token') ?? '');
     if (query.get('reason') === 'session_expired')
       setSessionMessage(
         'Oturumunuzun süresi doldu veya erişiminiz iptal edildi. Lütfen yeniden giriş yapın.',
@@ -33,27 +43,19 @@ export default function LoginPage() {
       .then(async (response) =>
         response.ok
           ? (response.json() as Promise<{
-              auth0Enabled: boolean;
+              betterAuthEnabled: boolean;
               pilotEnabled: boolean;
             }>)
           : null,
       )
       .then((data) => {
         if (data) {
-          setAuth0(data.auth0Enabled);
+          setBetterAuth(data.betterAuthEnabled);
           setPilotEnabled(data.pilotEnabled);
         }
       })
       .catch(() => undefined);
   }, []);
-  const startAuth0 = (signup: boolean) => {
-    const params = new URLSearchParams({
-      client: 'merchant',
-      returnTo: safeReturn(),
-    });
-    if (signup) params.set('signup', 'true');
-    window.location.assign(`${api}/v1/auth/oidc/start?${params}`);
-  };
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -73,54 +75,163 @@ export default function LoginPage() {
       setError('Giriş servisine ulaşılamıyor.');
     }
   }
-  async function claim(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
-    try {
-      const response = await fetch(`${api}/v1/auth/oidc/claim`, {
-        method: 'POST',
-        credentials: 'include',
-        redirect: 'follow',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          client: 'merchant',
-          returnTo: safeReturn(),
-          pilotEmail: email,
-          pilotToken: token,
-        }),
-      });
-      // A cross-origin fetch redirect to Auth0 cannot navigate the top-level
-      // browser safely. The claim endpoint returns an authorization URL below.
-      if (!response.ok) {
-        setError('Pilot hesap doğrulanamadı.');
-        return;
-      }
-      const data = (await response.json()) as { authorizationUrl?: string };
-      if (!data.authorizationUrl) {
-        setError('Auth0 yönlendirmesi başlatılamadı.');
-        return;
-      }
-      window.location.assign(data.authorizationUrl);
-    } catch {
-      setError('Pilot hesap bağlama başlatılamadı.');
-    }
+  async function betterRequest(path: string, body: unknown) {
+    return fetch(`${api}/v1/auth/better/${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
   }
-  async function recover(event: FormEvent<HTMLFormElement>) {
+  async function createAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     try {
-      const response = await fetch(`${api}/v1/auth/recover`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ client: 'merchant', email: recoveryEmail }),
+      const response = await betterRequest('sign-up/email', {
+        name: accountName,
+        email,
+        password,
       });
       if (!response.ok) {
-        setError('Kurtarma isteği işlenemedi.');
+        setError(
+          'Hesap oluşturulamadı. Bilgileri kontrol edip yeniden deneyin.',
+        );
         return;
       }
       setMessage(
-        'Hesap için kurtarma mümkünse e-posta adresine yönergeler gönderildi.',
+        'Hesap uygunsa doğrulama bağlantısı e-posta adresinize gönderildi. Bağlantıyı açtıktan sonra giriş yapın.',
+      );
+    } catch {
+      setError('Kimlik servisine ulaşılamıyor.');
+    }
+  }
+  async function beginBetterLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      const response = await betterRequest('sign-in/email', {
+        email,
+        password,
+      });
+      if (!response.ok) {
+        setError('Giriş yapılamadı. E-postanızı doğruladığınızdan emin olun.');
+        return;
+      }
+      const data = (await response.json()) as { twoFactorRedirect?: boolean };
+      if (data.twoFactorRedirect) {
+        setMessage('Doğrulayıcı uygulamanızdaki 6 haneli kodu aşağıya girin.');
+        return;
+      }
+      const enrollment = await betterRequest('two-factor/enable', {
+        method: 'totp',
+        password,
+      });
+      if (!enrollment.ok) {
+        setError('İki aşamalı doğrulama kurulumu başlatılamadı.');
+        return;
+      }
+      const enrolled = (await enrollment.json()) as {
+        totpURI?: string;
+        backupCodes?: string[];
+      };
+      if (!enrolled.totpURI) {
+        setError('Doğrulayıcı kurulum bilgisi alınamadı.');
+        return;
+      }
+      setTotpUri(enrolled.totpURI);
+      setBackupCodes(enrolled.backupCodes ?? []);
+      setMessage(
+        'Doğrulayıcı uygulamanıza kurulum adresini ekleyin, yedek kodları güvenli bir yere kaydedin ve kurulum kodunu onaylayın.',
+      );
+    } catch {
+      setError('Kimlik servisine ulaşılamıyor.');
+    }
+  }
+  async function confirmTotp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      const response = await betterRequest('two-factor/verify-totp', {
+        code: totpCode,
+        trustDevice: false,
+      });
+      if (!response.ok) {
+        setError('Doğrulayıcı kodu geçersiz.');
+        return;
+      }
+      setTotpUri('');
+      setMessage(
+        'İki aşamalı doğrulama kuruldu. Güncel kodunuzla güvenli girişi tamamlayın.',
+      );
+    } catch {
+      setError('Kimlik servisine ulaşılamıyor.');
+    }
+  }
+  async function completeBetterLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      const response = await fetch(`${api}/v1/auth/better/complete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          ...(backupCode ? { backupCode } : { totp: totpCode }),
+          client: 'merchant',
+          ...(pilotProof ? { pilotToken: pilotProof } : {}),
+        }),
+      });
+      if (response.status === 409) {
+        setError(
+          'Bu e-posta mevcut pilot hesabına ait. Eski kullanıcı ve mağaza kayıtlarınızı korumak için pilot kodunuzu girip yeni TOTP koduyla yeniden deneyin.',
+        );
+        return;
+      }
+      if (!response.ok) {
+        setError('Parola, doğrulanmış e-posta veya iki aşamalı kod geçersiz.');
+        return;
+      }
+      await betterRequest('sign-out', {});
+      router.replace(safeReturn());
+    } catch {
+      setError('Kimlik servisine ulaşılamıyor.');
+    }
+  }
+  async function recoverBetter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      await betterRequest('request-password-reset', {
+        email: recoveryEmail,
+        redirectTo: `${window.location.origin}/login`,
+      });
+      setMessage(
+        'Hesap uygunsa sıfırlama yönergeleri e-posta adresine gönderildi.',
+      );
+    } catch {
+      setError('Kurtarma servisine ulaşılamıyor.');
+    }
+  }
+  async function resetBetter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      const response = await betterRequest('reset-password', {
+        token: resetToken,
+        newPassword,
+      });
+      if (!response.ok) {
+        setError(
+          'Bağlantı geçersiz veya süresi dolmuş. Yeni bir kurtarma bağlantısı isteyin.',
+        );
+        return;
+      }
+      setResetToken('');
+      window.history.replaceState(null, '', '/login');
+      setMessage(
+        'Parolanız yenilendi. Giriş yaptıktan sonra iki aşamalı kodunuz gerekecek.',
       );
     } catch {
       setError('Kurtarma servisine ulaşılamıyor.');
@@ -130,17 +241,161 @@ export default function LoginPage() {
     <main>
       <h1>Mağaza paneline giriş</h1>
       {sessionMessage ? <p role="status">{sessionMessage}</p> : null}
-      {auth0 ? (
-        <section aria-label="Güvenli kullanıcı hesabı">
-          <p>
-            Doğrulanmış e-posta ile güvenli giriş yapın veya hesap oluşturun.
-          </p>
-          <button type="button" onClick={() => startAuth0(false)}>
-            Auth0 ile giriş yap
-          </button>
-          <button type="button" onClick={() => startAuth0(true)}>
-            Yeni hesap oluştur
-          </button>
+      {betterAuth ? (
+        <section aria-label="Better Auth hesabı">
+          <h2>Güvenli hesap</h2>
+          <p>E-posta doğrulaması ve doğrulayıcı uygulama zorunludur.</p>
+          {resetToken ? (
+            <form onSubmit={resetBetter}>
+              <label>
+                Yeni parola
+                <input
+                  required
+                  type="password"
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </label>
+              <button type="submit">Parolayı yenile</button>
+            </form>
+          ) : (
+            <>
+              <form onSubmit={createAccount}>
+                <h3>Hesap oluştur</h3>
+                <label>
+                  Adınız
+                  <input
+                    required
+                    value={accountName}
+                    onChange={(event) => setAccountName(event.target.value)}
+                  />
+                </label>
+                <label>
+                  E-posta
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Parola
+                  <input
+                    required
+                    type="password"
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+                <button type="submit">
+                  Kayıt ol ve doğrulama e-postası gönder
+                </button>
+              </form>
+              <form onSubmit={beginBetterLogin}>
+                <h3>Giriş ve doğrulayıcı kurulumu</h3>
+                <label>
+                  E-posta
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Parola
+                  <input
+                    required
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+                <button type="submit">E-posta ve parolayla devam et</button>
+              </form>
+              {totpUri ? (
+                <div>
+                  <p>
+                    Kurulum adresi gizlidir; üçüncü taraf QR servisine
+                    göndermeyin.
+                  </p>
+                  <code>{totpUri}</code>
+                  <form onSubmit={confirmTotp}>
+                    <label>
+                      Kurulum kodu
+                      <input
+                        required
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
+                        value={totpCode}
+                        onChange={(event) => setTotpCode(event.target.value)}
+                      />
+                    </label>
+                    <button type="submit">Doğrulayıcıyı etkinleştir</button>
+                  </form>
+                </div>
+              ) : null}
+              {backupCodes.length ? (
+                <p>
+                  Yedek kodları şimdi güvenli bir yere kaydedin:{' '}
+                  {backupCodes.join(' · ')}
+                </p>
+              ) : null}
+              <form onSubmit={completeBetterLogin}>
+                <h3>İki aşamalı girişi tamamla</h3>
+                <label>
+                  Güncel 6 haneli kod
+                  <input
+                    required={!backupCode}
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    value={totpCode}
+                    onChange={(event) => setTotpCode(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Doğrulayıcıya erişemiyorsanız tek kullanımlık yedek kod
+                  <input
+                    type="password"
+                    autoComplete="one-time-code"
+                    value={backupCode}
+                    onChange={(event) => setBackupCode(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Mevcut pilot kodu (yalnız eski hesabı bağlarken)
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={pilotProof}
+                    onChange={(event) => setPilotProof(event.target.value)}
+                  />
+                </label>
+                <button type="submit">Güvenli giriş</button>
+              </form>
+              <form onSubmit={recoverBetter}>
+                <h3>Parolamı unuttum</h3>
+                <label>
+                  E-posta
+                  <input
+                    required
+                    type="email"
+                    value={recoveryEmail}
+                    onChange={(event) => setRecoveryEmail(event.target.value)}
+                  />
+                </label>
+                <button type="submit">Sıfırlama bağlantısı iste</button>
+              </form>
+            </>
+          )}
         </section>
       ) : null}
       {pilotEnabled ? (
@@ -173,53 +428,6 @@ export default function LoginPage() {
               />
             </label>
             <button type="submit">Pilot girişi</button>
-            {auth0 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const form = document.createElement('form');
-                  // Keep the pilot proof in the existing form state and use the API's
-                  // explicit linking route rather than matching accounts by email.
-                  void form;
-                  setMessage(
-                    'Mevcut pilot hesabınızı bağlamak için aşağıdaki hesabı bağla düğmesini kullanın.',
-                  );
-                }}
-              >
-                Hesabı bağlama hakkında
-              </button>
-            ) : null}
-          </form>
-          {auth0 ? (
-            <form onSubmit={claim}>
-              <p>
-                Pilot kodunuzla hesabın size ait olduğunu kanıtladıktan sonra
-                Auth0 girişini tamamlayın. Kayıtlarınız ve mağaza üyeliğiniz
-                korunur.
-              </p>
-              <button type="submit">
-                Mevcut pilot hesabımı Auth0 ile bağla
-              </button>
-            </form>
-          ) : null}
-        </section>
-      ) : null}
-      {auth0 ? (
-        <section aria-label="Erişim kurtarma">
-          <h2>Erişim kurtarma</h2>
-          <form onSubmit={recover}>
-            <label>
-              E-posta
-              <input
-                required
-                type="email"
-                maxLength={254}
-                autoComplete="email"
-                value={recoveryEmail}
-                onChange={(event) => setRecoveryEmail(event.target.value)}
-              />
-            </label>
-            <button type="submit">Kurtarma e-postası iste</button>
           </form>
         </section>
       ) : null}

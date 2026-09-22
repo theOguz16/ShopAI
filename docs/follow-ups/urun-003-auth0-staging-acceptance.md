@@ -1,5 +1,7 @@
 # ÜRÜN-003 — Auth0 kurulum, güvenli geçiş ve gerçek kabul kapısı
 
+> **TARİHSEL / İPTAL:** Ürün sahibi Auth0 yerine Better Auth kararını verdi ve PR #59'daki Auth0 giriş kodu kaldırıldı. Aşağıdaki Auth0 tenant adımları ve CI anlatımı yürürlükteki kodu veya kabul listesini tarif etmez; [güncel Better Auth geçiş kaydına](urun-003-better-auth-migration.md) bakın. Bu belge yalnız önceki planın izlenebilirliği için tutulur.
+
 **Durum:** Kod ve CI kanıtı ile gerçek Auth0 / HTTPS staging kabulü farklıdır. Bu belge gerçek tenant veya gerçek kullanıcı testi yapıldığı iddiası değildir. `main` merge için ayrıca ürün sahibinin açık onayı gerekir.
 
 ## 1. Dış yapılandırma (secret'ları GitHub'a veya loglara yazma)

@@ -1,6 +1,12 @@
 # Kimlik ve oturum kararı — ÜRÜN-003
 
-> **Durum: ÜRÜN-003 kod düzeyinde aşamalı olarak uygulandı, gerçek Auth0/HTTPS staging kabulü BEKLİYOR.** 0031+0032 migration, iki-client OIDC giriş/callback, verified-email ve issuer+subject kimliği, kanıtlı pilot claim, şifreli tek kullanımlık PKCE/nonce, opaque session/CSRF, logout-all, owner MFA/step-up ve hesap kapatma kodları branch üzerindedir. Test sağlayıcısı gerçek imzalı Auth0 tokenı değil doğrulanmış sağlayıcı çıktısını taklit eder. Gerçek recovery e-postası, MFA cihazı, HTTPS tarayıcı ve anonimleştirilmiş gerçek veride migrasyon kabulü yapılmadı. Pilot giriş kontrollü geçiş için açık, ÜRÜN-003 KISMİ / AÇIK.
+> **GÜNCEL KARAR (23 Eylül 2026): Auth0 yerine self-hosted Better Auth.** Aşağıdaki Auth0 tasarımı tarihsel ve iptaldir; PR #59'daki Auth0 çalıştırılabilir kodu, UI ve dağıtım değişkenleri kaldırılmıştır. Eski migration'lar veri geçmişi için korunur. Better Auth 1.7.5 e-posta, PostgreSQL ve TOTP akışı feature flag arkasında kodlandı; izole yerel DB testleri geçti. Varsayılan bayrak kapalı, üretimde etkin değil, HTTPS staging ve gerçek e-posta teslim kabulü yapılmadı. Pilot oturumları korunur; gerçek müşteri kabulü ilan etmeyin.
+
+Yeni hedef: Better Auth 1.7.5 ile e-posta/parola, doğrulanmış e-posta, şifre sıfırlama ve TOTP; `shopai_auth` şemasında ayrı credential/verification/2FA verisi. ShopAI `users.id` UUID, mağaza üyelikleri, tenant RLS ve mevcut hashli pilot oturumları korunur. Better Auth `user.id` ile ShopAI `users.id` yalnız açık kimlik eşlemesi üzerinden bağlanır. E-posta eşleşmesi tek başına bağlama kanıtı değildir; mevcut pilot için pilot kodu + doğrulanmış e-posta + atomik işlem zorunludur. Owner oturumu ancak parola + gerçek TOTP challenge sonrası üretilir; `twoFactorEnabled` bayrağı tek başına yeterli değildir. Kullanıcı Resend üzerinden alıcı adresi ve tek kullanımlık bağlantı aktarımını onayladı; gerçek teslim, sender domain ve secret kurulumu hâlâ sınanmadı.
+
+Uygulama ve kabul adımları [Better Auth geçiş kaydında](follow-ups/urun-003-better-auth-migration.md). Aşağıdaki Auth0 bölümü yalnız tarihsel bağlamdır; “sabitlenen hedef” ifadeleri artık yürürlükte değildir.
+
+> **Tarihsel not (iptal):** Eski PR #59 tasarımında Auth0 OIDC yolu vardı; çalıştırılabilir kodu kaldırıldı. Bu bölümdeki “uygulanan” ve “hedef” ifadeleri artık geçerli durum raporu değildir. Geçerli ÜRÜN-003 durumu yukarıdaki karar ve [Better Auth geçiş kaydı](follow-ups/urun-003-better-auth-migration.md) içindedir.
 
 ## Geçerli pilotun davranışı (tarihsel, henüz kaldırılmadı)
 
@@ -10,7 +16,7 @@ Login gövdesi strict şemayla doğrulanır: e-posta en çok 254, pilot kodu 16�
 
 Pilot ilk mağaza kurulumunda kullanıcı `/v1/setup/merchant` ile tek mağaza oluşturabilir. `owner` üyelik/bağlantı; `editor` katalog/bağlantı; `viewer` okuma yetkisini korur. Rol her yönetim isteğinde backend üyeliğinden yüklenir; istemcinin merchant ID/rolü tek başına yetki vermez.
 
-## Sabitlenen hedef mimari
+## İptal edilen Auth0 hedef mimarisi (arşiv)
 
 - Tek kimlik sağlayıcısı **Auth0**, aynı tenant'ta iki ayrı OIDC client: `shopper` ve `merchant`. Auth0 Universal Login kayıt, parola doğrulama/kurtarma, e-posta doğrulama ve MFA'yı sağlar. ShopAI parola tutmaz veya yeni parola sıfırlama sistemi geliştirmez.
 - Backend confidential web client, Authorization Code + PKCE **S256**, `state`, `nonce`, kısa ömürlü ve tek kullanımlık giriş işlemi. Kütüphane: bakım alan [`openid-client` v6](https://github.com/panva/openid-client); sürüm ve lockfile gerçek uygulama PR'ında sabitlenecek. Callback `openid-client` ile imza/issuer/audience/expiry/state/nonce doğrular; `email_verified !== true` olduğunda session çıkarmaz. HTTP redirect URI, state ve browser-binding birebir karşılaştırılır. Web/client tarafına IdP access veya refresh token verilmez.
@@ -38,7 +44,7 @@ Development, staging ve production için ayrı uygulama kimlikleri/secrets, tam 
 | Gizli veri ifşası/IdP kesintisi | Redacted audit ve operasyon alarmı; Auth0 sorununda pilot'a otomatik geri dönüş yok. |
 | Hesap kapatma/son owner | Önce owner transferi/mağaza kapama, yeni login engeli, bütün oturumların iptali, ayrı kişisel veri ve ticari retention kuralları. |
 
-## Uygulanan kod ve güvenli geçiş kapıları
+## İptal edilen Auth0 kodu ve geçiş kapıları (arşiv)
 
 1. Veri temeli: 0031 ve 0032 additive migration; mevcut kullanıcı UUIDleri, üyelikler ve pilot oturumları silinmez. Kimlik anahtarı doğrulanmış issuer + subject. E-posta eşleşmesi tek başına hesap birleştirmez.
 2. OIDC: openid-client 6.8.4 Authorization Code + PKCE S256, state ve nonce doğrulamasına yönelik sunucu kodu; encrypted browser-bound, 5 dakika geçerli ve atomik tek kullanımlık callback. Sağlayıcı tokenları tarayıcıya aktarılmaz. Gerçek Auth0 imza/JWKS doğrulaması staging ortamında ayrıca sınanmalıdır.
