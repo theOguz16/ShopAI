@@ -1,6 +1,7 @@
 # TASK-024 — Web/ChatGPT account linking ve MCP principal sürekliliği
 
 > Kimlik çakışması notu: Görsel kabul artık TASK-025'tir. Bu görev yalnız account-linking ve principal sürekliliğini kapsar.
+> Yeni ürün planında bu teknik takip işi **ÜRÜN-016 — Web ve ChatGPT kullanıcı kimliğini birleştir** kapsamının doğrudan dayanağıdır; ÜRÜN-016'nın tam ürün kabulü, ÜRÜN-003 gerçek hesap altyapısına bağlıdır. **ÜRÜN-024**, WooCommerce sipariş attribution işidir; TASK-024 ile aynı görev değildir. Kanonik ilişki: [görev eşleme tablosu](../06-implementation-status.md).
 
 Öncelik: P0 (TASK-011B pilot kapısı)
 
