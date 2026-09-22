@@ -1,5 +1,6 @@
 export * from './client.js';
 export * from './schema.js';
+export * from './auth-schema.js';
 export * from './category-model.js';
 export * from './catalog-repository.js';
 export * from './product-detail-repository.js';
