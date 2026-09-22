@@ -45,12 +45,12 @@ jobs:
         with:
           node-version-file: .node-version
       - run: pnpm install --frozen-lockfile
-      - name: Patch security and merchant CSRF requests
+      - name: Patch auth security and integration compatibility
         run: node scripts/urun003-security-fix.mjs
       - name: Format changed files
         run: |
-          pnpm exec biome check --write apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx scripts/urun003-security-fix.mjs
-          pnpm exec biome format --write apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx scripts/urun003-security-fix.mjs
+          pnpm exec biome check --write apps/api/src/auth0-routes.ts apps/api/src/plugins/auth.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-security-fix.mjs
+          pnpm exec biome format --write apps/api/src/auth0-routes.ts apps/api/src/plugins/auth.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-security-fix.mjs
       - name: Full type/unit/build checks
         run: pnpm check
       - name: Migrate PostgreSQL
@@ -59,9 +59,9 @@ jobs:
         run: pnpm test:integration
       - name: Commit validated changes to same feature branch only
         run: |
-          git add apps/api/src/auth0-routes.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx
+          git add apps/api/src/auth0-routes.ts apps/api/src/plugins/auth.ts apps/web/lib/authenticated-fetch.ts apps/web/app/dashboard/merchant-context.tsx apps/web/app/dashboard/products/page.tsx apps/web/app/dashboard/connections/page.tsx apps/web/app/dashboard/imports/page.tsx tests/integration/auth0-flows.test.ts
           git diff --cached --check
           git config user.name 'shopai-auth-branch-bot'
           git config user.email 'shopai-auth-branch-bot@users.noreply.github.com'
-          git commit -m 'fix(auth): secure return paths and enable CSRF-protected merchant workflows'
+          git commit -m 'fix(auth): secure callbacks and preserve pilot cookie behavior'
           git push origin HEAD:feat/urun-003-auth-foundation
