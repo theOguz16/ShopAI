@@ -63,4 +63,4 @@ const test = readFileSync(testPath, 'utf8');
 const importOld = "import { createDatabase } from '@shopai/db';";
 if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
 writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
-console.log('Patched PKCE and sanitized test-only callback diagnosis.');
+console.log('Patched PKCE; mock-library stages diagnose the grant without exposing credentials.');
