@@ -1,59 +1,23 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const routePath = 'apps/api/src/auth0-routes.ts';
-let route = readFileSync(routePath, 'utf8');
-const begin = route.indexOf('function safeReturnTo(value: string, origin: string): string | null {');
-const marker = '  const target = new URL(value, origin);';
-const end = route.indexOf(marker, begin);
-if (begin < 0 || end < begin || route.indexOf(marker, end + marker.length) !== -1)
-  throw new Error('Return-path validation source mismatch');
-const header = `function safeReturnTo(value: string, origin: string): string | null {\n  if (\n    !value.startsWith('/') ||\n    value.startsWith('//') ||\n    value.includes(String.fromCharCode(92)) ||\n    [...value].some((character) => character.charCodeAt(0) < 32)\n  ) return null;\n`;
-route = route.slice(0, begin) + header + route.slice(end);
-for (const [before, after] of [
-  ["encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier", 'pending.pkce_verifier_ciphertext AS encrypted_verifier'],
-  ["decode(${encrypt(verifier, config!.encryptionKey)},'base64')", '${encrypt(verifier, config!.encryptionKey)}'],
-  ["pkce_verifier_ciphertext=decode('','hex')", "pkce_verifier_ciphertext=''"],
-]) {
-  if (route.split(before).length !== 2) throw new Error(`PKCE source mismatch: ${before.slice(0, 20)}`);
-  route = route.replace(before, after);
-}
-writeFileSync(routePath, route);
-
-for (const [path, relative] of [
-  ['apps/web/app/dashboard/merchant-context.tsx', '../../lib/authenticated-fetch'],
-  ['apps/web/app/dashboard/products/page.tsx', '../../../lib/authenticated-fetch'],
-  ['apps/web/app/dashboard/connections/page.tsx', '../../../lib/authenticated-fetch'],
-  ['apps/web/app/dashboard/imports/page.tsx', '../../../lib/authenticated-fetch'],
-]) {
-  let content = readFileSync(path, 'utf8');
-  if (!content.startsWith("'use client';\n") || !content.includes('await fetch(') || content.includes('authenticatedFetch'))
-    throw new Error(`Unexpected client source ${path}`);
-  content = content.replace("'use client';\n", `'use client';\n\nimport { authenticatedFetch } from '${relative}';\n`)
-    .replaceAll('await fetch(', 'await authenticatedFetch(');
-  writeFileSync(path, content);
-}
-
-const authPath = 'apps/api/src/plugins/auth.ts';
-let auth = readFileSync(authPath, 'utf8');
-const a = auth.indexOf('  const clearCookies = (reply: FastifyReply) => {');
-const b = auth.indexOf('  const authApi: AuthApi = {', a);
-if (a < 0 || b < 0) throw new Error('Pilot cookie cleanup source mismatch');
-const clear = `  const clearCookies = (reply: FastifyReply, oidcSession: boolean) => {\n    const secure = env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production';\n    const pilotExpiry = \`\${legacyCookie}=; HttpOnly; SameSite=Lax\${secure ? '; Secure' : ''}; Max-Age=0; Path=/\`;\n    const oauthExpiry = \`\${oauthCookie(env)}=; \${cookieAttributes(env)}; Max-Age=0\`;\n    reply.header('Set-Cookie', oidcSession ? [pilotExpiry, oauthExpiry] : pilotExpiry);\n  };\n`;
-auth = auth.slice(0, a) + clear + auth.slice(b);
-const call = '      clearCookies(reply);';
-if (auth.split(call).length !== 3) throw new Error('Unexpected logout cookie call count');
-auth = auth.replaceAll(call, '      clearCookies(reply, Boolean(cookie(request, oauthCookie(env))));');
-writeFileSync(authPath, auth);
-
 const testPath = 'tests/integration/auth0-flows.test.ts';
 let test = readFileSync(testPath, 'utf8');
-const importOld = "import { createDatabase } from '@shopai/db';";
-if (test.split(importOld).length !== 2) throw new Error('OIDC test database import mismatch');
-test = test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';");
-const mockStart = test.indexOf("vi.mock('openid-client', () => ({");
-const mockEnd = test.indexOf('\n\ndescribe(', mockStart);
-if (mockStart < 0 || mockEnd < mockStart) throw new Error('OIDC mock fixture mismatch');
-const mock = `// Business integration fixture: simulate the *output* of an already verified\n// provider, not token signatures, discovery or nonce verification. Those require\n// separate cryptographic tests and an actual Auth0/HTTPS staging acceptance.\nvi.mock('../../apps/api/src/auth0-client-library.js', () => ({\n  verifyAuth0Grant: async (\n    _configuration: unknown,\n    _kind: unknown,\n    code: string,\n  ) => {\n    if (code === 'unverified') throw new Error('OIDC_EMAIL_UNVERIFIED');\n    if (code === 'wrong-audience') throw new Error('OIDC_WRONG_AUDIENCE');\n    return {\n      issuer,\n      subject: 'auth0|verified-fixture',\n      email,\n      emailVerified: true,\n      mfa: true,\n      authenticatedAt: new Date(),\n    };\n  },\n}));`;
-test = test.slice(0, mockStart) + mock + test.slice(mockEnd);
+const anchor = '    expect(stale.statusCode).toBe(401);\n  });';
+if (test.split(anchor).length !== 2) throw new Error('Expected unique positive OIDC regression anchor');
+const addition = `    expect(stale.statusCode).toBe(401);\n    const issued = callback.headers['set-cookie'];\n    const cookies = Array.isArray(issued) ? issued : [issued];\n    const oidcCookie = cookies.find((item) => item?.startsWith('shopai_oidc_session='))?.split(';')[0];\n    expect(oidcCookie).toBeTruthy();\n    const active = await app.inject({\n      method: 'GET',\n      url: '/v1/auth/session',\n      headers: { cookie: oidcCookie! },\n    });\n    expect(active.statusCode).toBe(200);\n    expect(active.json().user.userId).toBe(pilotId);\n    expect(active.json().user.authLevel).toBe('mfa');\n    const csrf = active.json().csrfToken;\n    expect(csrf).toMatch(/^[A-Za-z0-9_-]{43}$/u);\n    const missingCsrf = await app.inject({\n      method: 'POST',\n      url: '/v1/auth/logout-all',\n      headers: { cookie: oidcCookie!, origin },\n    });\n    expect(missingCsrf.statusCode).toBe(403);\n    const revoked = await app.inject({\n      method: 'POST',\n      url: '/v1/auth/logout-all',\n      headers: { cookie: oidcCookie!, origin, 'x-shopai-csrf': csrf },\n    });\n    expect(revoked.statusCode).toBe(200);\n    const noLongerActive = await app.inject({\n      method: 'GET',\n      url: '/v1/auth/session',\n      headers: { cookie: oidcCookie! },\n    });\n    expect(noLongerActive.statusCode).toBe(401);\n    const oldPilotLogin = await app.inject({\n      method: 'POST',\n      url: '/v1/auth/login',\n      headers: { origin },\n      payload: { email, token },\n    });\n    expect(oldPilotLogin.statusCode).toBe(403);\n  });`;
+test = test.replace(anchor, addition);
 writeFileSync(testPath, test);
-console.log('Prepared PKCE text storage, CSRF-aware merchant requests and an explicitly post-provider business test fixture.');
+
+const decisionPath = 'docs/07-auth-decision.md';
+let doc = readFileSync(decisionPath, 'utf8');
+const oldIntroStart = doc.indexOf('> **Durum:');
+const oldIntroEnd = doc.indexOf('\n\n## Geçerli pilotun davranışı', oldIntroStart);
+if (oldIntroStart < 0 || oldIntroEnd < 0) throw new Error('Auth decision intro mismatch');
+const intro = '> **Durum: ÜRÜN-003 kod düzeyinde aşamalı olarak uygulandı, gerçek tenant/staging kabulü BEKLİYOR.** `0031` ve `0032` migration, Auth0 iki-client Universal Login başlatma/callback, doğrulanmış e-posta ve `issuer + subject` kimliği, kanıtlı pilot claim, şifrelenmiş tek-kullanımlık PKCE/nonce, OIDC session/CSRF, logout-all, owner MFA/step-up kontrolü ve hesap kapatma akışı branch üzerinde uygulanmıştır. Testlerdeki doğrulanmış sağlayıcı çıktısı mocktur: Auth0 token imzası, gerçek recovery e-postası, MFA cihazı, HTTPS tarayıcı ve anonimleştirilmiş gerçek veride migrasyon kabulü yapılmamıştır. Pilot giriş hâlâ kontrollü geçiş amacıyla açıktır; gerçek kabul tamamlanmadan ÜRÜN-003 **KISMİ / AÇIK** kalır.';
+doc = doc.slice(0, oldIntroStart) + intro + doc.slice(oldIntroEnd);
+const phaseStart = doc.indexOf('## Geriye uyumlu veri geçişi ve kapılar');
+if (phaseStart < 0) throw new Error('Auth decision migration section missing');
+doc = doc.slice(0, phaseStart) + `## Uygulanan kod ve güvenli cutover kapıları\n\n1. **Veri temeli:** 0031+0032 migration mevcut kullanıcı UUID'sini, üyelikleri ve pilot oturumlarını silmeden ek şema oluşturur. Kimlik anahtarı yalnız doğrulanmış issuer+subject'tir; e-posta eşleşmesi otomatik link değildir.\n2. **Sunucu:** \\`openid-client\\` v6.8.4 ile code+PKCE S256, state/nonce ve doğrulanmış ID Token claim kontrolü kodda vardır. PKCE/nonce şifrelenmiş ve browser-bound transaction'a yazılır, callback tek kullanımlık atomik tüketilir. Kullanıcıya provider token verilmez. Yanlış/eksik e-posta doğrulaması reddedilir. Bu kodun gerçek Auth0'daki çalışması henüz gösterilmedi.\n3. **Hesap ve oturum:** Pilot kodu + doğrulanmış aynı e-posta + kimlik kanıtı ile transaction içinde orijinal UUID'ye bağlama; eski pilot session'ları iptal; OAuth oturumu hashlenmiş opaque cookie, idle/mutlak süre ve revocation kontrolü; CSRF+origin; yönetimde DB membership ve owner MFA. Birim/PostgreSQL entegrasyon testleri gerçek sağlayıcı yerine doğrulanmış kimlik çıktısını taklit eder.\n4. **Kapatma ve çıkış:** logout/logout-all sunucu tarafı iptal; owner hesap kapatması sahiplik devri yapılmadan reddedilir. Auth0 SSO logout ve gerçek e-posta recovery teslimi ayrıca staging üzerinde doğrulanmalıdır.\n5. **Üretime geçiş (YAPILMADI):** Gerçek Auth0 tenant, shopper/merchant application ID/secret, HTTPS callback/logout allowlist, MFA Action/faktör ve e-posta sağlayıcısı tanımlanmalı. Anonimleştirilmiş gerçek DB kopyasında migration, UUID/üyelik/kayıt mutabakatı, backup/restore ve tarayıcı negatif testleri yapılmalı. Kullanıcı erişimi doğrulanmadan \\`AUTH_PILOT_LOGIN_ENABLED=false\\` veya pilot secret silme uygulanmamalı; ayrı operatör onayı gerekir.\n\n**Gerçek ortam kabul matrisi:** [ÜRÜN-003 Auth0 staging kabulü](follow-ups/urun-003-auth0-staging-acceptance.md). ÜRÜN-016 Web/ChatGPT principal sürekliliği ve ÜRÜN-032 gerçek kullanıcı pilotu bu PR'ın kanıtı değildir.\n`;
+doc = doc.replaceAll('\\`', '`');
+writeFileSync(decisionPath, doc);
+console.log('Added positive-session, CSRF and logout-all integration assertions; refreshed staged auth decision.');
