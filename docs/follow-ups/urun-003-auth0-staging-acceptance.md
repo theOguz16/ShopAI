@@ -30,6 +30,10 @@ AUTH_PILOT_LOGIN_ENABLED=true
 
 `AUTH0_TRANSACTION_KEY` sadece sunucuda tutulmalı; kaybı veya rotasyonu sırasında başlamış OIDC işlemleri süresi dolana kadar başarısız olur. HTTPS `MCP_PUBLIC_ORIGIN` API'nin tam origin'i, `MCP_ALLOWED_ORIGINS` ise web origin'i ve `https://chatgpt.com` dahil izinli origin'ler olmalı. Web build için `NEXT_PUBLIC_API_URL=https://<API_HOST>` kullan. Mevcut `DATABASE_URL`, `REDIS_URL`, `REDIRECT_SIGNING_SECRET` ve hosted deploy şifreleme değişkenleri aynen gereklidir. Gerçek kullanıcı e-postasını test fixture'larında tutma.
 
+Compose dağıtımında yukarıdaki API runtime adları doğrudan host `.env` dosyasına yazılmaz: staging için `STAGING_`, production için `PRODUCTION_` önekiyle eşlenen adları kullan (`STAGING_AUTH0_ISSUER` → API container `AUTH0_ISSUER` gibi). `STAGING_AUTH0_ENABLED` ve `PRODUCTION_AUTH0_ENABLED` varsayılanı `false`, pilot login bayraklarının varsayılanı `true`'dur. Auth0 sırları yalnız API container'ına aktarılır; worker, web veya widget'a aktarılmaz. `AUTH0_ENABLED=true` iken eksik/uyumsuz tenant, callback veya anahtar ayarında API başlangıçta hata verir; bu korumayı aşma. `NEXT_PUBLIC_API_URL` image build argümanıdır, Compose runtime değişkeni değildir. Web uygulamasının gerçek HTTPS origin'i ve Nginx yönlendirmesi ayrıca doğrulanmadan Auth0 callback testine başlama.
+
+22 Eylül 2026 salt-okunur kontrol: `https://shop.fizyoflow.com/health/ready` release `3cf084a04e3934b72bc088c4c8babd205aa3946a` döndürdü; `/v1/auth/capabilities` 404 idi. Bu, PR #59 Auth0 kodunun o staging API'sine henüz deploy edilmediğini gösterir; Auth0 tenant'ının varlığı/yokluğu hakkında kanıt değildir. Staging dağıtımı için ayrı host/operatör erişimi, güncel image, 0031+0032 migration ve public HTTPS web origin'i gerekir. Üretim deploy'u veya pilot login cutover'ı bu gözlemle yetkilendirilmiş değildir.
+
 ## 2. MFA (mağaza sahibi)
 
 Auth0 tenant üzerinde merchant uygulamasına MFA policy uygula (TOTP veya WebAuthn) ve yeni owner'ların enrollment'ını zorunlu kıl. Auth0 Post-Login Action, başarılı MFA'nın kanıtını **imzalı ID Token** içine `amr: ['mfa']` veya `https://shopai.example/claims/mfa: true` şeklinde yalnızca gerçekten MFA gerçekleştiğinde eklemeli; Action olmadan MFA oturum yükseltmesi `mfa` kabul edilmez. `auth_time` son 5 dakika içinde değilse ayrıca step-up gerekir. Owner istekleri MFA olmadan 403 `MFA_REQUIRED`, hesap kapatma 403 `MFA_STEP_UP_REQUIRED` vermelidir. MFA kayıp cihaz, recovery ve reset işlemleri Auth0 tenant politikasıyla gerçek ortamda sınanmalıdır; yalnızca ayar sayfasının görünmesi kabul kanıtı değildir.
@@ -44,7 +48,7 @@ Pilot kimlikleri / canlı oturumları kontrolsüz silme. Tenant ve staging kabul
 
 | Kabul | Kanıt / beklenen sonuç | Durum |
 | --- | --- | --- |
-| Auth0 giriş/kayıt | Yeni doğrulanmış e-posta ile gerçek Auth0 Universal Login + shopper/merchant callback | BLOCKED: tenant yok |
+| Auth0 giriş/kayıt | Yeni doğrulanmış e-posta ile gerçek Auth0 Universal Login + shopper/merchant callback | BLOCKED: tenant erişimi/yapılandırması doğrulanmadı; PR staging'de değil |
 | Güvenlik | Yanlış issuer/audience, hatalı imza, expired token, yanlış state/nonce/PKCE, tekrar callback => reddedilir | BLOCKED: gerçek staging negatif test yok |
 | E-posta | Doğrulanmamış e-posta reddedilir, recovery maili gerçek posta kutusunda doğrulanır | BLOCKED: Auth0/mail yok |
 | Veri koruma | Pilot UUID, üyelik, kaydedilenler/alarmlar ve staging backup/restore birebir korunur | BLOCKED: anonimleştirilmiş gerçek veri yok |
