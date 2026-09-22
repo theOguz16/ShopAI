@@ -4,7 +4,7 @@ Tarih: 22 Eylül 2026
 
 PR: [#55](https://github.com/theOguz16/ShopAI/pull/55)
 
-PR head: `bd21ee466de3e383e6930dc9e81e1aeb012b0a69`
+Implementation commit: `bd21ee466de3e383e6930dc9e81e1aeb012b0a69` (the report-only follow-up commit must be read from PR head)
 
 Bu kayıt sentetik WooCommerce staging pilotunun salt okunur kanıtını, kod düzeltmelerini ve henüz doğrulanamayan kapıları ayırır. Sentetik mağaza gerçek merchant kabulü değildir.
 
@@ -36,7 +36,7 @@ ShopAI modeli her simple ürünü de tek normalize variant satırı olarak sakla
 | Test Urunu 1 dashboard detayı | **BLOCKED** | **Doğrulanmadı** | Dashboard geçerli pilot oturumu olmadan login'e yönlendiriyor. |
 | Test Urunu 78 kök neden | **PASS** | Woo source product ID 321 | Kaynak Store API `images: []`; placeholder kaynak eksikliğinin sonucu. |
 | Test Urunu 78 tek ürün görsel düzeltmesi ve incremental aktarım | **BLOCKED** | Aktif connection ID **doğrulanmadı** | Kaynak/VDS yazma yetkisi yok; hiçbir staging verisi değiştirilmedi. Kontrollü plan aşağıda. |
-| PR son commit yerel/CI doğrulaması | **BLOCKED** | `bd21ee466de3e383e6930dc9e81e1aeb012b0a69` | Push-event CI `check` ve `integration` PASS; GitGuardian PASS. Aynı SHA'nın PR-event duplicate `check` job'u PASS, duplicate `integration` job'u TASK-023A adımında halen IN_PROGRESS. Main branch protection tanımlı değil; GitHub açısından required context yok. |
+| PR son commit yerel/CI doğrulaması | **BLOCKED** | PR head `gh pr view 55 --json headRefOid` ile okunur | Implementation SHA için push-event CI `check` ve `integration` PASS; GitGuardian PASS. Aynı SHA'nın PR-event duplicate `check` job'u PASS, duplicate `integration` job'u TASK-023A adımında halen IN_PROGRESS. Main branch protection tanımlı değil; GitHub açısından required context yok. Rapor follow-up commit'inin CI sonucu ayrıca beklenmelidir. |
 | PR commit hosted staging deploy + smoke | **FAIL** | Hosted SHA `a8594cfcb739932a2fcaec94fad27b545d3724c1` | Hosted readiness hâlâ eski SHA'yı döndürüyor. PR SHA deploy edilmedi; eski smoke yeni davranışların kanıtı değildir. Repoda branch preview/izole staging deploy workflow'u yok. |
 | TASK-018 gerçek merchant şartı | **BLOCKED** | uygulanmaz | Bu sentetik pilottur; bağımsız ve izinli gerçek WooCommerce merchant kabulü yoktur. |
 
