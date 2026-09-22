@@ -18,6 +18,18 @@ for (const [before, after] of replacements) {
   if (fixedRoute.split(before).length !== 2) throw new Error(`PKCE source mismatch: ${before.slice(0, 20)}`);
   fixedRoute = fixedRoute.replace(before, after);
 }
+const phases = [
+  ["      try {\n        const verifier = decrypt(", "      let phase = 'decrypt_verifier';\n      try {\n        const verifier = decrypt("],
+  ["        const nonce = decrypt(\n", "        phase = 'decrypt_nonce';\n        const nonce = decrypt(\n"],
+  ["        const identity = await verifyAuth0Grant(\n", "        phase = 'verify_grant';\n        const identity = await verifyAuth0Grant(\n"],
+  ["        const userId = await resolveAccount(\n", "        phase = 'resolve_account';\n        const userId = await resolveAccount(\n"],
+  ["        await app.authApi.issueOidcSession(\n", "        phase = 'issue_session';\n        await app.authApi.issueOidcSession(\n"],
+  ["      } catch {\n        return authError(reply);\n      }", "      } catch (error) {\n        if (env.DEPLOY_ENV === 'test') {\n          const reason = error instanceof Error && /^[A-Z_]{3,80}$/u.test(error.message) ? error.message : 'OTHER';\n          const pg = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : '';\n          console.warn('OIDC_TEST_FAILURE', phase, reason, pg);\n        }\n        return authError(reply);\n      }"],
+];
+for (const [before, after] of phases) {
+  if (fixedRoute.split(before).length !== 2) throw new Error(`Callback diagnostic anchor mismatch: ${before.slice(0, 22)}`);
+  fixedRoute = fixedRoute.replace(before, after);
+}
 writeFileSync(routePath, fixedRoute);
 
 for (const [path, relative] of [
@@ -51,4 +63,4 @@ const test = readFileSync(testPath, 'utf8');
 const importOld = "import { createDatabase } from '@shopai/db';";
 if (test.split(importOld).length !== 2) throw new Error('OIDC test import mismatch');
 writeFileSync(testPath, test.replace(importOld, "import { createDatabase } from '../../packages/db/src/client.js';"));
-console.log('Patched PKCE ciphertext storage/consume, redirect, merchant CSRF requests, pilot logout and test import.');
+console.log('Patched PKCE and sanitized test-only callback diagnosis.');
