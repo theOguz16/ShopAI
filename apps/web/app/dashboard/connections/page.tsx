@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { authenticatedFetch } from '../../../lib/authenticated-fetch';
 import { useActiveMerchant } from '../merchant-context';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
@@ -65,7 +66,7 @@ export default function ConnectionsPage() {
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       if (!merchantId) return;
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/connections`,
         { credentials: 'include', signal },
       );
@@ -159,7 +160,7 @@ export default function ConnectionsPage() {
     setTestState('testing');
     setMessage('');
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/onboarding/${provider}/test`,
         {
           method: 'POST',
@@ -191,7 +192,7 @@ export default function ConnectionsPage() {
       `${providerLabels[provider]} bağlantısı oluşturuluyor ve ilk sync başlatılıyor…`,
     );
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/onboarding/${provider}/connect`,
         {
           method: 'POST',
@@ -235,7 +236,7 @@ export default function ConnectionsPage() {
     if (!canRevoke || busy) return;
     setBusy(true);
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/connections/${connectionId}`,
         { method: 'DELETE', credentials: 'include' },
       );

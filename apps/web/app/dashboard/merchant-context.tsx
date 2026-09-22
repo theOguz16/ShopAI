@@ -10,6 +10,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { authenticatedFetch } from '../../lib/authenticated-fetch';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -48,7 +49,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${api}/v1/merchants`, {
+      const response = await authenticatedFetch(`${api}/v1/merchants`, {
         credentials: 'include',
       });
       if (!response.ok) throw new Error('Mağaza listesi alınamadı.');
@@ -79,7 +80,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     if (!name.trim() || creating) return;
     setCreating(true);
     setError('');
-    const response = await fetch(`${api}/v1/setup/merchant`, {
+    const response = await authenticatedFetch(`${api}/v1/setup/merchant`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },

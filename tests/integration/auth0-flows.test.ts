@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { createDatabase } from '@shopai/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
+import { createDatabase } from '../../packages/db/src/client.js';
 import { userIdentities, users } from '../../packages/db/src/index.js';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -32,30 +32,26 @@ const stubVariables = {
 
 // This mock checks ShopAI's business and session handling, not the underlying
 // openid-client signature checks. A real Auth0/HTTPS test remains mandatory.
-vi.mock('openid-client', () => ({
-  ClientSecretPost: () => () => undefined,
-  discovery: async () => ({
-    serverMetadata: () => ({
-      issuer: 'https://auth.auth0-test.example/',
-      authorization_endpoint: 'https://auth.auth0-test.example/authorize',
-      token_endpoint: 'https://auth.auth0-test.example/oauth/token',
-      jwks_uri: 'https://auth.auth0-test.example/.well-known/jwks.json',
-    }),
-  }),
-  authorizationCodeGrant: async (_config: unknown, url: URL) => ({
-    claims: () => ({
-      iss: 'https://auth.auth0-test.example/',
-      aud:
-        url.searchParams.get('code') === 'wrong-audience'
-          ? 'other-client'
-          : 'test-merchant-client',
-      sub: 'auth0|verified-fixture',
+// Business integration fixture: simulate the *output* of an already verified
+// provider, not token signatures, discovery or nonce verification. Those require
+// separate cryptographic tests and an actual Auth0/HTTPS staging acceptance.
+vi.mock('../../apps/api/src/auth0-client-library.js', () => ({
+  verifyAuth0Grant: async (
+    _configuration: unknown,
+    _kind: unknown,
+    code: string,
+  ) => {
+    if (code === 'unverified') throw new Error('OIDC_EMAIL_UNVERIFIED');
+    if (code === 'wrong-audience') throw new Error('OIDC_WRONG_AUDIENCE');
+    return {
+      issuer,
+      subject: 'auth0|verified-fixture',
       email,
-      email_verified: url.searchParams.get('code') !== 'unverified',
-      auth_time: Math.floor(Date.now() / 1000),
-      amr: ['pwd', 'mfa'],
-    }),
-  }),
+      emailVerified: true,
+      mfa: true,
+      authenticatedAt: new Date(),
+    };
+  },
 }));
 
 describe('Ürün-003 OIDC account and session integration (mock provider)', () => {

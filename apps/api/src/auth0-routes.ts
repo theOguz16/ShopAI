@@ -65,8 +65,13 @@ const expireBinding = (reply: FastifyReply, env: ApiEnv) =>
     `${bindingName(env)}=; ${attributes(env)}; Max-Age=0`,
   );
 function safeReturnTo(value: string, origin: string): string | null {
-  value.includes('\\') ||
-    [...value].some((character) => character.charCodeAt(0) < 32);
+  if (
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes(String.fromCharCode(92)) ||
+    [...value].some((character) => character.charCodeAt(0) < 32)
+  )
+    return null;
   const target = new URL(value, origin);
   if (
     target.origin !== origin ||
@@ -135,7 +140,7 @@ export function registerAuth0Routes(
     await database.execute(sql`
       INSERT INTO oidc_auth_transactions
       (state_hash,browser_binding_hash,client_kind,nonce_hash,nonce_ciphertext,pkce_verifier_ciphertext,return_to,expires_at,claim_user_id,stepup_user_id,flow_kind)
-      VALUES (${sha256(state)},${sha256(binding)},${input.client},${sha256(nonce)},decode(${encrypt(nonce, config!.encryptionKey)},'base64'),decode(${encrypt(verifier, config!.encryptionKey)},'base64'),
+      VALUES (${sha256(state)},${sha256(binding)},${input.client},${sha256(nonce)},decode(${encrypt(nonce, config!.encryptionKey)},'base64'),${encrypt(verifier, config!.encryptionKey)},
         ${returnTo},${new Date(Date.now() + 5 * 60000)},${claimUserId}::uuid,${flowKind === 'stepup' ? request.auth?.userId : null}::uuid,${flowKind})
     `);
     reply.header('Cache-Control', 'no-store');
@@ -332,10 +337,10 @@ export function registerAuth0Routes(
         FOR UPDATE
       )
       UPDATE oidc_auth_transactions AS t
-      SET consumed_at=now(), nonce_ciphertext=decode('','hex'), pkce_verifier_ciphertext=decode('','hex')
+      SET consumed_at=now(), nonce_ciphertext=decode('','hex'), pkce_verifier_ciphertext=''
       FROM pending WHERE t.state_hash=pending.state_hash
       RETURNING t.nonce_hash, encode(pending.nonce_ciphertext,'base64') AS encrypted_nonce,
-        encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier,
+        pending.pkce_verifier_ciphertext AS encrypted_verifier,
         t.return_to, t.claim_user_id, t.stepup_user_id, t.flow_kind
     `);
       const record = recordResult.rows[0];

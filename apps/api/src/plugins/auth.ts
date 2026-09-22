@@ -116,11 +116,15 @@ export function registerAuth(
       );
     return db;
   };
-  const clearCookies = (reply: FastifyReply) => {
-    reply.header('Set-Cookie', [
-      `${legacyCookie}=; ${cookieAttributes(env)}; Max-Age=0`,
-      `${oauthCookie(env)}=; ${cookieAttributes(env)}; Max-Age=0`,
-    ]);
+  const clearCookies = (reply: FastifyReply, oidcSession: boolean) => {
+    const secure =
+      env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production';
+    const pilotExpiry = `${legacyCookie}=; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=0; Path=/`;
+    const oauthExpiry = `${oauthCookie(env)}=; ${cookieAttributes(env)}; Max-Age=0`;
+    reply.header(
+      'Set-Cookie',
+      oidcSession ? [pilotExpiry, oauthExpiry] : pilotExpiry,
+    );
   };
   const authApi: AuthApi = {
     db,
@@ -237,7 +241,7 @@ export function registerAuth(
         await db.execute(
           sql`UPDATE sessions SET revoked_at = now() WHERE token_hash = ${hash(raw)} AND revoked_at IS NULL`,
         );
-      clearCookies(reply);
+      clearCookies(reply, Boolean(cookie(request, oauthCookie(env))));
       return { ok: true };
     },
     async logoutAll(request, reply) {
@@ -246,7 +250,7 @@ export function registerAuth(
       await requireDb().execute(
         sql`UPDATE sessions SET revoked_at = now() WHERE user_id = ${request.auth.userId}::uuid AND revoked_at IS NULL`,
       );
-      clearCookies(reply);
+      clearCookies(reply, Boolean(cookie(request, oauthCookie(env))));
       return { ok: true };
     },
     async membership(request, merchantId) {
