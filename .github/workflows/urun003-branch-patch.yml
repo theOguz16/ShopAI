@@ -19,12 +19,13 @@ jobs:
           node-version-file: .node-version
       - run: pnpm install --frozen-lockfile
       - run: node scripts/urun003-apply.mjs
-      - run: pnpm add --filter @shopai/api openid-client@6.8.4 --save-exact
+      - name: Run type and test checks before commit
+        run: pnpm check
       - name: Verify scope and commit only to feature branch
         run: |
-          git add apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml
+          git add apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts
           git diff --cached --check
           git config user.name 'shopai-auth-branch-bot'
           git config user.email 'shopai-auth-branch-bot@users.noreply.github.com'
-          git commit -m 'feat(auth): integrate Auth0 OIDC library and atomic callback'
+          git commit -m 'feat(auth): harden and test Auth0 integration'
           git push origin HEAD:feat/urun-003-auth-foundation
