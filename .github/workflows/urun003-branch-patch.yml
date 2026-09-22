@@ -19,11 +19,16 @@ jobs:
           node-version-file: .node-version
       - run: pnpm install --frozen-lockfile
       - run: node scripts/urun003-apply.mjs
-      - name: Run type and test checks before commit
+      - name: Format and lint changed source files
+        run: |
+          pnpm exec biome check --write apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Run all checks before commit
         run: pnpm check
       - name: Verify scope and commit only to feature branch
         run: |
-          git add apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts
+          git add apps/api/src/env.ts apps/api/src/app.ts apps/api/src/plugins/auth.ts apps/api/src/auth0-routes.ts apps/api/src/auth0-oidc.ts apps/api/src/auth0-client-library.ts packages/db/drizzle/0032_auth0_verified_link.sql packages/db/drizzle/meta/_journal.json apps/api/package.json pnpm-lock.yaml apps/web/app/login/page.tsx tests/integration/auth0-flows.test.ts scripts/urun003-apply.mjs
           git diff --cached --check
           git config user.name 'shopai-auth-branch-bot'
           git config user.email 'shopai-auth-branch-bot@users.noreply.github.com'
