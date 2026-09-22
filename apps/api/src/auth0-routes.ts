@@ -7,9 +7,10 @@ import { z } from 'zod';
 import type { ApiEnv } from './env.js';
 import {
   type Auth0ClientKind, type Auth0Config, type VerifiedIdentity,
-  authorizationUrl, discover, exchangeAndVerify, randomSecret, requestPasswordReset, sha256,
+  authorizationUrl, discover, randomSecret, requestPasswordReset, sha256,
 } from './auth0-oidc.js';
 import { requireRecentMfa } from './plugins/auth.js';
+import { verifyAuth0Grant } from './auth0-client-library.js';
 
 const startSchema = z.object({
   client: z.enum(['shopper', 'merchant']).default('shopper'),
@@ -65,8 +66,6 @@ export function registerAuth0Routes(app: FastifyInstance, db: Database | undefin
   app.get('/v1/auth/capabilities', async () => ({ auth0Enabled: Boolean(config), pilotEnabled: app.authApi.pilotEnabled }));
   if (!config || !db) return;
   const database = db;
-  const audit = (userId: string | null, eventType: string, outcome: string, requestId: string) =>
-    database.execute(sql`INSERT INTO auth_audit_events (user_id,event_type,outcome,request_id) VALUES (${userId}::uuid,${eventType},${outcome},${requestId})`);
   async function begin(request: FastifyRequest, reply: FastifyReply, input: z.infer<typeof startSchema>, claimUserId: string | null = null) {
     const returnTo = safeReturnTo(input.returnTo, config!.webOrigin);
     if (!returnTo) return reply.code(400).send({ code: 'INVALID_RETURN_TO' });
@@ -82,8 +81,8 @@ export function registerAuth0Routes(app: FastifyInstance, db: Database | undefin
     catch { return reply.code(503).send({ code: 'IDENTITY_PROVIDER_UNAVAILABLE' }); }
     await database.execute(sql`
       INSERT INTO oidc_auth_transactions
-      (state_hash,browser_binding_hash,client_kind,nonce_hash,pkce_verifier_ciphertext,return_to,expires_at,claim_user_id,stepup_user_id,flow_kind)
-      VALUES (${sha256(state)},${sha256(binding)},${input.client},${sha256(nonce)},decode(${encrypt(verifier, config!.encryptionKey)},'base64'),
+      (state_hash,browser_binding_hash,client_kind,nonce_hash,nonce_ciphertext,pkce_verifier_ciphertext,return_to,expires_at,claim_user_id,stepup_user_id,flow_kind)
+      VALUES (${sha256(state)},${sha256(binding)},${input.client},${sha256(nonce)},decode(${encrypt(nonce, config!.encryptionKey)},'base64'),decode(${encrypt(verifier, config!.encryptionKey)},'base64'),
         ${returnTo},${new Date(Date.now() + 5 * 60000)},${claimUserId}::uuid,${flowKind === 'stepup' ? request.auth?.userId : null}::uuid,${flowKind})
     `);
     reply.header('Cache-Control', 'no-store');
@@ -166,21 +165,28 @@ export function registerAuth0Routes(app: FastifyInstance, db: Database | undefin
     if ((kind !== 'shopper' && kind !== 'merchant') || !parsed.success || !binding || !/^[A-Za-z0-9_-]{43}$/u.test(binding))
       return authError(reply);
     const recordResult = await database.execute(sql`
-      UPDATE oidc_auth_transactions SET consumed_at=now(),pkce_verifier_ciphertext=decode('','hex')
-      WHERE state_hash=${sha256(parsed.data.state)} AND browser_binding_hash=${sha256(binding)}
-        AND client_kind=${kind} AND consumed_at IS NULL AND expires_at>now()
-      RETURNING nonce_hash, encode(pkce_verifier_ciphertext,'base64') AS encrypted_verifier,
-        return_to, claim_user_id,stepup_user_id,flow_kind
+      WITH pending AS MATERIALIZED (
+        SELECT state_hash, nonce_ciphertext, pkce_verifier_ciphertext
+        FROM oidc_auth_transactions
+        WHERE state_hash=${sha256(parsed.data.state)} AND browser_binding_hash=${sha256(binding)}
+          AND client_kind=${kind} AND consumed_at IS NULL AND expires_at>now()
+        FOR UPDATE
+      )
+      UPDATE oidc_auth_transactions AS t
+      SET consumed_at=now(), nonce_ciphertext=decode('','hex'), pkce_verifier_ciphertext=decode('','hex')
+      FROM pending WHERE t.state_hash=pending.state_hash
+      RETURNING t.nonce_hash, encode(pending.nonce_ciphertext,'base64') AS encrypted_nonce,
+        encode(pending.pkce_verifier_ciphertext,'base64') AS encrypted_verifier,
+        t.return_to, t.claim_user_id, t.stepup_user_id, t.flow_kind
     `);
-    // Ciphertext must be read before clearing. The UPDATE above clears it;
-    // use the transaction's pre-image via a CTE in the follow-up revision.
     const record = recordResult.rows[0];
     expireBinding(reply, env);
     if (!record) return authError(reply);
     try {
       const verifier = decrypt(String(record.encrypted_verifier), config.encryptionKey);
-      const identity = await exchangeAndVerify(config, await discover(config), kind as Auth0ClientKind,
-        parsed.data.code, verifier, String(record.nonce_hash));
+      const nonce = decrypt(String(record.encrypted_nonce), config.encryptionKey);
+      if (sha256(nonce) !== String(record.nonce_hash)) throw new Error('OIDC_NONCE_MISMATCH');
+      const identity = await verifyAuth0Grant(config, kind as Auth0ClientKind, parsed.data.code, parsed.data.state, nonce, verifier);
       const userId = await resolveAccount(identity, {
         claimUserId: typeof record.claim_user_id === 'string' ? record.claim_user_id : null,
         stepupUserId: typeof record.stepup_user_id === 'string' ? record.stepup_user_id : null,

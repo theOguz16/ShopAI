@@ -4,7 +4,8 @@ import { memberships, merchants, sessions, setTenantContext, users } from '@shop
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiEnv } from '../env.js';
-import type { Auth0ClientKind } from '../auth0-oidc.js';
+import { parseAuth0Config, type Auth0ClientKind } from '../auth0-oidc.js';
+import { registerAuth0Routes } from '../auth0-routes.js';
 
 export type Role = 'owner' | 'editor' | 'viewer';
 export type AuthContext = {
@@ -52,6 +53,12 @@ export interface AuthApi {
 }
 
 export function registerAuth(app: FastifyInstance, db: Database | undefined, env: ApiEnv, oidcEnabled = false, pilotEnabled = true) {
+  const auth0Config = parseAuth0Config(process.env);
+  oidcEnabled = Boolean(auth0Config);
+  pilotEnabled = env.AUTH_PILOT_LOGIN_ENABLED !== 'false';
+  if (auth0Config && (!db || !env.MCP_ALLOWED_ORIGINS.includes(auth0Config.webOrigin) ||
+    Object.values(auth0Config.clients).some((client) => new URL(client.redirectUri).origin !== env.MCP_PUBLIC_ORIGIN)))
+    throw new Error('Auth0 origins or PostgreSQL are not configured for this API');
   app.decorateRequest('auth', null);
   const requireDb = () => {
     if (!db) throw Object.assign(new Error('Kimlik servisi postgres modunda kullanılabilir.'), { statusCode: 503 });
@@ -137,7 +144,11 @@ export function registerAuth(app: FastifyInstance, db: Database | undefined, env
         INSERT INTO sessions (user_id, token_hash, expires_at, absolute_expires_at, last_active_at, auth_level, authenticated_at, client_kind)
         VALUES (${userId}::uuid, ${hash(raw)}, ${expiry}, ${expiry}, now(), ${level}, ${authenticatedAt}, ${kind})
       `);
-      reply.header('Set-Cookie', `${oauthCookie(env)}=${raw}; ${cookieAttributes(env)}; Max-Age=${12 * 3600}`);
+      const prior = reply.getHeader('Set-Cookie');
+      reply.header('Set-Cookie', [
+        ...(Array.isArray(prior) ? prior : prior ? [String(prior)] : []),
+        `${oauthCookie(env)}=${raw}; ${cookieAttributes(env)}; Max-Age=${12 * 3600}`,
+      ]);
     },
     csrfToken(request) {
       const raw = cookie(request, oauthCookie(env));
@@ -193,6 +204,7 @@ export function registerAuth(app: FastifyInstance, db: Database | undefined, env
       !safeEqual(request.headers['x-shopai-csrf'], expected))
       return void reply.code(403).send({ code: 'CSRF_REJECTED' });
   });
+  registerAuth0Routes(app, db, env, auth0Config);
 }
 
 declare module 'fastify' { interface FastifyInstance { authApi: AuthApi } }

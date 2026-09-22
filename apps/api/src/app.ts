@@ -69,6 +69,8 @@ export async function buildApp(
   const opsAlerts = createOpsAlertSender(env);
   const app = Fastify({
     routerOptions: { maxParamLength: 1024 },
+    // Callback URLs contain authorization codes: never log raw request URLs.
+    disableRequestLogging: true,
     logger: {
       level: env.LOG_LEVEL,
       redact: [
@@ -80,6 +82,10 @@ export async function buildApp(
         'req.body.apiKey',
         'req.body.apiSecret',
         'req.body.token',
+        'req.body.pilotToken',
+        'req.body.code',
+        'req.query.code',
+        'req.query.state',
         'req.body.AUTH_PILOT_CREDENTIALS',
         'req.body.email',
       ],
@@ -142,7 +148,7 @@ export async function buildApp(
   );
   app.get('/v1/auth/session', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ code: 'UNAUTHENTICATED' });
-    return { user: request.auth };
+    return { user: request.auth, csrfToken: app.authApi.csrfToken(request) };
   });
   await registerMerchantRoutes(app, env);
   await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);

@@ -12,6 +12,8 @@ DO $$ BEGIN
   END IF;
 END $$;
 --> statement-breakpoint
+ALTER TABLE oidc_auth_transactions ADD COLUMN IF NOT EXISTS nonce_ciphertext bytea;
+--> statement-breakpoint
 ALTER TABLE users ADD COLUMN IF NOT EXISTS closed_at timestamptz;
 --> statement-breakpoint
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS client_kind text NOT NULL DEFAULT 'pilot';

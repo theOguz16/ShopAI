@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, randomBytes, timingSafeEqual, verify } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 export type Auth0ClientKind = 'shopper' | 'merchant';
 export type Auth0Client = { clientId: string; clientSecret: string; redirectUri: string };
@@ -28,11 +28,6 @@ const object = (value: unknown): JsonObject =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : fail();
 const string = (value: unknown): string =>
   typeof value === 'string' && value.length > 0 ? value : fail();
-const same = (a: string, b: string): boolean => {
-  const left = Buffer.from(sha256(a), 'hex');
-  const right = Buffer.from(sha256(b), 'hex');
-  return timingSafeEqual(left, right);
-};
 function httpsOrigin(value: string): URL {
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.hostname || url.hostname === 'localhost' || /^[\d.]+$/u.test(url.hostname)) fail();
@@ -41,7 +36,8 @@ function httpsOrigin(value: string): URL {
 
 /** Fail closed; no default tenant/client/secret, no partial Auth0 configuration. */
 export function parseAuth0Config(env: NodeJS.ProcessEnv): Auth0Config | null {
-  if (env.AUTH0_ENABLED !== 'true') return null;
+  if (!env.AUTH0_ENABLED || env.AUTH0_ENABLED === 'false') return null;
+  if (env.AUTH0_ENABLED !== 'true') fail();
   const issuer = httpsOrigin(string(env.AUTH0_ISSUER)).href;
   const issuerUrl = new URL(issuer);
   if (issuerUrl.pathname !== '/' || issuer !== issuerUrl.origin + '/') fail();
@@ -113,93 +109,12 @@ export function authorizationUrl(
   return url.href;
 }
 
-function validateIdToken(
-  token: string,
-  jwks: JsonObject,
-  config: Auth0Config,
-  kind: Auth0ClientKind,
-  nonceHash: string,
-  accessToken?: string,
-): VerifiedIdentity {
-  if (token.length > 24_000) fail();
-  const parts = token.split('.');
-  if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/u.test(part))) fail();
-  const header = object(JSON.parse(Buffer.from(parts[0]!, 'base64url').toString('utf8')));
-  const claims = object(JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')));
-  if (header.alg !== 'RS256' || typeof header.kid !== 'string' || header.kid.length > 256 || header.crit !== undefined || (header.typ !== undefined && header.typ !== 'JWT')) fail();
-  const keys = jwks.keys;
-  if (!Array.isArray(keys) || keys.length > 50) fail();
-  const matches = keys.filter((candidate: unknown) => {
-    const key = object(candidate);
-    return key.kid === header.kid && key.kty === 'RSA' && (!key.use || key.use === 'sig') && (!key.alg || key.alg === 'RS256');
-  });
-  if (matches.length !== 1) fail();
-  let signatureValid = false;
-  try {
-    signatureValid = verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), createPublicKey({ key: matches[0] as JsonWebKey, format: 'jwk' }), Buffer.from(parts[2]!, 'base64url'));
-  } catch { fail(); }
-  if (!signatureValid) fail();
-  const now = Math.floor(Date.now() / 1000);
-  const clientId = config.clients[kind].clientId;
-  const aud = claims.aud;
-  if (claims.iss !== config.issuer || (typeof aud !== 'string' && !Array.isArray(aud)) || !(typeof aud === 'string' ? aud === clientId : aud.includes(clientId))) fail();
-  if (Array.isArray(aud) && aud.length > 1 && claims.azp !== clientId) fail();
-  if (typeof claims.exp !== 'number' || claims.exp <= now - 30 || typeof claims.iat !== 'number' || claims.iat > now + 60 || claims.iat < now - 86400) fail();
-  if (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now + 60)) fail();
-  if (typeof claims.nonce !== 'string' || !same(sha256(claims.nonce), nonceHash)) fail();
-  if (claims.email_verified !== true) fail();
-  const subject = string(claims.sub);
-  const email = string(claims.email).trim().toLowerCase();
-  if (subject.length > 512 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) fail();
-  if (claims.at_hash !== undefined) {
-    if (!accessToken || typeof claims.at_hash !== 'string' || !same(createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url'), claims.at_hash)) fail();
-  }
-  const authTime = claims.auth_time;
-  if (authTime !== undefined && (typeof authTime !== 'number' || authTime > now + 60 || authTime < now - 86400)) fail();
-  const amr = claims.amr;
-  const mfa = Array.isArray(amr) && amr.includes('mfa') && typeof authTime === 'number' && authTime <= now + 60;
-  return {
-    issuer: config.issuer,
-    subject,
-    email,
-    emailVerified: true,
-    mfa,
-    authenticatedAt: typeof authTime === 'number' ? new Date(authTime * 1000) : null,
-  };
-}
-
-export async function exchangeAndVerify(
-  config: Auth0Config,
-  discovery: Discovery,
-  kind: Auth0ClientKind,
-  code: string,
-  verifier: string,
-  nonceHash: string,
-): Promise<VerifiedIdentity> {
-  const client = config.clients[kind];
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code', code, code_verifier: verifier,
-    redirect_uri: client.redirectUri, client_id: client.clientId, client_secret: client.clientSecret,
-  });
-  const tokenResponse = await fetch(discovery.tokenEndpoint, {
-    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body, signal: AbortSignal.timeout(8000), redirect: 'error',
-  });
-  if (!tokenResponse.ok) fail();
-  const token = object(await tokenResponse.json());
-  if (token.token_type !== 'Bearer') fail();
-  const idToken = string(token.id_token);
-  const jwksResponse = await fetch(discovery.jwksUri, { signal: AbortSignal.timeout(8000), redirect: 'error' });
-  if (!jwksResponse.ok) fail();
-  return validateIdToken(idToken, object(await jwksResponse.json()), config, kind, nonceHash, typeof token.access_token === 'string' ? token.access_token : undefined);
-}
-
-export async function requestPasswordReset(config: Auth0Config, email: string): Promise<void> {
+export async function requestPasswordReset(config: Auth0Config, email: string, kind: Auth0ClientKind = 'shopper'): Promise<void> {
   if (!config.databaseConnection) fail();
   const endpoint = new URL('/dbconnections/change_password', config.issuer);
   const result = await fetch(endpoint, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ client_id: config.clients.shopper.clientId, connection: config.databaseConnection, email }),
+    body: JSON.stringify({ client_id: config.clients[kind].clientId, connection: config.databaseConnection, email }),
     signal: AbortSignal.timeout(8000), redirect: 'error',
   });
   if (!result.ok) fail();

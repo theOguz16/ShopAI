@@ -18,7 +18,7 @@
     { "idx": 13, "version": "7", "when": 1788974400000, "tag": "0014_discovery_sessions", "breakpoints": true },
     { "idx": 14, "version": "7", "when": 1788984600000, "tag": "0015_branded_storefront_context", "breakpoints": true },
     { "idx": 15, "version": "7", "when": 1789039500000, "tag": "0016_catalog_sync_progress", "breakpoints": true },
-    { "idx": 16, "version": "7", "when": 1789049762219, "tag": "0017_category_facets_mvp", "breakpoints": true },
+    { "idx": 16, "version": "7", "when": 1789049760000, "tag": "0017_category_facets_mvp", "breakpoints": true },
     { "idx": 17, "version": "7", "when": 1789130000000, "tag": "0018_checkout_click_attribution", "breakpoints": true },
     { "idx": 18, "version": "7", "when": 1789132200000, "tag": "0019_merchant_conversion_callback", "breakpoints": true },
     { "idx": 19, "version": "7", "when": 1789134600000, "tag": "0020_product_view_events", "breakpoints": true },
