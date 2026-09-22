@@ -4,7 +4,7 @@ Tarih: 22 Eylül 2026
 
 PR: [#55](https://github.com/theOguz16/ShopAI/pull/55)
 
-Implementation commit: `bd21ee466de3e383e6930dc9e81e1aeb012b0a69` (the report-only follow-up commit must be read from PR head)
+Merged/deployed commit: `3cf084a04e3934b72bc088c4c8babd205aa3946a`
 
 Bu kayıt sentetik WooCommerce staging pilotunun salt okunur kanıtını, kod düzeltmelerini ve henüz doğrulanamayan kapıları ayırır. Sentetik mağaza gerçek merchant kabulü değildir.
 
@@ -30,15 +30,16 @@ ShopAI modeli her simple ürünü de tek normalize variant satırı olarak sakla
 | Madde | Durum | Connection ID / deploy SHA | Kanıt veya engel |
 | --- | --- | --- | --- |
 | WooCommerce kaynak toplamı | **PASS** | Woo source; connection ID uygulanmaz | Public Store API: 520 ürün, 300 native variation, 420 simple + 100 variable. |
-| Aktif ShopAI bağlantısında 520 ürün / 300 native variation / 720 normalize variant | **BLOCKED** | **Doğrulanmadı** | Staging DB/VDS yetkisi bu oturumda yok. Aşağıdaki şema-doğrulanmış sorgu operatör tarafından çalıştırılmalı; LocalWP satırları filtre dışında. |
+| Aktif ShopAI bağlantısında 520 ürün / 300 native variation / 720 normalize variant | **PASS** | `9b00753e-de43-4720-8dd2-175ef8fc2838`; deploy `3cf084a` | VDS read-only SQL tek aktif bağlantıda 520 ürün, 300 native variation, 720 normalize variant ve 720 aktif teklif döndürdü. |
 | Test Urunu 1 WooCommerce kaynak S/M/L, fiyat, stok, görsel | **PASS** | Woo source IDs 13/14/15/16 | S/M/L; 451/461/471 TRY; her biri 5 stok; aynı blue PNG. |
-| Test Urunu 1 ShopAI DB/API mutabakatı | **BLOCKED** | **Doğrulanmadı** | Staging DB ve pilot API oturumu yok. |
-| Test Urunu 1 dashboard detayı | **BLOCKED** | **Doğrulanmadı** | Dashboard geçerli pilot oturumu olmadan login'e yönlendiriyor. |
+| Test Urunu 1 ShopAI DB/API mutabakatı | **PASS** | `9b00753e-de43-4720-8dd2-175ef8fc2838`; deploy `3cf084a` | DB ve authenticated API: S/M/L, 45100/46100/47100 minor TRY, stok kullanılabilir ve aynı blue PNG. Login/session/product API HTTP 200. |
+| Test Urunu 1 dashboard detayı | **PASS** | deploy `3cf084a` | Oturumlu Brave kontrolünde kart görseli, 3 varyant ve detayda L ₺471, M ₺461, S ₺451; üçü de `Stokta`. |
 | Test Urunu 78 kök neden | **PASS** | Woo source product ID 321 | Kaynak Store API `images: []`; placeholder kaynak eksikliğinin sonucu. |
-| Test Urunu 78 tek ürün görsel düzeltmesi ve incremental aktarım | **BLOCKED** | Aktif connection ID **doğrulanmadı** | Kaynak/VDS yazma yetkisi yok; hiçbir staging verisi değiştirilmedi. Kontrollü plan aşağıda. |
-| PR son commit yerel/CI doğrulaması | **BLOCKED** | PR head `gh pr view 55 --json headRefOid` ile okunur | Implementation SHA için push-event CI `check` ve `integration` PASS; GitGuardian PASS. Aynı SHA'nın PR-event duplicate `check` job'u PASS, duplicate `integration` job'u TASK-023A adımında halen IN_PROGRESS. Main branch protection tanımlı değil; GitHub açısından required context yok. Rapor follow-up commit'inin CI sonucu ayrıca beklenmelidir. |
-| PR commit hosted staging deploy + smoke | **FAIL** | Hosted SHA `a8594cfcb739932a2fcaec94fad27b545d3724c1` | Hosted readiness hâlâ eski SHA'yı döndürüyor. PR SHA deploy edilmedi; eski smoke yeni davranışların kanıtı değildir. Repoda branch preview/izole staging deploy workflow'u yok. |
-| TASK-018 gerçek merchant şartı | **BLOCKED** | uygulanmaz | Bu sentetik pilottur; bağımsız ve izinli gerçek WooCommerce merchant kabulü yoktur. |
+| Test Urunu 78 tek ürün görsel düzeltmesi ve incremental aktarım | **PASS** | product `321`; `9b00753e-de43-4720-8dd2-175ef8fc2838` | Eski thumbnail yokluğu root-only rollback JSON'una kaydedildi; yalnız attachment `11` atandı. Woo Store API ve dashboard görseli PASS; `12:30:22` incremental sync sonrası ShopAI DB/API aynı URL'yi döndürdü. |
+| PR son commit yerel/CI doğrulaması | **PASS** | PR head `20d549e44c32ed4e255ba1996385cebd81006dcf` | Zorunlu check/integration ve GitGuardian PASS; takılan duplicate integration iptal edilip aynı SHA üzerinde başarılı yeniden koşuldu. |
+| PR commit hosted staging deploy + smoke | **PASS** | merge/deploy `3cf084a04e3934b72bc088c4c8babd205aa3946a` | Exact-release readiness ve `scripts/staging-chatgpt-smoke.mjs` PASS; api/worker/web/widget aynı immutable image'ı çalıştırdı. |
+| TASK-018 teknik pilot kabulü | **PASS** | PR #55; deploy `3cf084a` | Sentetik WooCommerce staging kabulü kaynak → ShopAI DB/API → oturumlu dashboard boyunca tamamlandı. |
+| Gerçek merchant/user pilotu | **BLOCKED (TASK-023B)** | uygulanmaz | Gerçek ve izinli mağaza yoktur; sentetik kanıt gerçek merchant sonucu olarak sunulmaz ve TASK-023B açık kalır. |
 
 ## Kök neden ve düzeltmeler
 
@@ -52,16 +53,16 @@ ShopAI modeli her simple ürünü de tek normalize variant satırı olarak sakla
 - `pnpm check`: PASS — 31 test dosyası, 130 test PASS; typecheck ve production build PASS. WooCommerce rehearsal credential gerektiren 3 test beklendiği gibi skip.
 - Hedef unit: 4 dosya, 20 test PASS.
 - İzole `shopai_woo_acceptance` PostgreSQL DB + yerel Redis üzerinde `sync-status` ve `catalog-health`: 2 dosya, 4 integration test PASS.
-- Public staging smoke yalnız eski release `a8594cfcb739932a2fcaec94fad27b545d3724c1` için PASS. Bu sonuç PR #55'in davranışları için kabul kanıtı değildir.
+- PR head `20d549e44c32ed4e255ba1996385cebd81006dcf` zorunlu CI koşuları PASS; merge/deploy SHA `3cf084a04e3934b72bc088c4c8babd205aa3946a` exact-release readiness ve hosted smoke PASS.
 
-## Açık staging kabul kapıları
+## Tamamlanan staging kabul kanıtı
 
-`https://shop.fizyoflow.com/dashboard` geçerli pilot oturumu olmadan login ekranına yönlendirdi. Bu nedenle aşağıdakiler bu koşuda **PASS değildir**:
-
-- 520 ürünün tamamının aktif WooCommerce connection ID'sine ait olduğunun DB mutabakatı.
-- Beklenen varyant sayısının aktif connection bazında mutabakatı.
-- Test Urunu 1'in ShopAI private katalog API/DB ve dashboard detayındaki S/M/L, fiyat, stok, görsel eşitliği.
-- Görseli kaynaktan eklendikten sonra Test Urunu 78'in bir incremental sync ile ShopAI'ye taşındığının doğrulanması.
+- Aktif connection `9b00753e-de43-4720-8dd2-175ef8fc2838`; merchant `b376073a-e8d3-4dbf-af05-2ebc431dfcb9`.
+- Read-only DB sonucu: 520 ürün, 300 native Woo variation, 720 normalize variant, 720 aktif teklif. Revoked LocalWP connection `37166412-bf34-450e-ba7b-0b3dd8e26f7b` yalnız tarihsel sorguda yer aldı.
+- Dashboard son incremental çalışmayı `0 / 0 / 0 / 0` olarak, aynı bağlantının mevcut kataloğunu ayrı satırda `520 ürün · 720 varyant` olarak gösterdi.
+- Catalog Health aktif WooCommerce bağlantısını `Healthy`, iptal edilmiş LocalWP'yi `Bağlantı geçmişi` altında `İptal edildi` olarak gösterdi.
+- Test Urunu 1 kaynak, DB, authenticated API ve dashboard detayında S/M/L, fiyat, stok durumu ve görsel açısından eşleşti.
+- Test Urunu 78 kaynak eksikliği yalnız product `321` üzerinde geri alınabilir biçimde düzeltildi. Rollback kaydı `/home/deploy/shopai-staging-runtime-backups/test-urunu-78/thumbnail-before-20260922T122750Z.json`; kaynak watermark `2026-09-22 12:27:52+00`, başarılı incremental sync `2026-09-22 12:30:23.369+00`.
 
 ### VDS'de secret yazdırmadan çalıştırma
 
@@ -160,8 +161,8 @@ else
 fi
 ```
 
-Aktif worker bağlantıları beş dakikada bir incremental kuyruğa alır; manuel DB/job ekleme yapılmamalı. Değişiklikten önce aktif connection ID ve `last_successful_sync_at` kaydedilmeli, kaynak `date_modified_gmt` ilerledikten sonra yeni bir `last_successful_sync_at` beklenmeli. Sonrasında versioned read-only SQL yeniden çalıştırılmalı ve Test Urunu 78 için `image_url` dolu olmalıdır. Bu koşu yapılmadığı için sonuç **BLOCKED** durumundadır.
+Bu plan product `321` için uygulandı. Eski değerde `_thumbnail_id` yoktu; rollback JSON'u root-only dizinde korundu. Attachment `11` atandıktan sonra kaynak `date_modified_gmt` ilerledi, worker'ın normal incremental scheduler çalışması beklendi ve yeni `last_successful_sync_at` sonrasında ShopAI DB/API ile oturumlu dashboard aynı görseli gösterdi. Manuel DB/job eklenmedi, toplu seed/yayın yapılmadı ve bağlantı iptal edilmedi.
 
-## Merge kararı
+## Kapanış kararı
 
-PR henüz merge'e hazır kabul edilmemelidir. Kod/test tarafında başarılı bir son-SHA CI koşusu vardır; ancak duplicate PR integration koşusu bitmemiştir, PR SHA hosted/izole staging'e deploy edilmemiştir ve aktif connection bazlı DB/API kabul sonuçları alınmamıştır. TASK-018 gerçek merchant şartı ayrıca açık kalır.
+PR #55 merge edildi ve `3cf084a04e3934b72bc088c4c8babd205aa3946a` staging'e deploy edildi. Sentetik TASK-018 teknik pilot kabulü **tamamlandı**. Gerçek merchant/user pilotu bu kapanışla karşılanmış sayılmaz; ayrı TASK-023B kabul kapısı olarak açık kalır.
