@@ -73,6 +73,7 @@ if (!databaseUrl || !redisUrl) {
       const offerIds = Array.from({ length: 3 }, () => randomUUID());
       const observedAt = new Date();
       const staleSuccessfulSync = new Date(Date.now() - 14 * 60 * 60 * 1000);
+      const revokedConnectionId = randomUUID();
 
       await withTenant(database.db, merchantId, async (tx) => {
         await tx.insert(connections).values({
@@ -84,6 +85,18 @@ if (!databaseUrl || !redisUrl) {
           syncMode: 'incremental',
           lastSuccessfulSyncAt: staleSuccessfulSync,
           lastFetchedAt: staleSuccessfulSync,
+        });
+        await tx.insert(connections).values({
+          id: revokedConnectionId,
+          merchantId,
+          provider: 'woocommerce',
+          active: false,
+          authorizationStatus: 'revoked',
+          syncMode: 'incremental',
+          lastSuccessfulSyncAt: new Date(),
+          lastFetchedAt: new Date(),
+          lastSyncError: 'Historical LocalWP endpoint is unavailable',
+          revokedAt: new Date(),
         });
         await tx.insert(products).values([
           {
@@ -203,8 +216,15 @@ if (!databaseUrl || !redisUrl) {
         connections: [
           {
             provider: 'woocommerce',
+            active: true,
             status: 'stale',
             authorizationStatus: 'active',
+          },
+          {
+            provider: 'woocommerce',
+            active: false,
+            status: 'attention',
+            authorizationStatus: 'revoked',
           },
         ],
       });

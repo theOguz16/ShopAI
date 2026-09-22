@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
@@ -7,8 +8,8 @@ import { parseApiEnv } from '../../apps/api/src/env.js';
 import { redisConnection } from '../../apps/worker/src/connection.js';
 import { SYNC_QUEUE } from '../../packages/contracts/src/index.js';
 import {
-  connections,
   connectionSyncProgress,
+  connections,
   createDatabase,
   memberships,
   merchantCredentialOwnerships,
@@ -16,6 +17,7 @@ import {
   products,
   sessions,
   users,
+  variants,
   withTenant,
   writeConnectionSyncProgress,
 } from '../../packages/db/src/index.js';
@@ -117,6 +119,9 @@ if (!databaseUrl || !redisUrl) {
       expect(status.statusCode).toBe(200);
       expect(status.json()).toMatchObject({
         connectionId,
+        syncMode: 'incremental',
+        catalogProducts: 0,
+        catalogVariants: 0,
         status: 'queued',
         foundProducts: 0,
         processedProducts: 0,
@@ -134,6 +139,29 @@ if (!databaseUrl || !redisUrl) {
 
     it('restores 10k sync counters from PostgreSQL after the API app is rebuilt', async () => {
       const startedAt = new Date('2026-09-10T11:30:00.000Z');
+      await withTenant(database.db, merchantId, async (tx) => {
+        const productId = randomUUID();
+        await tx.insert(products).values({
+          id: productId,
+          merchantId,
+          connectionId,
+          externalKey: 'persisted-catalog-product',
+          title: 'Persisted catalog product',
+          category: 'test',
+          observedAt: startedAt,
+        });
+        await tx.insert(variants).values(
+          ['S', 'M'].map((size) => ({
+            merchantId,
+            productId,
+            connectionId,
+            externalId: `persisted-${size}`,
+            size,
+            color: 'black',
+            observedAt: startedAt,
+          })),
+        );
+      });
       await writeConnectionSyncProgress(
         database.db,
         merchantId,
@@ -158,6 +186,9 @@ if (!databaseUrl || !redisUrl) {
       });
       expect(beforeRefresh.json()).toMatchObject({
         status: 'running',
+        syncMode: 'incremental',
+        catalogProducts: 1,
+        catalogVariants: 2,
         foundProducts: 10_000,
         processedProducts: 6_027,
         failedProducts: 3,
@@ -174,6 +205,9 @@ if (!databaseUrl || !redisUrl) {
       expect(afterRefresh.statusCode).toBe(200);
       expect(afterRefresh.json()).toMatchObject({
         connectionId,
+        syncMode: 'incremental',
+        catalogProducts: 1,
+        catalogVariants: 2,
         status: 'running',
         foundProducts: 10_000,
         processedProducts: 6_027,

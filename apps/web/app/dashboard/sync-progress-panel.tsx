@@ -17,6 +17,9 @@ type SyncStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed';
 
 type SyncProgress = {
   connectionId: string;
+  syncMode: 'full' | 'incremental';
+  catalogProducts: number;
+  catalogVariants: number;
   status: SyncStatus;
   foundProducts: number;
   processedProducts: number;
@@ -121,6 +124,8 @@ export function SyncProgressPanel() {
       : progress.status === 'partial'
         ? 'Ürün senkronu kısmen tamamlandı'
         : 'Ürün senkronu tamamlanamadı';
+  const modeLabel =
+    progress.syncMode === 'incremental' ? 'incremental' : 'full';
 
   return (
     <section
@@ -132,8 +137,8 @@ export function SyncProgressPanel() {
         <div>
           <h2>{title}</h2>
           <p>
-            Bu ilerleme sunucuda saklanır; sayfayı yenilesen de kaldığı yerden
-            görünür.
+            Son {modeLabel} çalışma gösteriliyor. Sayaçlar yalnız bu çalışmaya
+            aittir; değişiklik bulunmayan incremental çalışma 0 gösterebilir.
           </p>
         </div>
         <span className={styles.badge}>{statusText[progress.status]}</span>
@@ -156,6 +161,13 @@ export function SyncProgressPanel() {
           <dd>{number.format(progress.variants)}</dd>
         </div>
       </dl>
+      <div className={styles.catalogTotal}>
+        <strong>Bu bağlantıdaki mevcut katalog</strong>
+        <span>
+          {number.format(progress.catalogProducts)} ürün ·{' '}
+          {number.format(progress.catalogVariants)} varyant
+        </span>
+      </div>
       {progress.error ? (
         <p className={styles.error} role="alert">
           {progress.error}
