@@ -232,42 +232,48 @@ export async function buildApp(
       return reply.code(503).send({ status: 'unavailable' });
     }
   });
-  app.post('/discovery-session', async (request, reply) => {
-    const parsed = discoverySessionCreateRequestSchema.safeParse(request.body);
-    if (!parsed.success)
-      return reply
-        .code(400)
-        .send({ code: 'INVALID_INPUT', requestId: request.id });
-    if (!restDiscoverySurfaces.has(parsed.data.surface))
-      return reply.code(400).send({
-        code: 'INVALID_SURFACE_FOR_TRANSPORT',
-        requestId: request.id,
-      });
-    try {
-      const session = await resolvedServices.discoverySessions.create(
-        parsed.data,
-        {
-          transport: 'rest',
-          userId: request.auth?.userId,
-        },
+  app.post(
+    '/discovery-session',
+    { preHandler: requireSameOrigin },
+    async (request, reply) => {
+      const parsed = discoverySessionCreateRequestSchema.safeParse(
+        request.body,
       );
-      return reply.code(201).send(session);
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'statusCode' in error &&
-        error.statusCode === 404 &&
-        'code' in error &&
-        error.code === 'MERCHANT_NOT_FOUND'
-      )
-        return reply.code(404).send({
-          code: 'MERCHANT_NOT_FOUND',
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ code: 'INVALID_INPUT', requestId: request.id });
+      if (!restDiscoverySurfaces.has(parsed.data.surface))
+        return reply.code(400).send({
+          code: 'INVALID_SURFACE_FOR_TRANSPORT',
           requestId: request.id,
         });
-      throw error;
-    }
-  });
+      try {
+        const session = await resolvedServices.discoverySessions.create(
+          parsed.data,
+          {
+            transport: 'rest',
+            userId: request.auth?.userId,
+          },
+        );
+        return reply.code(201).send(session);
+      } catch (error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'statusCode' in error &&
+          error.statusCode === 404 &&
+          'code' in error &&
+          error.code === 'MERCHANT_NOT_FOUND'
+        )
+          return reply.code(404).send({
+            code: 'MERCHANT_NOT_FOUND',
+            requestId: request.id,
+          });
+        throw error;
+      }
+    },
+  );
   const mcpSessions = new Map<
     string,
     {
