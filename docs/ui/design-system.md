@@ -3,8 +3,13 @@
 > Tek doğruluk kaynağı: [`packages/ui/src/tokens.css`](../../packages/ui/src/tokens.css).
 > Bu doküman onun insan-okur özetidir; ikisi çakışırsa tokens.css kazanır.
 > Canlı referans: web uygulamasında `/design` rotası (`apps/web/app/design`).
+> **Görünürlük:** rota yalnız dev ve staging'dedir; production'da
+> (`DEPLOY_ENV=production`) middleware 404 döndürür
+> (`apps/web/middleware.ts` + `apps/web/lib/design-reference.ts`).
 > Doğrulama araçları: `node scripts/design-contrast-report.mjs [--md]` ve
-> `node scripts/design-evidence.mjs` (screenshot/taşma kanıtı).
+> `node scripts/design-evidence.mjs` (screenshot/taşma kanıtı; CI'da
+> `design-evidence` job'ı çıktıyı artifact olarak saklar, PNG'ler repoya
+> eklenmez).
 
 **Kapsam:** `apps/web` (storefront + merchant dashboard) ve
 `apps/chatgpt-widget`. **Kapsam dışı:** auth akışları, staging
@@ -314,6 +319,15 @@ gerçek olmayan satış/stok verisi göstermez.
   (auth task'iyla çakışmaması için bilinçli bırakıldı); dev modu Next.js
   göstergesi screenshot'larda görünür (production'a ait değil); widget
   screenshot'ları host-yok durumunu gösterir (host teması ÜRÜN-020).
+- **CI kanıtı:** `ci.yml` içindeki `design-evidence` job'ı aynı script'i
+  koşar ve `artifacts/urun-019/` çıktısını 90 gün saklanan
+  `design-evidence-<run_id>` artifact'ı olarak yükler; PNG'ler repoya
+  eklenmez.
+- **Rota görünürlüğü:** `/design` production'da 404'tür; gating
+  `DEPLOY_ENV` ortam değişkenini okur (compose dosyalarında zaten
+  tanımlı) ve `tests/design-reference-gating.test.ts` ile birim
+  testlidir. Staging'de ek yapılandırma gerekmez; dev sunucusunda da
+  açıktır.
 
 ## 10. Bilinçli olarak yapılmayanlar
 

@@ -120,3 +120,48 @@ jobs:
           BACKUP_DIR=/tmp/shopai-backups infra/backup.sh > /tmp/shopai-backup-path
           PGPASSWORD=shopai_test createdb --host=127.0.0.1 --username=shopai shopai_restore_test
           DATABASE_URL=postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_restore_test BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
+  design-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record tested commit
+        run: |
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          echo "Tested commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build:packages
+      - run: pnpm --filter @shopai/chatgpt-widget build
+      - run: pnpm --filter @shopai/web build
+      - name: Start demo API, web and widget servers
+        run: |
+          (cd apps/api && ../../node_modules/.bin/tsx src/main.ts > /tmp/api.log 2>&1 &)
+          (pnpm --filter @shopai/web start > /tmp/web.log 2>&1 &)
+          node apps/chatgpt-widget/server.mjs > /tmp/widget.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:4000/health/live >/dev/null \
+              && curl -sf http://127.0.0.1:3000/ >/dev/null \
+              && curl -sf http://127.0.0.1:3001/health/live >/dev/null; then
+              echo "servers ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "servers failed to start"
+          tail -20 /tmp/api.log /tmp/web.log /tmp/widget.log
+          exit 1
+      - name: Capture design evidence (320/390/1440 x light/dark)
+        run: node scripts/design-evidence.mjs
+      - name: Upload design evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-evidence-${{ github.run_id }}
+          path: artifacts/urun-019/
+          if-no-files-found: error
+          retention-days: 90
