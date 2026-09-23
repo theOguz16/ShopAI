@@ -1,0 +1,512 @@
+/* ÜRÜN-019 /design referans sayfası stilleri. Renkler yalnız token'lardan. */
+
+.ds-page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 24px clamp(14px, 4vw, 48px) 96px;
+}
+
+.ds-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.ds-header h1 {
+  max-width: none;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.ds-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-surface);
+  color: var(--shopai-color-text-secondary);
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.ds-intro {
+  max-width: 780px;
+  color: var(--shopai-color-text-secondary);
+}
+
+.ds-theme-switch {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-surface);
+}
+
+.ds-theme-switch button {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--shopai-radius-pill);
+  background: transparent;
+  color: var(--shopai-color-text-secondary);
+  font-weight: var(--shopai-font-weight-bold);
+  cursor: pointer;
+}
+
+.ds-theme-switch button[aria-pressed="true"] {
+  border-color: var(--shopai-color-action-primary);
+  background: var(--shopai-color-action-primary);
+  color: var(--shopai-color-text-on-action);
+}
+
+.ds-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-subnav a {
+  padding: 7px 12px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-pill);
+  color: var(--shopai-color-text-secondary);
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+  text-decoration: none;
+}
+
+.ds-subnav a:hover,
+.ds-subnav a:focus-visible {
+  border-color: var(--shopai-color-border-strong);
+  color: var(--shopai-color-text-primary);
+}
+
+.ds-section {
+  margin-top: 56px;
+}
+
+.ds-section > h2 {
+  margin: 0 0 6px;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  letter-spacing: -0.03em;
+}
+
+.ds-section > .ds-section-note {
+  max-width: 760px;
+  margin: 0 0 24px;
+  color: var(--shopai-color-text-secondary);
+}
+
+.ds-h3 {
+  margin: 32px 0 12px;
+  font-size: 1.15rem;
+}
+
+/* --- Token swatch ızgaraları --- */
+
+.ds-token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 10px;
+}
+
+.ds-token {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface);
+  min-width: 0;
+}
+
+.ds-token-swatch {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--shopai-color-border-strong);
+  border-radius: var(--shopai-radius-sm);
+}
+
+.ds-token-name {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--shopai-font-size-xs);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.ds-token-use {
+  margin: 2px 0 0;
+  color: var(--shopai-color-text-muted);
+  font-size: var(--shopai-font-size-xs);
+}
+
+.ds-scale {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-scale li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-sm);
+  background: var(--shopai-color-surface);
+}
+
+.ds-scale code {
+  min-width: 240px;
+  overflow-wrap: anywhere;
+  color: var(--shopai-color-text-secondary);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--shopai-font-size-xs);
+}
+
+/* --- Bileşen vitrini --- */
+
+.ds-component-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.ds-field {
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.ds-field label {
+  color: var(--shopai-color-text-secondary);
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.ds-field input,
+.ds-field select {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--shopai-color-border-strong);
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface);
+  color: var(--shopai-color-text-primary);
+}
+
+.ds-field input:focus-visible,
+.ds-field select:focus-visible {
+  outline: 3px solid var(--shopai-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.ds-field-error input {
+  border-color: var(--shopai-color-error-border);
+  border-width: 2px;
+}
+
+.ds-field-error .ds-field-error-text {
+  margin: 0;
+  color: var(--shopai-color-error-text);
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-surface);
+  color: var(--shopai-color-text-primary);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.ds-chip[aria-pressed="true"] {
+  border-color: var(--shopai-color-action-primary);
+  background: var(--shopai-color-action-primary);
+  color: var(--shopai-color-text-on-action);
+}
+
+.ds-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--shopai-font-size-sm);
+}
+
+.ds-table th,
+.ds-table td {
+  padding: 10px 12px;
+  border: 1px solid var(--shopai-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ds-table th {
+  background: var(--shopai-color-surface-muted);
+}
+
+.ds-table code {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--shopai-font-size-xs);
+  color: var(--shopai-color-text-secondary);
+}
+
+/* --- Ekran referans kartları --- */
+
+.ds-screen {
+  margin-top: 36px;
+  padding-top: 20px;
+  border-top: 2px solid var(--shopai-color-border);
+}
+
+.ds-screen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 18px;
+}
+
+.ds-screen-head h3 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.ds-route {
+  color: var(--shopai-color-text-secondary);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--shopai-font-size-xs);
+}
+
+.ds-source {
+  padding: 3px 9px;
+  border-radius: var(--shopai-radius-pill);
+  font-size: var(--shopai-font-size-xs);
+  font-weight: var(--shopai-font-weight-extrabold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ds-source--live {
+  border: 1px solid var(--shopai-color-success-border);
+  background: var(--shopai-color-success-bg);
+  color: var(--shopai-color-success-text);
+}
+
+.ds-source--reference {
+  border: 1px solid var(--shopai-color-warning-border);
+  background: var(--shopai-color-warning-bg);
+  color: var(--shopai-color-warning-text);
+}
+
+.ds-screen-note {
+  max-width: 760px;
+  margin: 8px 0 16px;
+  color: var(--shopai-color-text-secondary);
+}
+
+/* --- Wireframe panelleri --- */
+
+.wf-state-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.wf-panel {
+  min-width: 0;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-lg);
+  background: var(--shopai-color-bg-page);
+  padding: 12px;
+}
+
+.wf-panel-name {
+  margin: 0 0 10px;
+  color: var(--shopai-color-text-muted);
+  font-size: var(--shopai-font-size-xs);
+  font-weight: var(--shopai-font-weight-extrabold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wf-panel-body {
+  display: grid;
+  gap: 10px;
+}
+
+.wf-bar {
+  height: 9px;
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-neutral-border);
+}
+
+.wf-bar-strong {
+  height: 12px;
+  background: var(--shopai-color-border-strong);
+}
+
+.wf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wf-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--shopai-color-border-strong);
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-surface);
+  color: var(--shopai-color-text-secondary);
+  font-size: var(--shopai-font-size-xs);
+}
+
+.wf-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wf-card {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface);
+}
+
+.wf-card-image {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--shopai-radius-sm);
+  background: var(--shopai-color-surface-muted);
+}
+
+.wf-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.wf-media {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface-muted);
+  color: var(--shopai-color-text-muted);
+  font-size: var(--shopai-font-size-xs);
+}
+
+.wf-stack {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+.wf-cta {
+  height: 30px;
+  border-radius: var(--shopai-radius-sm);
+  background: var(--shopai-color-action-primary);
+}
+
+.wf-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.wf-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface);
+}
+
+.wf-dot {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--shopai-color-surface-muted);
+}
+
+.wf-row-bars {
+  flex: 1;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.wf-pill {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 14px;
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-neutral-bg);
+}
+
+.wf-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wf-tile {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface-muted);
+}
+
+.wf-field {
+  display: grid;
+  gap: 5px;
+}
+
+.wf-input {
+  height: 30px;
+  border: 1px solid var(--shopai-color-border-strong);
+  border-radius: var(--shopai-radius-sm);
+  background: var(--shopai-color-surface);
+}
+
+@media (max-width: 480px) {
+  .wf-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .wf-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ds-table {
+    display: block;
+    overflow-x: auto;
+  }
+}

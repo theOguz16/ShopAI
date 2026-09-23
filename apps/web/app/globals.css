@@ -1,12 +1,21 @@
+/*
+ * ShopAI web uygulaması stilleri (ÜRÜN-019 sonrası).
+ * Renk kaynakları @shopai/ui/tokens.css'teki semantic token'lardır;
+ * aşağıdaki :root bloğu eski kısa adları token'lara köprüler. Dark tema,
+ * <html data-shopai-theme="dark"> attribute'u ile açılır (layout.tsx).
+ */
+@import "@shopai/ui/tokens.css";
+@import "@shopai/ui/states.css";
+
 :root {
-  --ink: #151715;
-  --paper: #f6f5ef;
-  --surface: #fff;
-  --muted: #686d67;
-  --line: #d9dcd4;
-  --accent: #d9ff43;
-  --accent-dark: #26320a;
-  --danger: #8e2828;
+  --ink: var(--shopai-color-text-primary);
+  --paper: var(--shopai-color-bg-page);
+  --surface: var(--shopai-color-surface);
+  --muted: var(--shopai-color-text-muted);
+  --line: var(--shopai-color-border);
+  --accent: var(--shopai-color-accent);
+  --accent-dark: var(--shopai-color-accent-ink);
+  --danger: var(--shopai-color-error-text);
 }
 * {
   box-sizing: border-box;
@@ -18,7 +27,11 @@ html {
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 85% 8%, rgb(217 255 67 / 28%), transparent 23rem),
+    radial-gradient(
+      circle at 85% 8%,
+      var(--shopai-color-accent-soft),
+      transparent 23rem
+    ),
     var(--paper);
   color: var(--ink);
   font-family:
@@ -42,7 +55,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #5a7500;
+  outline: 3px solid var(--shopai-color-focus-ring);
 }
 a {
   color: inherit;
@@ -69,11 +82,11 @@ a {
   text-decoration: none;
 }
 .brand span {
-  color: #94b800;
+  color: var(--shopai-color-accent-ink);
   font-size: 0.65em;
 }
 .merchant-link {
-  color: #3f443e;
+  color: var(--shopai-color-text-secondary);
   font-size: 0.9rem;
   font-weight: 650;
 }
@@ -82,7 +95,7 @@ a {
 }
 .eyebrow {
   margin: 0 0 8px;
-  color: #50564f;
+  color: var(--shopai-color-text-secondary);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -109,7 +122,7 @@ h1 {
   flex-direction: column;
   gap: 7px;
   min-width: 0;
-  color: #454a44;
+  color: var(--shopai-color-text-secondary);
   font-size: 0.88rem;
   font-weight: 700;
 }
@@ -125,7 +138,7 @@ h1 {
   font-size: clamp(1.12rem, 2.2vw, 1.55rem);
 }
 .query-field input::placeholder {
-  color: #858a83;
+  color: var(--shopai-color-text-muted);
 }
 .filter-controls {
   display: grid;
@@ -224,7 +237,7 @@ button:disabled {
 }
 .onboarding-steps li.current,
 .onboarding-steps li.done {
-  border-color: #7c9d00;
+  border-color: var(--shopai-color-accent-ink);
 }
 .onboarding-steps a {
   display: flex;
@@ -276,7 +289,7 @@ button:disabled {
 .primary-link {
   margin-top: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--shopai-color-text-on-inverse);
 }
 .secondary-link {
   border: 1px solid var(--ink);
@@ -293,7 +306,7 @@ button:disabled {
   flex-direction: column;
   padding: 20px;
   border-radius: 16px;
-  background: #e9ece5;
+  background: var(--shopai-color-surface-muted);
 }
 .dashboard-stats strong {
   font-size: 2rem;
@@ -325,7 +338,7 @@ button:disabled {
 .field-help {
   margin: 18px 0;
   padding: 18px;
-  border: 1px dashed #a9aea4;
+  border: 1px dashed var(--shopai-color-border-strong);
   border-radius: 14px;
 }
 .field-help summary {
@@ -355,7 +368,7 @@ button:disabled {
   border: 1px solid var(--ink);
   border-radius: 10px;
   background: var(--ink);
-  color: white;
+  color: var(--shopai-color-text-on-inverse);
   font-weight: 800;
 }
 .role-note,
@@ -364,10 +377,11 @@ button:disabled {
 .panel-alert {
   padding: 16px 18px;
   border-radius: 14px;
-  background: #fff1b8;
+  background: var(--shopai-color-warning-bg);
 }
 .panel-alert {
-  background: #fff2f2;
+  border: 1px solid var(--shopai-color-error-border);
+  background: var(--shopai-color-error-bg);
   color: var(--danger);
 }
 .panel-alert p {
@@ -414,7 +428,7 @@ button:disabled {
   display: grid;
   gap: 3px;
   padding: 12px;
-  background: #fff2f2;
+  background: var(--shopai-color-error-bg);
   border-radius: 10px;
 }
 .row-errors small {
@@ -426,7 +440,7 @@ button:disabled {
   gap: 10px;
   padding: 12px clamp(16px, 4vw, 48px);
   background: var(--ink);
-  color: white;
+  color: var(--shopai-color-text-on-inverse);
 }
 .merchant-switcher select {
   width: auto;
@@ -461,12 +475,12 @@ button:disabled {
   border: 1px solid var(--ink);
   border-radius: 10px;
   background: var(--ink);
-  color: white;
+  color: var(--shopai-color-text-on-inverse);
   font-weight: 800;
 }
 .store-share > p {
   grid-column: 1 / -1;
-  color: #516500;
+  color: var(--shopai-color-success-text);
 }
 .store-shell {
   width: min(1180px, 100%);
@@ -500,7 +514,7 @@ button:disabled {
 .store-search label {
   display: grid;
   gap: 7px;
-  color: #454a44;
+  color: var(--shopai-color-text-secondary);
   font-size: 0.88rem;
   font-weight: 750;
 }
@@ -518,7 +532,7 @@ button:disabled {
   border: 1px solid var(--ink);
   border-radius: 12px;
   background: var(--ink);
-  color: white;
+  color: var(--shopai-color-text-on-inverse);
   font-weight: 800;
 }
 .store-results {
@@ -538,7 +552,7 @@ button:disabled {
 .store-empty {
   margin-top: 48px;
   padding: 28px;
-  border: 1px dashed #a9aea4;
+  border: 1px dashed var(--shopai-color-border-strong);
   border-radius: 18px;
 }
 .store-empty h2 {
@@ -595,7 +609,7 @@ button:disabled {
 .error-state button {
   border: 1px solid var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--shopai-color-text-on-inverse);
   font-weight: 780;
 }
 .search-button {
@@ -612,20 +626,20 @@ button:disabled {
   border-radius: 14px;
 }
 .catalog-note {
-  background: #e8ebe4;
-  color: #363b35;
+  background: var(--shopai-color-neutral-bg);
+  color: var(--shopai-color-text-secondary);
 }
 .catalog-note.demo {
-  background: #fff1b8;
-  color: #4d3c00;
+  background: var(--shopai-color-warning-bg);
+  color: var(--shopai-color-warning-text);
 }
 .catalog-note strong {
   flex: 0 0 auto;
 }
 .error-state {
   justify-content: space-between;
-  border: 1px solid #e4b5b5;
-  background: #fff2f2;
+  border: 1px solid var(--shopai-color-error-border);
+  background: var(--shopai-color-error-bg);
   color: var(--danger);
 }
 .error-state p {
@@ -664,7 +678,7 @@ button:disabled {
 }
 .active-filters button,
 .facet-groups button {
-  border: 1px solid #bfc4ba;
+  border: 1px solid var(--shopai-color-border);
   background: #fff;
   color: var(--ink);
   font-weight: 700;
@@ -675,14 +689,14 @@ button:disabled {
 }
 .active-filters button span {
   margin-left: 5px;
-  color: #72776f;
+  color: var(--shopai-color-text-muted);
   font-size: 1.1em;
 }
 .warnings {
   margin: 20px 0;
   padding-left: 14px;
-  border-left: 3px solid #d1a300;
-  color: #675300;
+  border-left: 3px solid var(--shopai-color-warning-border);
+  color: var(--shopai-color-warning-text);
 }
 .warnings p {
   margin: 5px 0;
@@ -761,10 +775,10 @@ button:disabled {
   aspect-ratio: 4 / 3;
   place-items: center;
   object-fit: cover;
-  background: #e8ebe5;
+  background: var(--shopai-color-surface-muted);
 }
 .product-image-placeholder {
-  color: #6f756e;
+  color: var(--shopai-color-text-muted);
   font-size: 3rem;
 }
 .product-card-body {
@@ -800,14 +814,14 @@ button:disabled {
   font-weight: 700;
 }
 .stock.stock-in_stock {
-  color: #24643e;
+  color: var(--shopai-color-stock-in-stock);
 }
 .stock.stock-out_of_stock {
   color: #8e2828;
 }
 .stock.stock-unknown,
 .stock.stock-stale {
-  color: #6e5c14;
+  color: var(--shopai-color-stock-stale);
 }
 .product-freshness {
   margin: 0 0 15px;
@@ -825,8 +839,8 @@ button:disabled {
   margin-bottom: 10px;
   padding: 4px 7px;
   border-radius: 5px;
-  background: #fff1b8;
-  color: #4d3c00;
+  background: var(--shopai-color-warning-bg);
+  color: var(--shopai-color-warning-text);
   font-size: 0.72rem;
   font-weight: 850;
   letter-spacing: 0.06em;
@@ -834,9 +848,9 @@ button:disabled {
 }
 .empty-state,
 .start-state {
-  border: 1px dashed #adb2aa;
+  border: 1px dashed var(--shopai-color-border-strong);
   border-radius: 18px;
-  background: rgb(255 255 255 / 45%);
+  background: var(--shopai-color-surface-muted);
 }
 .empty-state {
   padding: clamp(28px, 5vw, 56px);
@@ -859,7 +873,7 @@ button:disabled {
   color: var(--muted);
 }
 .start-state span {
-  color: #769600;
+  color: var(--shopai-color-success-text);
   font-size: 2rem;
 }
 .start-state p {
@@ -907,5 +921,172 @@ button:disabled {
   *::before,
   *::after {
     scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
+}
+
+/* --- ÜRÜN-019: daha önce tanımsız kalan sınıflar (dashboard/connections) --- */
+
+.success-note {
+  padding: 16px 18px;
+  border: 1px solid var(--shopai-color-success-border);
+  border-radius: 14px;
+  background: var(--shopai-color-success-bg);
+  color: var(--shopai-color-success-text);
+}
+
+.error-note {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--shopai-color-error-border);
+  border-radius: 10px;
+  background: var(--shopai-color-error-bg);
+  color: var(--shopai-color-error-text);
+  font-size: 0.88rem;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--shopai-color-action-primary);
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-action-primary);
+  color: var(--shopai-color-text-on-action);
+  font-weight: var(--shopai-font-weight-extrabold);
+  text-decoration: none;
+}
+
+.button-link:hover,
+.button-link:focus-visible {
+  background: var(--shopai-color-action-primary-hover);
+  border-color: var(--shopai-color-action-primary-hover);
+}
+
+.connection-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.connection-list h2 {
+  margin: 0 0 6px;
+}
+
+.connection-list article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--shopai-color-bg-page);
+}
+
+.connection-list article h3 {
+  margin: 0;
+}
+
+.connection-list article p {
+  margin: 0;
+  color: var(--shopai-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.connector-wizard-steps {
+  margin: 28px 0 32px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
+  overflow-x: auto;
+}
+
+.connector-wizard-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 8px 0;
+  border-top: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: var(--shopai-font-weight-bold);
+  min-width: 0;
+}
+
+.connector-wizard-steps li.current,
+.connector-wizard-steps li.done {
+  border-color: var(--shopai-color-accent-ink);
+  color: var(--ink);
+}
+
+.connector-wizard-steps li span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.connector-wizard-steps li.current span {
+  background: var(--accent);
+  border-color: var(--ink);
+}
+
+.connector-wizard-card {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shopai-shadow-raised);
+}
+
+.connector-wizard-card h2 {
+  margin: 0;
+}
+
+.connector-wizard-card > p {
+  margin: 0;
+  color: var(--shopai-color-text-secondary);
+}
+
+.connector-choice {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--shopai-color-border-strong);
+  border-radius: 14px;
+  background: var(--shopai-color-bg-page);
+  text-align: left;
+}
+
+.connector-choice:hover:not(:disabled),
+.connector-choice:focus-visible {
+  border-color: var(--ink);
+}
+
+.connector-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.connector-choice strong {
+  font-size: 1.05rem;
+}
+
+.connector-choice span {
+  color: var(--shopai-color-text-secondary);
+  font-size: 0.88rem;
 }

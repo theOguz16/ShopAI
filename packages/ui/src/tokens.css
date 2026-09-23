@@ -1,0 +1,193 @@
+/*
+ * ShopAI ortak design token'ları (ÜRÜN-019).
+ *
+ * Kurallar:
+ * - Tüm token'lar `--shopai-` öneki taşır; host sayfalarla çakışmayı önler.
+ * - Token isimleri semantic'tir: değer değil anlam (yüzey, eylem, durum) anlatır.
+ * - Light tema varsayılandır. Dark tema `[data-shopai-theme="dark"]` attribute'u
+ *   herhangi bir kapsayıcıda (html veya bir div) açılır. Tarayıcı medya sorgusu
+ *   ile otomatik geçiş bilinçli olarak yapılmaz; tema seçimi uygulamaya aittir.
+ * - Kontrast: docs/ui/design-system.md içindeki tablo WCAG 4.5:1 (metin) ve
+ *   3:1 (UI bileşeni) hedefiyle scripts/design-contrast-report.mjs ile doğrulanır.
+ *
+ * Web (apps/web) ve ChatGPT widget (apps/chatgpt-widget) bu dosyayı
+ * `@shopai/ui/tokens.css` üzerinden import eder.
+ */
+
+:root,
+.shopai-scope {
+  /* --- Yüzeyler --- */
+  --shopai-color-bg-page: #f6f5ef;
+  --shopai-color-surface: #ffffff;
+  --shopai-color-surface-muted: #eceee8;
+  --shopai-color-surface-raised: #ffffff;
+  --shopai-color-surface-inverse: #172019;
+  --shopai-color-overlay: rgb(21 23 21 / 55%);
+
+  /* --- Metin --- */
+  --shopai-color-text-primary: #151715;
+  --shopai-color-text-secondary: #3f443e;
+  --shopai-color-text-muted: #5c625b;
+  --shopai-color-text-on-inverse: #ffffff;
+  --shopai-color-text-on-action: #ffffff;
+
+  /* --- Eylem (buton/bağlantı) --- */
+  --shopai-color-action-primary: #151715;
+  --shopai-color-action-primary-hover: #333c33;
+  --shopai-color-action-secondary-bg: #ffffff;
+  --shopai-color-action-secondary-hover: #f3f5f0;
+  --shopai-color-action-secondary-border: #151715;
+  --shopai-color-action-secondary-text: #151715;
+  --shopai-color-action-disabled-bg: #e4e7e1;
+  --shopai-color-action-disabled-text: #6d736c;
+
+  /* --- Marka vurgusu --- */
+  --shopai-color-accent: #d9ff43;
+  --shopai-color-accent-ink: #3d4b00; /* vurgu rengiyle boyanmış metin/çizgi */
+  --shopai-color-on-accent: #26320a; /* accent zemin üzerindeki metin */
+  --shopai-color-accent-soft: rgb(217 255 67 / 22%);
+
+  /* --- Kenarlık / odak --- */
+  --shopai-color-border: #d9dcd4;
+  --shopai-color-border-strong: #83887f;
+  --shopai-color-focus-ring: #5a7500;
+
+  /* --- Durum renkleri (metin / zemin / kenarlık üçlüsü) --- */
+  --shopai-color-success-text: #1e6b40;
+  --shopai-color-success-bg: #e8f3ea;
+  --shopai-color-success-border: #b3d4bd;
+  --shopai-color-warning-text: #634f00;
+  --shopai-color-warning-bg: #fff1b8;
+  --shopai-color-warning-border: #d9bb4e;
+  --shopai-color-error-text: #8e2828;
+  --shopai-color-error-bg: #fdf0f0;
+  --shopai-color-error-border: #e4b5b5;
+  --shopai-color-info-text: #33517a;
+  --shopai-color-info-bg: #e9f0f9;
+  --shopai-color-info-border: #bfcedf;
+  --shopai-color-neutral-text: #5c625b;
+  --shopai-color-neutral-bg: #eceee8;
+  --shopai-color-neutral-border: #d0d4cc;
+
+  /* --- Stok durumu (renk + etiket birlikte kullanılır, yalnız renk yetmez) --- */
+  --shopai-color-stock-in-stock: #1e6b40;
+  --shopai-color-stock-out-of-stock: #8e2828;
+  --shopai-color-stock-unknown: #634f00;
+  --shopai-color-stock-stale: #634f00;
+
+  /* --- Aralık (4px tabanlı ölçek) --- */
+  --shopai-space-1: 4px;
+  --shopai-space-2: 8px;
+  --shopai-space-3: 12px;
+  --shopai-space-4: 16px;
+  --shopai-space-5: 20px;
+  --shopai-space-6: 24px;
+  --shopai-space-8: 32px;
+  --shopai-space-10: 40px;
+  --shopai-space-12: 48px;
+
+  /* --- Tipografi --- */
+  --shopai-font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --shopai-font-size-2xs: 0.6875rem; /* 11px */
+  --shopai-font-size-xs: 0.75rem; /* 12px */
+  --shopai-font-size-sm: 0.8125rem; /* 13px */
+  --shopai-font-size-md: 0.875rem; /* 14px */
+  --shopai-font-size-base: 1rem; /* 16px */
+  --shopai-font-size-lg: 1.125rem; /* 18px */
+  --shopai-font-size-xl: 1.25rem; /* 20px */
+  --shopai-font-size-2xl: 1.5rem; /* 24px */
+  --shopai-font-size-3xl: 2rem; /* 32px */
+  --shopai-font-weight-medium: 600;
+  --shopai-font-weight-bold: 700;
+  --shopai-font-weight-extrabold: 800;
+  --shopai-line-height-tight: 1.25;
+  --shopai-line-height-base: 1.5;
+
+  /* --- Köşe yarıçapı --- */
+  --shopai-radius-sm: 8px;
+  --shopai-radius-md: 10px;
+  --shopai-radius-lg: 14px;
+  --shopai-radius-xl: 18px;
+  --shopai-radius-2xl: 24px;
+  --shopai-radius-pill: 999px;
+
+  /* --- Gölge --- */
+  --shopai-shadow-card: 0 1px 2px rgb(23 32 25 / 5%);
+  --shopai-shadow-raised: 0 18px 60px rgb(33 39 28 / 8%);
+
+  /* --- Katman --- */
+  --shopai-z-sticky: 200;
+  --shopai-z-overlay: 300;
+  --shopai-z-toast: 400;
+
+  /* --- Geçiş --- */
+  --shopai-transition-fast: 120ms ease-out;
+  --shopai-transition-base: 200ms ease-out;
+}
+
+[data-shopai-theme="dark"] {
+  /* --- Yüzeyler --- */
+  --shopai-color-bg-page: #101410;
+  --shopai-color-surface: #1a1f1a;
+  --shopai-color-surface-muted: #222822;
+  --shopai-color-surface-raised: #1e241e;
+  --shopai-color-surface-inverse: #f2f4ec;
+  --shopai-color-overlay: rgb(0 0 0 / 65%);
+
+  /* --- Metin --- */
+  --shopai-color-text-primary: #f1f4ec;
+  --shopai-color-text-secondary: #c9cfc5;
+  --shopai-color-text-muted: #a2aaa1;
+  --shopai-color-text-on-inverse: #151715;
+  --shopai-color-text-on-action: #26320a;
+
+  /* --- Eylem --- */
+  --shopai-color-action-primary: #d9ff43;
+  --shopai-color-action-primary-hover: #e6ff77;
+  --shopai-color-action-secondary-bg: #232923;
+  --shopai-color-action-secondary-hover: #2b322b;
+  --shopai-color-action-secondary-border: #4c544c;
+  --shopai-color-action-secondary-text: #f1f4ec;
+  --shopai-color-action-disabled-bg: #262b26;
+  --shopai-color-action-disabled-text: #8b938a;
+
+  /* --- Marka vurgusu --- */
+  --shopai-color-accent: #d9ff43;
+  --shopai-color-accent-ink: #d9ff43;
+  --shopai-color-on-accent: #26320a;
+  --shopai-color-accent-soft: rgb(217 255 67 / 14%);
+
+  /* --- Kenarlık / odak --- */
+  --shopai-color-border: #343a34;
+  --shopai-color-border-strong: #6e786e;
+  --shopai-color-focus-ring: #d9ff43;
+
+  /* --- Durum renkleri --- */
+  --shopai-color-success-text: #8fd8ab;
+  --shopai-color-success-bg: #1b3024;
+  --shopai-color-success-border: #2f5a41;
+  --shopai-color-warning-text: #ffd97a;
+  --shopai-color-warning-bg: #2f2a16;
+  --shopai-color-warning-border: #5f5224;
+  --shopai-color-error-text: #ff9c92;
+  --shopai-color-error-bg: #34201d;
+  --shopai-color-error-border: #6b342b;
+  --shopai-color-info-text: #a5c4f2;
+  --shopai-color-info-bg: #1c2839;
+  --shopai-color-info-border: #3a5273;
+  --shopai-color-neutral-text: #b9c0b7;
+  --shopai-color-neutral-bg: #262c26;
+  --shopai-color-neutral-border: #3c433c;
+
+  /* --- Stok durumu --- */
+  --shopai-color-stock-in-stock: #8fd8ab;
+  --shopai-color-stock-out-of-stock: #ff9c92;
+  --shopai-color-stock-unknown: #e8d27f;
+  --shopai-color-stock-stale: #e8d27f;
+
+  /* --- Gölge (dark'ta kenarlıkla derinlik) --- */
+  --shopai-shadow-card: 0 1px 2px rgb(0 0 0 / 30%);
+  --shopai-shadow-raised: 0 18px 60px rgb(0 0 0 / 45%);
+}

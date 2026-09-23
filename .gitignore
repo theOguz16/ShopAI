@@ -13,3 +13,4 @@ private/
 *.tsbuildinfo
 .DS_Store
 artifacts/pilot-rehearsal/
+artifacts/urun-019/*.png
