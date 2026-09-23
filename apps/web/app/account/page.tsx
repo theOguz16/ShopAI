@@ -9,6 +9,7 @@ export default function AccountPage() {
   const [checking, setChecking] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -67,11 +68,33 @@ export default function AccountPage() {
     }
   }
 
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const response = await authenticatedFetch(`${api}/v1/auth/logout`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('SIGN_OUT_FAILED');
+      window.location.replace('/login');
+    } catch {
+      setMessage('Çıkış yapılamadı. Lütfen yeniden deneyin.');
+      setSigningOut(false);
+    }
+  }
+
   if (checking) return <main>Oturum doğrulanıyor…</main>;
   return (
     <main>
       <a href="/">Kataloğa dön</a>
       <h1>Hesap durumu</h1>
+      <button
+        type="button"
+        disabled={signingOut}
+        onClick={() => void signOut()}
+      >
+        {signingOut ? 'Çıkılıyor…' : 'Çıkış yap'}
+      </button>
       <p>
         Hesabı pasife almak bütün aktif oturumları sonlandırır ve yeniden girişi
         engeller. Bu işlem kişisel kayıtları, kimlik bilgilerini ve mağaza
