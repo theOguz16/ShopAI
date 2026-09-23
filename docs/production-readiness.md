@@ -22,7 +22,9 @@ TASK-021'in görev seviyesi mühendislik/dış kabul özeti `docs/06-implementat
 - [x] Rollback explicit eski image SHA'sına application rollback yapıyor; migration otomatik geri alınmıyor.
 - [x] Production deploy exact release için başarılı `Staging hosted smoke` workflow kanıtı istiyor.
 
-Buradaki AES-256-GCM maddesi uygulamanın yerel managed-secret dosyalarını şifrelemesini kanıtlar. Vault/KMS/managed secret provider, key rotation, secret access audit'i ve pilot plaintext migration/safe deletion kapsamını kanıtlamaz; bunlar [issue #9](https://github.com/theOguz16/ShopAI/issues/9) açıkken production secret lifecycle kabulü sayılmaz.
+Buradaki AES-256-GCM maddesi uygulamanın yerel managed-secret dosyalarını şifrelemesini kanıtlar. Vault/KMS/managed secret provider, key rotation ve pilot plaintext migration/safe deletion operasyonunu kanıtlamaz; bunlar [issue #9](https://github.com/theOguz16/ShopAI/issues/9) açıkken production secret lifecycle kabulü sayılmaz. Secret access audit'i ÜRÜN-004 kodunda eklenir, gerçek ortamda ayrıca doğrulanmalıdır.
+
+ÜRÜN-004 kodu connection-scope, rotation, revocation ve metadata audit'i ekler; [operasyon ve migration kararı](follow-ups/urun-004-managed-secrets.md) uygulanmadan production kabulü verilmez. Önce `0034_connector_secret_lifecycle.sql` migration'ını inceleyin; staging'de DB+private volume backup/restore, ayrı key ve `scripts/migrate-connector-secrets.mts` plan/uygulama koşusunu doğrulayın. Production veri migration'ı bu görevde yapılmaz. Harici Vault/KMS/managed provider gereksinimi #9'da açık kalır.
 
 ## 2. GitHub `production` environment kurulumu — OPERATÖR GATE
 

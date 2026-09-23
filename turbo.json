@@ -27,6 +27,7 @@
         "LOG_LEVEL",
         "NEXT_PUBLIC_API_URL",
         "UPLOAD_DIR",
+        "CONNECTOR_SECRET_ENCRYPTION_KEY",
         "AI_PROVIDER",
         "OPENAI_API_KEY",
         "AI_MODEL",

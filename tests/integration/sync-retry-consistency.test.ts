@@ -151,7 +151,7 @@ describe.sequential('catalog sync commit-aware progress and retry', () => {
         { resolve: async () => ({}) },
         () => connector(firstAttemptCursors),
       ),
-    ).rejects.toThrow('Failed query');
+    ).rejects.toThrow('Catalog sync failed');
 
     const [failedProgress] = await database.db
       .select()

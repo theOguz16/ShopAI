@@ -27,6 +27,36 @@ afterEach(async () => {
 });
 
 describe('managed connector secret encryption', () => {
+  it('binds a scoped secret to merchant, connection and provider', async () => {
+    const root = await privateRoot();
+    const store = new ManagedConnectorSecretStore(root, encryptionKey);
+    const scope = {
+      merchantId: 'merchant-a',
+      connectionId: 'connection-a',
+      provider: 'woocommerce',
+    };
+    const reference = await store.createScoped(credentials, scope);
+    await expect(store.resolveScoped(reference, scope)).resolves.toEqual(
+      credentials,
+    );
+    await expect(
+      store.resolveScoped(reference, { ...scope, merchantId: 'merchant-b' }),
+    ).rejects.toThrow('Connector secret çözülemedi.');
+    await expect(
+      store.resolveScoped(reference, {
+        ...scope,
+        connectionId: 'connection-b',
+      }),
+    ).rejects.toThrow('Connector secret çözülemedi.');
+    await expect(store.resolve(reference)).rejects.toThrow(
+      'Scoped connector secret için bağlam gerekli.',
+    );
+    const raw = await readFile(
+      join(root, 'connector-secrets', `${reference.slice(9)}.json`),
+      'utf8',
+    );
+    expect(raw).not.toContain(credentials.consumerSecret);
+  });
   it('encrypts new credentials at rest and resolves them with the same key', async () => {
     const root = await privateRoot();
     const store = new ManagedConnectorSecretStore(root, encryptionKey);

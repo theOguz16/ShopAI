@@ -13,6 +13,8 @@ import {
 import { type SourceRow, type SyncJob, syncJobSchema } from '@shopai/contracts';
 import {
   connections,
+  connectorSecretAudit,
+  connectorSecrets,
   type Database,
   importCatalog,
   inventory,
@@ -29,25 +31,35 @@ import {
 } from './product-alerts.js';
 
 export interface SecretResolver {
-  resolve(reference: string): Promise<unknown>;
+  resolve(
+    reference: string,
+    scope?: { merchantId: string; connectionId: string; provider: string },
+  ): Promise<unknown>;
 }
 
 export class EnvironmentSecretResolver implements SecretResolver {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
-  async resolve(reference: string) {
+  async resolve(
+    reference: string,
+    scope?: { merchantId: string; connectionId: string; provider: string },
+  ) {
     if (!reference.startsWith('secret://'))
       throw new Error('Yalnız secret:// referansları desteklenir.');
     const key = reference.slice('secret://'.length);
     if (!/^[A-Z][A-Z0-9_]{2,80}$/u.test(key))
       throw new Error('Geçersiz secret referansı.');
-    const value = this.environment[key];
-    if (value) return JSON.parse(value);
-    if (ManagedConnectorSecretStore.supports(reference))
-      return new ManagedConnectorSecretStore(
+    if (ManagedConnectorSecretStore.supports(reference)) {
+      const store = new ManagedConnectorSecretStore(
         this.environment.UPLOAD_DIR ?? 'private/uploads',
         this.environment.CONNECTOR_SECRET_ENCRYPTION_KEY,
-      ).resolve(reference);
-    throw new Error(`Secret çözülemedi: ${key}`);
+      );
+      return scope
+        ? store.resolveScoped(reference, scope)
+        : store.resolve(reference);
+    }
+    const value = this.environment[key];
+    if (value) return JSON.parse(value);
+    throw new Error('Secret çözülemedi.');
   }
 }
 
@@ -78,6 +90,7 @@ export async function syncCatalogConnection(
   factory: ConnectorFactory = createConnector,
   now: () => Date = () => new Date(),
   alertEmailSender?: AlertEmailSender,
+  correlationId?: string,
 ) {
   const job = syncJobSchema.parse(input);
   const startedAt = now();
@@ -90,10 +103,24 @@ export async function syncCatalogConnection(
         and(
           eq(connections.id, job.connectionId),
           eq(connections.merchantId, job.merchantId),
-          eq(connections.active, true),
         ),
       );
-    if (!row || row.authorizationStatus === 'revoked') return null;
+    if (!row) return null;
+    if (!row.active || row.authorizationStatus === 'revoked') {
+      if (
+        row.credentialsRef &&
+        ManagedConnectorSecretStore.supports(row.credentialsRef)
+      )
+        await tx.insert(connectorSecretAudit).values({
+          merchantId: job.merchantId,
+          connectionId: job.connectionId,
+          reference: row.credentialsRef,
+          event: 'resolution_failed',
+          actor: 'worker',
+          correlationId,
+        });
+      return null;
+    }
     if (!row.credentialsRef) return null;
     const [ownership] = await tx
       .select({ id: merchantCredentialOwnerships.id })
@@ -106,6 +133,32 @@ export async function syncCatalogConnection(
         ),
       );
     if (!ownership) return null;
+    if (ManagedConnectorSecretStore.supports(row.credentialsRef)) {
+      const [secret] = await tx
+        .select({ id: connectorSecrets.id })
+        .from(connectorSecrets)
+        .where(
+          and(
+            eq(connectorSecrets.merchantId, job.merchantId),
+            eq(connectorSecrets.connectionId, job.connectionId),
+            eq(connectorSecrets.provider, row.provider),
+            eq(connectorSecrets.reference, row.credentialsRef),
+            eq(connectorSecrets.status, 'active'),
+          ),
+        )
+        .limit(1);
+      if (!secret) {
+        await tx.insert(connectorSecretAudit).values({
+          merchantId: job.merchantId,
+          connectionId: job.connectionId,
+          reference: row.credentialsRef,
+          event: 'resolution_failed',
+          actor: 'worker',
+          correlationId,
+        });
+        return null;
+      }
+    }
     let effectiveSyncMode = row.syncMode as 'full' | 'incremental';
     if (effectiveSyncMode === 'incremental') {
       const revalidationCutoff = new Date(
@@ -162,10 +215,42 @@ export async function syncCatalogConnection(
     );
     if (!connection.credentialsRef)
       throw new Error('Bağlantının secret referansı eksik.');
-    const connector = factory(
-      connection.provider,
-      await secrets.resolve(connection.credentialsRef),
-    );
+    const reference = connection.credentialsRef;
+    let credentials: unknown;
+    try {
+      credentials = await secrets.resolve(reference, {
+        merchantId: job.merchantId,
+        connectionId: job.connectionId,
+        provider: connection.provider,
+      });
+      if (ManagedConnectorSecretStore.supports(reference))
+        await db.transaction(async (tx) => {
+          await setTenantContext(tx, job.merchantId);
+          await tx.insert(connectorSecretAudit).values({
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            reference,
+            event: 'accessed',
+            actor: 'worker',
+            correlationId,
+          });
+        });
+    } catch {
+      if (ManagedConnectorSecretStore.supports(reference))
+        await db.transaction(async (tx) => {
+          await setTenantContext(tx, job.merchantId);
+          await tx.insert(connectorSecretAudit).values({
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            reference,
+            event: 'resolution_failed',
+            actor: 'worker',
+            correlationId,
+          });
+        });
+      throw new Error('Connector secret çözülemedi.');
+    }
+    const connector = factory(connection.provider, credentials);
     await connector.validate();
     const snapshot = await collectCatalogSnapshot({
       connector,
@@ -240,6 +325,27 @@ export async function syncCatalogConnection(
     };
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
+      const [live] = await tx
+        .select({
+          active: connections.active,
+          authorizationStatus: connections.authorizationStatus,
+          credentialsRef: connections.credentialsRef,
+        })
+        .from(connections)
+        .where(
+          and(
+            eq(connections.id, job.connectionId),
+            eq(connections.merchantId, job.merchantId),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (
+        !live?.active ||
+        live.authorizationStatus === 'revoked' ||
+        live.credentialsRef !== connection.credentialsRef
+      )
+        throw new Error('Connection changed during sync.');
       if (connection.effectiveSyncMode === 'full') {
         const scope = and(
           eq(offers.connectionId, job.connectionId),
@@ -269,7 +375,12 @@ export async function syncCatalogConnection(
           lastFetchedAt: new Date(snapshot.latestFetchedAt),
           lastSyncError: null,
         })
-        .where(eq(connections.id, job.connectionId));
+        .where(
+          and(
+            eq(connections.id, job.connectionId),
+            eq(connections.active, true),
+          ),
+        );
     });
     await writeConnectionSyncProgress(
       db,
@@ -293,13 +404,8 @@ export async function syncCatalogConnection(
         job.merchantId,
         alertEmailSender,
       );
-    } catch (error) {
-      alertEvaluation = {
-        error:
-          error instanceof Error
-            ? error.message.slice(0, 1000)
-            : 'Alert evaluation failed',
-      };
+    } catch {
+      alertEvaluation = { error: 'Alert evaluation failed' };
     }
 
     return {
@@ -312,7 +418,9 @@ export async function syncCatalogConnection(
     } as const;
   } catch (error) {
     const message =
-      error instanceof Error ? error.message.slice(0, 1000) : 'Senkron hatası';
+      error instanceof ConnectorHttpError
+        ? `Connector HTTP ${error.status}`
+        : 'Catalog sync failed';
     const failedAt = now();
     progress = {
       ...progress,
@@ -329,7 +437,12 @@ export async function syncCatalogConnection(
             ? { authorizationStatus: 'reauthorization_required' }
             : {}),
         })
-        .where(eq(connections.id, job.connectionId));
+        .where(
+          and(
+            eq(connections.id, job.connectionId),
+            eq(connections.active, true),
+          ),
+        );
     });
     await writeConnectionSyncProgress(
       db,
@@ -343,6 +456,8 @@ export async function syncCatalogConnection(
       },
       failedAt,
     );
-    throw error;
+    throw error instanceof ConnectorHttpError
+      ? new ConnectorHttpError(error.status, message, error.retryAfterMs)
+      : new Error(message);
   }
 }

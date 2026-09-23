@@ -9,8 +9,14 @@ const envelopeVersion = 1 as const;
 const algorithm = 'aes-256-gcm' as const;
 const aad = Buffer.from('shopai-managed-connector-secret:v1', 'utf8');
 
+export type SecretScope = {
+  merchantId: string;
+  connectionId: string;
+  provider: string;
+};
+
 type EncryptedEnvelope = {
-  v: typeof envelopeVersion;
+  v: 1 | 2;
   alg: typeof algorithm;
   iv: string;
   tag: string;
@@ -30,14 +36,34 @@ export class ManagedConnectorSecretStore {
   }
 
   async create(credentials: unknown) {
+    if (!this.encryptionKey)
+      throw new Error('Connector encryption key gerekli.');
     const parsed = connectorOnboardingCredentialsSchema.parse(credentials);
     const key = `ONBOARDING_${randomBytes(16).toString('hex').toUpperCase()}`;
     const directory = join(this.privateRoot, 'connector-secrets');
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    const stored = this.encryptionKey
-      ? encrypt(JSON.stringify(parsed), this.encryptionKey)
-      : parsed;
+    const stored = encrypt(JSON.stringify(parsed), this.encryptionKey);
     await writeFile(join(directory, `${key}.json`), JSON.stringify(stored), {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    return `${prefix}${key}`;
+  }
+
+  async createScoped(credentials: unknown, scope: SecretScope) {
+    if (!this.encryptionKey)
+      throw new Error('Connector encryption key gerekli.');
+    const parsed = connectorOnboardingCredentialsSchema.parse(credentials);
+    const key = `ONBOARDING_${randomBytes(16).toString('hex').toUpperCase()}`;
+    const directory = join(this.privateRoot, 'connector-secrets');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const encrypted = encrypt(
+      JSON.stringify(parsed),
+      this.encryptionKey,
+      scope,
+    );
+    await writeFile(join(directory, `${key}.json`), JSON.stringify(encrypted), {
       encoding: 'utf8',
       flag: 'wx',
       mode: 0o600,
@@ -52,10 +78,26 @@ export class ManagedConnectorSecretStore {
       'utf8',
     );
     const stored = JSON.parse(content) as unknown;
+    if (isEncryptedEnvelope(stored) && stored.v === 2)
+      throw new Error('Scoped connector secret için bağlam gerekli.');
     const plaintext = isEncryptedEnvelope(stored)
       ? JSON.parse(decrypt(stored, this.encryptionKey))
       : stored;
     return connectorOnboardingCredentialsSchema.parse(plaintext);
+  }
+
+  async resolveScoped(reference: string, scope: SecretScope) {
+    const key = managedKey(reference);
+    const content = await readFile(
+      join(this.privateRoot, 'connector-secrets', `${key}.json`),
+      'utf8',
+    );
+    const stored = JSON.parse(content) as unknown;
+    if (!isEncryptedEnvelope(stored) || stored.v !== 2)
+      throw new Error('Scoped connector secret bekleniyor.');
+    return connectorOnboardingCredentialsSchema.parse(
+      JSON.parse(decrypt(stored, this.encryptionKey, scope)),
+    );
   }
 
   async remove(reference: string) {
@@ -71,16 +113,20 @@ export class ManagedConnectorSecretStore {
   }
 }
 
-function encrypt(plaintext: string, key: Buffer): EncryptedEnvelope {
+function encrypt(
+  plaintext: string,
+  key: Buffer,
+  scope?: SecretScope,
+): EncryptedEnvelope {
   const iv = randomBytes(12);
   const cipher = createCipheriv(algorithm, key, iv);
-  cipher.setAAD(aad);
+  cipher.setAAD(scope ? scopedAad(scope) : aad);
   const ciphertext = Buffer.concat([
     cipher.update(plaintext, 'utf8'),
     cipher.final(),
   ]);
   return {
-    v: envelopeVersion,
+    v: scope ? 2 : envelopeVersion,
     alg: algorithm,
     iv: iv.toString('base64'),
     tag: cipher.getAuthTag().toString('base64'),
@@ -88,7 +134,11 @@ function encrypt(plaintext: string, key: Buffer): EncryptedEnvelope {
   };
 }
 
-function decrypt(envelope: EncryptedEnvelope, key: Buffer | null) {
+function decrypt(
+  envelope: EncryptedEnvelope,
+  key: Buffer | null,
+  scope?: SecretScope,
+) {
   if (!key)
     throw new Error('Encrypted connector secret için encryption key gerekli.');
   try {
@@ -97,7 +147,7 @@ function decrypt(envelope: EncryptedEnvelope, key: Buffer | null) {
       key,
       Buffer.from(envelope.iv, 'base64'),
     );
-    decipher.setAAD(aad);
+    decipher.setAAD(envelope.v === 2 && scope ? scopedAad(scope) : aad);
     decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
     return Buffer.concat([
       decipher.update(Buffer.from(envelope.ciphertext, 'base64')),
@@ -112,11 +162,18 @@ function isEncryptedEnvelope(value: unknown): value is EncryptedEnvelope {
   if (!value || typeof value !== 'object') return false;
   const envelope = value as Partial<EncryptedEnvelope>;
   return (
-    envelope.v === envelopeVersion &&
+    (envelope.v === envelopeVersion || envelope.v === 2) &&
     envelope.alg === algorithm &&
     typeof envelope.iv === 'string' &&
     typeof envelope.tag === 'string' &&
     typeof envelope.ciphertext === 'string'
+  );
+}
+
+function scopedAad(scope: SecretScope) {
+  return Buffer.from(
+    `shopai-managed-connector-secret:v2:${scope.merchantId}:${scope.connectionId}:${scope.provider}`,
+    'utf8',
   );
 }
 

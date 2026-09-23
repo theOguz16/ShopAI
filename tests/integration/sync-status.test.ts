@@ -43,6 +43,7 @@ if (!databaseUrl || !redisUrl) {
     AUTH_PILOT_CREDENTIALS: JSON.stringify({ [email]: loginToken }),
     LOGIN_RATE_LIMIT_MAX: '30',
     UPLOAD_DIR: uploadDir,
+    CONNECTOR_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString('base64'),
     LOG_LEVEL: 'silent',
   });
   const database = createDatabase(databaseUrl, {

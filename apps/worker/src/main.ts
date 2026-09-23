@@ -44,7 +44,6 @@ const connectorFailureFields = (error: Error) =>
     ? {
         httpStatus: error.status,
         retryAfterMs: error.retryAfterMs,
-        ...error.diagnostics,
       }
     : {};
 const worker = new Worker(
@@ -69,6 +68,7 @@ const syncWorker = new Worker(
       undefined,
       undefined,
       alertEmailSender,
+      job.id,
     ),
   {
     connection: {
