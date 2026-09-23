@@ -101,7 +101,10 @@ export function registerBetterAuthRoutes(
       const path = request.url
         .split('?')[0]
         ?.replace(/^\/v1\/auth\/better\//u, '');
-      if (!path || !allowedAuthPaths.has(path))
+      const passwordResetCallback =
+        request.method === 'GET' &&
+        /^reset-password\/[A-Za-z0-9_-]+$/u.test(path ?? '');
+      if (!path || (!allowedAuthPaths.has(path) && !passwordResetCallback))
         return reply.code(404).send({ code: 'NOT_FOUND' });
       // Better Auth endpoints never grant ShopAI merchant access by themselves.
       if (

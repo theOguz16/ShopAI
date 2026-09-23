@@ -276,6 +276,22 @@ describe('Better Auth API ve pilot bağlama', () => {
     expect(verificationUrl).toContain('/v1/auth/better/reset-password/');
     const resetToken = new URL(verificationUrl).pathname.split('/').at(-1);
     expect(resetToken).toBeTruthy();
+    const resetLink = new URL(verificationUrl);
+    const resetCallback = await app.inject({
+      method: 'GET',
+      url: `${resetLink.pathname}${resetLink.search}`,
+    });
+    expect(resetCallback.statusCode).toBe(302);
+    const redirect = new URL(resetCallback.headers.location as string);
+    expect(redirect.origin).toBe(origin);
+    expect(redirect.pathname).toBe('/login');
+    expect(redirect.searchParams.get('token')).toBe(resetToken);
+    const disallowedResetPost = await app.inject({
+      method: 'POST',
+      url: `${resetLink.pathname}${resetLink.search}`,
+      headers: { origin },
+    });
+    expect(disallowedResetPost.statusCode).toBe(404);
     const reset = await app.inject({
       method: 'POST',
       url: '/v1/auth/better/reset-password',
