@@ -41,6 +41,20 @@ describe('Better Auth API ve pilot bağlama', () => {
   let pilotId: string;
   let verificationUrl: string;
 
+  async function issueTestSession(kind: 'merchant' | 'shopper') {
+    const raw = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(raw).digest('hex');
+    await database.db.execute(sql`
+      INSERT INTO sessions
+        (user_id, token_hash, expires_at, absolute_expires_at, last_active_at,
+         auth_level, authenticated_at, client_kind)
+      VALUES
+        (${pilotId}::uuid, ${tokenHash}, now() + interval '12 hours',
+         now() + interval '12 hours', now(), 'mfa', now(), ${kind})
+    `);
+    return `__Host-shopai_session=${raw}`;
+  }
+
   beforeAll(async () => {
     vi.stubGlobal(
       'fetch',
@@ -274,6 +288,14 @@ describe('Better Auth API ve pilot bağlama', () => {
     );
     expect(stored.rows[0]?.token_hash).not.toBe(shopaiCookie!.split('=')[1]);
 
+    const remoteBrowser = await issueTestSession('merchant');
+    const remoteBeforeReset = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: remoteBrowser },
+    });
+    expect(remoteBeforeReset.statusCode).toBe(200);
+
     const resetRequest = await app.inject({
       method: 'POST',
       url: '/v1/auth/better/request-password-reset',
@@ -316,6 +338,12 @@ describe('Better Auth API ve pilot bağlama', () => {
       headers: { cookie: shopaiCookie! },
     });
     expect(revoked.statusCode).toBe(401);
+    const remoteAfterReset = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: remoteBrowser },
+    });
+    expect(remoteAfterReset.statusCode).toBe(401);
   });
 
   it('merchant A/B ve shopper yetkilerini ayırır; tüm oturumları sunucuda iptal eder', async () => {
@@ -330,23 +358,9 @@ describe('Better Auth API ve pilot bağlama', () => {
       VALUES (${pilotId}::uuid, ${merchantA}::uuid, 'owner')
     `);
 
-    async function issueSession(kind: 'merchant' | 'shopper') {
-      const raw = randomBytes(32).toString('base64url');
-      const tokenHash = createHash('sha256').update(raw).digest('hex');
-      await database.db.execute(sql`
-        INSERT INTO sessions
-          (user_id, token_hash, expires_at, absolute_expires_at, last_active_at,
-           auth_level, authenticated_at, client_kind)
-        VALUES
-          (${pilotId}::uuid, ${tokenHash}, now() + interval '12 hours',
-           now() + interval '12 hours', now(), 'mfa', now(), ${kind})
-      `);
-      return `__Host-shopai_session=${raw}`;
-    }
-
-    const firstBrowser = await issueSession('merchant');
-    const secondBrowser = await issueSession('merchant');
-    const shopperBrowser = await issueSession('shopper');
+    const firstBrowser = await issueTestSession('merchant');
+    const secondBrowser = await issueTestSession('merchant');
+    const shopperBrowser = await issueTestSession('shopper');
     const firstSession = await app.inject({
       method: 'GET',
       url: '/v1/auth/session',
