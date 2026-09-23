@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
@@ -14,6 +14,8 @@ const apiOrigin = 'https://api.better-auth-test.example';
 const email = `ba-pilot-${randomUUID()}@example.invalid`;
 const password = 'test-only-strong-password-123456';
 const pilotToken = 'test-only-pilot-proof-1234567890';
+const merchantA = randomUUID();
+const merchantB = randomUUID();
 const database = createDatabase(databaseUrl);
 const env = parseApiEnv({
   CATALOG_MODE: 'postgres',
@@ -57,6 +59,12 @@ describe('Better Auth API ve pilot bağlama', () => {
 
   afterAll(async () => {
     await app?.close();
+    await database.db.execute(
+      sql`DELETE FROM memberships WHERE merchant_id IN (${merchantA}::uuid, ${merchantB}::uuid)`,
+    );
+    await database.db.execute(
+      sql`DELETE FROM merchants WHERE id IN (${merchantA}::uuid, ${merchantB}::uuid)`,
+    );
     await database.db.execute(
       sql`DELETE FROM sessions WHERE user_id = ${pilotId}::uuid`,
     );
@@ -308,5 +316,99 @@ describe('Better Auth API ve pilot bağlama', () => {
       headers: { cookie: shopaiCookie! },
     });
     expect(revoked.statusCode).toBe(401);
+  });
+
+  it('merchant A/B ve shopper yetkilerini ayırır; tüm oturumları sunucuda iptal eder', async () => {
+    await database.db.execute(sql`
+      INSERT INTO merchants (id, name, slug, active)
+      VALUES
+        (${merchantA}::uuid, 'Auth test A', ${`auth-a-${merchantA}`}, true),
+        (${merchantB}::uuid, 'Auth test B', ${`auth-b-${merchantB}`}, true)
+    `);
+    await database.db.execute(sql`
+      INSERT INTO memberships (user_id, merchant_id, role)
+      VALUES (${pilotId}::uuid, ${merchantA}::uuid, 'owner')
+    `);
+
+    async function issueSession(kind: 'merchant' | 'shopper') {
+      const raw = randomBytes(32).toString('base64url');
+      const tokenHash = createHash('sha256').update(raw).digest('hex');
+      await database.db.execute(sql`
+        INSERT INTO sessions
+          (user_id, token_hash, expires_at, absolute_expires_at, last_active_at,
+           auth_level, authenticated_at, client_kind)
+        VALUES
+          (${pilotId}::uuid, ${tokenHash}, now() + interval '12 hours',
+           now() + interval '12 hours', now(), 'mfa', now(), ${kind})
+      `);
+      return `__Host-shopai_session=${raw}`;
+    }
+
+    const firstBrowser = await issueSession('merchant');
+    const secondBrowser = await issueSession('merchant');
+    const shopperBrowser = await issueSession('shopper');
+    const firstSession = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: firstBrowser },
+    });
+    expect(firstSession.statusCode).toBe(200);
+    const csrf = firstSession.json().csrfToken as string;
+    const memberList = await app.inject({
+      method: 'GET',
+      url: '/v1/merchants',
+      headers: { cookie: firstBrowser },
+    });
+    expect(memberList.statusCode).toBe(200);
+    expect(memberList.json().merchants).toEqual([
+      expect.objectContaining({ id: merchantA, role: 'owner' }),
+    ]);
+    const ownStore = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${merchantA}`,
+      headers: { cookie: firstBrowser },
+    });
+    expect(ownStore.statusCode).toBe(200);
+    const otherStore = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${merchantB}`,
+      headers: { cookie: firstBrowser },
+    });
+    expect(otherStore.statusCode).toBe(403);
+    const otherStoreMutation = await app.inject({
+      method: 'POST',
+      url: `/v1/merchants/${merchantB}/connections`,
+      headers: { origin, cookie: firstBrowser, 'x-shopai-csrf': csrf },
+      payload: { provider: 'csv' },
+    });
+    expect(otherStoreMutation.statusCode).toBe(403);
+
+    const shopperList = await app.inject({
+      method: 'GET',
+      url: '/v1/merchants',
+      headers: { cookie: shopperBrowser },
+    });
+    expect(shopperList.statusCode).toBe(403);
+    const shopperOwnStore = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${merchantA}`,
+      headers: { cookie: shopperBrowser },
+    });
+    expect(shopperOwnStore.statusCode).toBe(403);
+
+    const logoutAll = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout-all',
+      headers: { origin, cookie: firstBrowser, 'x-shopai-csrf': csrf },
+    });
+    expect(logoutAll.statusCode).toBe(200);
+    for (const cookie of [firstBrowser, secondBrowser, shopperBrowser]) {
+      const revoked = await app.inject({
+        method: 'GET',
+        url: '/v1/auth/session',
+        headers: { cookie },
+      });
+      expect(revoked.statusCode).toBe(401);
+    }
   });
 });
