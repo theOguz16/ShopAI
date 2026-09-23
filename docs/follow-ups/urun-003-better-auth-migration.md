@@ -29,4 +29,10 @@ Operatör `6f6d04177d7255d65bea4d365012f1fe8ca547ff` image'ını sunucuda SHA-25
 
 QR arayüzü gizli `otpauth://` adresini üçüncü taraf QR hizmetine göndermez; `qrcode.react` istemcide SVG üretir. Kurulum kodu ile yedek kodun farklı amaçları arayüzde açıklanır ve MFA giriş formu yalnız kurulum onayından veya mevcut 2FA challenge'ından sonra açılır. Bu değişiklik için `pnpm check` PASS; staging HTTPS tarayıcı kabulü ve imaj dağıtımı ayrıca gerekir.
 
+## 23 Eylül gerçek tarayıcı gözlemi — yeni hesap, eski pilot bağlama değil
+
+Operatör `ab19e36926338cab109ceaccd68dc97784e57a6d` imajını SHA-256 ile sunucuda doğrulayıp yükledi ve yalnız web servisine geçirdi; `/login` HTTP 200, API/worker/widget `6f6d041…` kaldı. Gerçek tarayıcıda kullanıcı `/dashboard` ekranına ulaştı, doğrulanmış yeni hesapla `ShopAI Staging Test` mağazasını oluşturdu ve boş katalog/bağlantı panelini gördü. Bu, yeni hesap + oturum + ilk mağaza kurulumuna dair staging kanıtıdır; QR'ın bizzat tarandığına dair ayrı gözlem ve e-posta doğrulama linkinin düzelmiş dönüşü kayda alınmadı.
+
+Önceki pilot adresinin sahte geliştirme e-postası olduğu operatörce belirtildi. Bu hesaba gerçek doğrulama postası alınamayacağından canlı pilot→gerçek hesap bağlama denenmedi. Mevcut sentetik pilot kaydı ve mağaza verisi silinmedi; izole entegrasyon testindeki UUID/üyelik koruma kanıtı gerçek müşteri verisi aktarımı diye sunulmaz. Parola kurtarma, çıkış/tüm oturum iptali, hesap kapatma ve gerçek tarayıcıda tenant negatif testleri hâlâ açık. Dashboard'da gerçek çıkış düğmeleri sonraki PR #59 commit'inde eklendi; staging'e alınmadan canlı kabul sayılmaz.
+
 Sonraki kapı: `callbackURL` düzeltmesini staging'de exact SHA ile yeniden dağıt; gerçek tarayıcıda kayıt → e-posta doğrulama dönüşü → TOTP → oturum/CSRF → kurtarma → çıkış senaryolarını kanıtla. Mevcut linkin 404 vermesi doğrulamanın başarısız olduğunu tek başına göstermez; doğrulanmış e-posta durumu giriş akışı veya yetkili DB sorgusuyla ayrıca kontrol edilir. Pilot giriş bu sırada açık tutulur, secret değerleri kanıta yazılmaz ve production DB'ye otomatik migration uygulanmaz.

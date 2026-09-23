@@ -168,7 +168,6 @@ export default function Dashboard() {
         </div>
         <nav>
           <a href="/">Kataloğa dön</a>
-          <a href="/login">Oturum değiştir</a>
         </nav>
       </header>
       <OnboardingSteps current={current} completed={completed} />

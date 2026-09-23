@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
+import { authenticatedFetch } from '../../lib/authenticated-fetch';
 import { MerchantProvider } from './merchant-context';
 import { SyncProgressPanel } from './sync-progress-panel';
 
@@ -12,6 +13,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
   useEffect(() => {
     let active = true;
     fetch(`${api}/v1/auth/session`, { credentials: 'include' })
@@ -33,11 +36,48 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       active = false;
     };
   }, [pathname, router]);
+
+  async function signOut(allSessions: boolean) {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError('');
+    try {
+      const response = await authenticatedFetch(
+        `${api}/v1/auth/${allSessions ? 'logout-all' : 'logout'}`,
+        { method: 'POST' },
+      );
+      if (!response.ok) throw new Error('SIGN_OUT_FAILED');
+      window.location.replace('/login');
+    } catch {
+      setSignOutError('Oturum kapatılamadı. Lütfen yeniden deneyin.');
+      setSigningOut(false);
+    }
+  }
+
   if (checking) return <main>Oturum doğrulanıyor…</main>;
   return (
-    <MerchantProvider key={userId}>
-      <SyncProgressPanel />
-      {children}
-    </MerchantProvider>
+    <>
+      <nav aria-label="Hesap işlemleri">
+        <button
+          type="button"
+          disabled={signingOut}
+          onClick={() => void signOut(false)}
+        >
+          Çıkış yap
+        </button>
+        <button
+          type="button"
+          disabled={signingOut}
+          onClick={() => void signOut(true)}
+        >
+          Tüm oturumlardan çık
+        </button>
+        {signOutError ? <p role="alert">{signOutError}</p> : null}
+      </nav>
+      <MerchantProvider key={userId}>
+        <SyncProgressPanel />
+        {children}
+      </MerchantProvider>
+    </>
   );
 }
