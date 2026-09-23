@@ -12,10 +12,13 @@ if (!databaseUrl)
 const origin = 'https://web.better-auth-test.example';
 const apiOrigin = 'https://api.better-auth-test.example';
 const email = `ba-pilot-${randomUUID()}@example.invalid`;
+const emailB = `ba-merchant-b-${randomUUID()}@example.invalid`;
 const password = 'test-only-strong-password-123456';
 const pilotToken = 'test-only-pilot-proof-1234567890';
 const merchantA = randomUUID();
 const merchantB = randomUUID();
+const legacyMerchant = randomUUID();
+const legacyDiscoveryId = randomUUID();
 const database = createDatabase(databaseUrl);
 const env = parseApiEnv({
   CATALOG_MODE: 'postgres',
@@ -39,9 +42,13 @@ const env = parseApiEnv({
 describe('Better Auth API ve pilot bağlama', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let pilotId: string;
+  let merchantBUserId: string | undefined;
   let verificationUrl: string;
 
-  async function issueTestSession(kind: 'merchant' | 'shopper') {
+  async function issueTestSession(
+    kind: 'merchant' | 'shopper',
+    userId = pilotId,
+  ) {
     const raw = randomBytes(32).toString('base64url');
     const tokenHash = createHash('sha256').update(raw).digest('hex');
     await database.db.execute(sql`
@@ -49,7 +56,7 @@ describe('Better Auth API ve pilot bağlama', () => {
         (user_id, token_hash, expires_at, absolute_expires_at, last_active_at,
          auth_level, authenticated_at, client_kind)
       VALUES
-        (${pilotId}::uuid, ${tokenHash}, now() + interval '12 hours',
+        (${userId}::uuid, ${tokenHash}, now() + interval '12 hours',
          now() + interval '12 hours', now(), 'mfa', now(), ${kind})
     `);
     return `__Host-shopai_session=${raw}`;
@@ -73,15 +80,26 @@ describe('Better Auth API ve pilot bağlama', () => {
 
   afterAll(async () => {
     await app?.close();
+    await database.db.execute(sql`
+      DELETE FROM discovery_sessions WHERE id=${legacyDiscoveryId}::uuid
+    `);
     await database.db.execute(
-      sql`DELETE FROM memberships WHERE merchant_id IN (${merchantA}::uuid, ${merchantB}::uuid)`,
+      sql`DELETE FROM memberships WHERE merchant_id IN (${merchantA}::uuid, ${merchantB}::uuid, ${legacyMerchant}::uuid)`,
     );
     await database.db.execute(
-      sql`DELETE FROM merchants WHERE id IN (${merchantA}::uuid, ${merchantB}::uuid)`,
+      sql`DELETE FROM merchants WHERE id IN (${merchantA}::uuid, ${merchantB}::uuid, ${legacyMerchant}::uuid)`,
     );
     await database.db.execute(
       sql`DELETE FROM sessions WHERE user_id = ${pilotId}::uuid`,
     );
+    if (merchantBUserId) {
+      await database.db.execute(sql`
+        DELETE FROM sessions WHERE user_id=${merchantBUserId}::uuid
+      `);
+      await database.db.execute(sql`
+        DELETE FROM users WHERE id=${merchantBUserId}::uuid
+      `);
+    }
     await database.db.execute(
       sql`DELETE FROM user_identities WHERE user_id = ${pilotId}::uuid`,
     );
@@ -98,7 +116,7 @@ describe('Better Auth API ve pilot bağlama', () => {
     vi.unstubAllGlobals();
   });
 
-  it('Auth0 yolları kapalıyken pilot girişini korur ve Better Auth bayrağını bildirir', async () => {
+  it('eski kimlik yolları kapalıyken pilot girişini korur ve Better Auth bayrağını bildirir', async () => {
     const enabled = await app.inject({
       method: 'GET',
       url: '/v1/auth/capabilities',
@@ -237,6 +255,20 @@ describe('Better Auth API ve pilot bağlama', () => {
       payload: base,
     });
     expect(noProof.statusCode).toBe(409);
+    await database.db.execute(sql`
+      INSERT INTO merchants (id, name, slug, active)
+      VALUES (${legacyMerchant}::uuid, 'Legacy migration fixture', ${`legacy-${legacyMerchant}`}, true)
+    `);
+    await database.db.execute(sql`
+      INSERT INTO memberships (user_id, merchant_id, role)
+      VALUES (${pilotId}::uuid, ${legacyMerchant}::uuid, 'editor')
+    `);
+    await database.db.execute(sql`
+      INSERT INTO discovery_sessions
+        (id, surface, transport, merchant_scope, anonymous_user_id, user_id)
+      VALUES
+        (${legacyDiscoveryId}::uuid, 'web', 'rest', '[]'::jsonb, ${randomUUID()}::uuid, ${pilotId}::uuid)
+    `);
     const completed = await app.inject({
       method: 'POST',
       url: '/v1/auth/better/complete',
@@ -245,6 +277,35 @@ describe('Better Auth API ve pilot bağlama', () => {
     });
     expect(completed.statusCode).toBe(200);
     expect(completed.json().user.id).toBe(pilotId);
+    const preserved = await database.db.execute(sql`
+      SELECT u.id, u.account_status, m.merchant_id, m.role, d.id AS discovery_id
+      FROM users AS u
+      JOIN memberships AS m ON m.user_id=u.id
+      JOIN discovery_sessions AS d ON d.user_id=u.id
+      WHERE u.id=${pilotId}::uuid AND m.merchant_id=${legacyMerchant}::uuid
+        AND d.id=${legacyDiscoveryId}::uuid
+    `);
+    expect(preserved.rows[0]).toMatchObject({
+      id: pilotId,
+      account_status: 'active',
+      merchant_id: legacyMerchant,
+      role: 'editor',
+      discovery_id: legacyDiscoveryId,
+    });
+    const oldPilotSessions = await database.db.execute(sql`
+      SELECT count(*)::integer AS active FROM sessions
+      WHERE user_id=${pilotId}::uuid AND auth_level='pilot' AND revoked_at IS NULL
+    `);
+    expect(oldPilotSessions.rows[0]?.active).toBe(0);
+    await database.db.execute(sql`
+      DELETE FROM discovery_sessions WHERE id=${legacyDiscoveryId}::uuid
+    `);
+    await database.db.execute(sql`
+      DELETE FROM memberships WHERE merchant_id=${legacyMerchant}::uuid
+    `);
+    await database.db.execute(sql`
+      DELETE FROM merchants WHERE id=${legacyMerchant}::uuid
+    `);
     const issued = completed.headers['set-cookie'];
     const issuedCookies = Array.isArray(issued) ? issued : [issued];
     const shopaiSession = issuedCookies.find((item) =>
@@ -357,8 +418,21 @@ describe('Better Auth API ve pilot bağlama', () => {
       INSERT INTO memberships (user_id, merchant_id, role)
       VALUES (${pilotId}::uuid, ${merchantA}::uuid, 'owner')
     `);
+    const secondUser = await database.db.execute(sql`
+      INSERT INTO users (email, account_status, email_verified_at)
+      VALUES (${emailB}, 'active', now()) RETURNING id
+    `);
+    merchantBUserId = secondUser.rows[0]?.id as string;
+    await database.db.execute(sql`
+      INSERT INTO memberships (user_id, merchant_id, role)
+      VALUES (${merchantBUserId}::uuid, ${merchantB}::uuid, 'owner')
+    `);
 
     const firstBrowser = await issueTestSession('merchant');
+    const secondUserBrowser = await issueTestSession(
+      'merchant',
+      merchantBUserId,
+    );
     const secondBrowser = await issueTestSession('merchant');
     const shopperBrowser = await issueTestSession('shopper');
     const firstSession = await app.inject({
@@ -396,6 +470,27 @@ describe('Better Auth API ve pilot bağlama', () => {
       payload: { provider: 'csv' },
     });
     expect(otherStoreMutation.statusCode).toBe(403);
+    const secondUserList = await app.inject({
+      method: 'GET',
+      url: '/v1/merchants',
+      headers: { cookie: secondUserBrowser },
+    });
+    expect(secondUserList.statusCode).toBe(200);
+    expect(secondUserList.json().merchants).toEqual([
+      expect.objectContaining({ id: merchantB, role: 'owner' }),
+    ]);
+    const secondUserOwnStore = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${merchantB}`,
+      headers: { cookie: secondUserBrowser },
+    });
+    expect(secondUserOwnStore.statusCode).toBe(200);
+    const secondUserOtherStore = await app.inject({
+      method: 'GET',
+      url: `/v1/merchants/${merchantA}`,
+      headers: { cookie: secondUserBrowser },
+    });
+    expect(secondUserOtherStore.statusCode).toBe(403);
 
     const shopperList = await app.inject({
       method: 'GET',
@@ -424,5 +519,103 @@ describe('Better Auth API ve pilot bağlama', () => {
       });
       expect(revoked.statusCode).toBe(401);
     }
+    const isolatedOtherUser = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: secondUserBrowser },
+    });
+    expect(isolatedOtherUser.statusCode).toBe(200);
+  });
+
+  it('son owner kapatmayı reddeder; uygun hesapta tüm oturumları ve yeniden girişi engeller', async () => {
+    const firstBrowser = await issueTestSession('merchant');
+    const secondBrowser = await issueTestSession('shopper');
+    const current = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: firstBrowser },
+    });
+    expect(current.statusCode).toBe(200);
+    const headers = {
+      origin,
+      cookie: firstBrowser,
+      'x-shopai-csrf': current.json().csrfToken as string,
+    };
+    const lastOwner = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/account/close',
+      headers,
+    });
+    expect(lastOwner.statusCode, JSON.stringify(lastOwner.json())).toBe(409);
+    expect(lastOwner.json()).toEqual({ code: 'OWNER_TRANSFER_REQUIRED' });
+    const stillOpen = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/session',
+      headers: { cookie: secondBrowser },
+    });
+    expect(stillOpen.statusCode).toBe(200);
+    const credentialBefore = await database.db.execute(sql`
+      SELECT u.id, a.id AS account_id FROM shopai_auth."user" AS u
+      JOIN shopai_auth."account" AS a ON a."userId"=u.id
+      JOIN user_identities AS i ON i.subject=u.id
+      WHERE i.user_id=${pilotId}::uuid AND i.issuer='better-auth'
+    `);
+    expect(credentialBefore.rows).toHaveLength(1);
+    await database.db.execute(sql`
+      INSERT INTO shopai_auth."session"
+        ("id", "expiresAt", "token", "createdAt", "updatedAt", "userId")
+      VALUES
+        (${randomUUID()}, now() + interval '1 hour', ${randomUUID()}, now(), now(), ${credentialBefore.rows[0]?.id})
+    `);
+    const liveBetterBefore = await database.db.execute(sql`
+      SELECT count(*)::integer AS count FROM shopai_auth."session" AS s
+      JOIN user_identities AS i ON i.subject=s."userId"
+      WHERE i.user_id=${pilotId}::uuid AND s."expiresAt">now()
+    `);
+    expect(Number(liveBetterBefore.rows[0]?.count)).toBeGreaterThan(0);
+
+    await database.db.execute(sql`
+      DELETE FROM memberships
+      WHERE user_id=${pilotId}::uuid AND merchant_id=${merchantA}::uuid
+    `);
+    const closed = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/account/close',
+      headers,
+    });
+    expect(closed.statusCode).toBe(200);
+    for (const cookie of [firstBrowser, secondBrowser]) {
+      const revoked = await app.inject({
+        method: 'GET',
+        url: '/v1/auth/session',
+        headers: { cookie },
+      });
+      expect(revoked.statusCode).toBe(401);
+    }
+    const account = await database.db.execute(sql`
+      SELECT account_status, closed_at FROM users WHERE id=${pilotId}::uuid
+    `);
+    expect(account.rows[0]).toMatchObject({ account_status: 'closed' });
+    expect(account.rows[0]?.closed_at).not.toBeNull();
+    const credentialAfter = await database.db.execute(sql`
+      SELECT u.id, a.id AS account_id FROM shopai_auth."user" AS u
+      JOIN shopai_auth."account" AS a ON a."userId"=u.id
+      JOIN user_identities AS i ON i.subject=u.id
+      WHERE i.user_id=${pilotId}::uuid AND i.issuer='better-auth'
+    `);
+    expect(credentialAfter.rows).toEqual(credentialBefore.rows);
+    const signIn = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/better/sign-in/email',
+      headers: { origin },
+      payload: { email, password: 'replacement-test-password-123456' },
+    });
+    expect(signIn.statusCode).toBe(401);
+    const activeBetterSessions = await database.db.execute(sql`
+      SELECT count(*)::integer AS count FROM shopai_auth."session" AS s
+      JOIN user_identities AS i ON i.subject=s."userId"
+      WHERE i.user_id=${pilotId}::uuid AND s."expiresAt">now()
+    `);
+    expect(activeBetterSessions.rows[0]?.count).toBe(0);
   });
 });

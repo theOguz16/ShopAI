@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { createDatabase } from '../../packages/db/src/client.js';
 import {
   authAuditEvents,
-  oidcAuthTransactions,
   userIdentities,
 } from '../../packages/db/src/auth-schema.js';
 import { users } from '../../packages/db/src/schema.js';
@@ -22,10 +21,9 @@ if (!databaseUrl) {
       const suffix = randomUUID().replaceAll('-', '');
       const pilotEmail = `urun003-pilot-${suffix}@example.invalid`;
       const anotherEmail = `urun003-other-${suffix}@example.invalid`;
-      const issuer = 'https://tenant.example.auth0.com/';
-      const subject = `auth0|${suffix}`;
+      const issuer = 'better-auth';
+      const subject = `test-identity-${suffix}`;
       const ids: string[] = [];
-      const stateHash = randomUUID().replaceAll('-', '');
       try {
         const [pilot] = await database.db
           .insert(users)
@@ -76,15 +74,6 @@ if (!databaseUrl) {
           account_status: 'pilot',
         });
 
-        await database.db.insert(oidcAuthTransactions).values({
-          stateHash,
-          browserBindingHash: `binding-${suffix}`,
-          clientKind: 'merchant',
-          nonceHash: `nonce-${suffix}`,
-          pkceVerifierCiphertext: 'encrypted-test-fixture-not-a-real-verifier',
-          returnTo: '/dashboard',
-          expiresAt: new Date(Date.now() + 60_000),
-        });
         await database.db.insert(authAuditEvents).values({
           userId: pilot.id,
           eventType: 'identity_link',
@@ -98,9 +87,6 @@ if (!databaseUrl) {
         expect(rights.rows[0]?.can_read).toBe(false);
       } finally {
         try {
-          await database.db
-            .delete(oidcAuthTransactions)
-            .where(eq(oidcAuthTransactions.stateHash, stateHash));
           await database.db
             .delete(authAuditEvents)
             .where(eq(authAuditEvents.requestId, `test-${suffix}`));

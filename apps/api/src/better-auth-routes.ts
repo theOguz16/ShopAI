@@ -113,6 +113,18 @@ export function registerBetterAuthRoutes(
           !app.authApi.allowedOrigins.has(request.headers.origin))
       )
         return reply.code(403).send({ code: 'FORBIDDEN_ORIGIN' });
+      if (request.method === 'POST' && path === 'sign-in/email') {
+        const email = (request.body as { email?: unknown } | undefined)?.email;
+        if (typeof email === 'string') {
+          const closed = await database.execute(sql`
+            SELECT 1 FROM users
+            WHERE email = ${email.trim().toLowerCase()} AND account_status = 'closed'
+            LIMIT 1
+          `);
+          if (closed.rows.length)
+            return reply.code(401).send({ code: 'INVALID_CREDENTIALS' });
+        }
+      }
       const upstream = await auth.handle(
         new Request(new URL(request.url, env.MCP_PUBLIC_ORIGIN), {
           method: request.method,

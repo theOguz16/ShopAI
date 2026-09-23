@@ -186,8 +186,14 @@ export function registerAuth(
         userId: row.user_id,
         email: row.email,
         authLevel: row.auth_level as AuthContext['authLevel'],
-        authenticatedAt:
-          row.authenticated_at instanceof Date ? row.authenticated_at : null,
+        authenticatedAt: (() => {
+          const value = row.authenticated_at;
+          if (value instanceof Date)
+            return Number.isFinite(value.getTime()) ? value : null;
+          if (typeof value !== 'string') return null;
+          const parsed = new Date(value);
+          return Number.isFinite(parsed.getTime()) ? parsed : null;
+        })(),
         sessionId: row.id as string,
         clientKind: row.client_kind as AuthContext['clientKind'],
       };

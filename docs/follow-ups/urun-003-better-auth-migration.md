@@ -1,6 +1,16 @@
 # ÜRÜN-003 — Better Auth geçiş kaydı
 
-Durum: **Kısmi / açık**. Ürün kararı Better Auth. Auth0 giriş kodu, bağımlılığı, arayüzü ve Compose değişkenleri kaldırıldı. `0031`/`0032` migration geçmişi geriye dönük uyumluluk için korunur; bu eski tasarımın hâlâ çalıştığı anlamına gelmez. Better Auth feature flag varsayılan kapalıdır; pilot giriş varsayılan açıktır. Auth0 ile giriş yapan ortamlar Better Auth secret ve servis kurulmadan yeni giriş kabul edemez. Mevcut uygulama oturumlarının çerez adı uyumluluk için korunmuştur; oturum süresi bitince yeniden giriş gerekir. Bu kayıt teknik testleri gerçek müşteri kabulünden ayırır.
+Durum: **Mühendislik testleri PASS; staging kabulü açık**. Ürün kararı Better Auth. Önceki sağlayıcının çalıştırılabilir giriş kodu, bağımlılığı, arayüzü ve Compose değişkenleri kaldırıldı. `0031`/`0032` uygulanmış migration geçmişi şema uyumluluğu için korunur; kullanılmayan kimlik işlem tablosunun DB'den kaldırılması veri/backup incelemesi gerektirir. Better Auth feature flag varsayılan kapalıdır; pilot giriş varsayılan açıktır. Mevcut uygulama oturumlarının çerez adı uyumluluk için korunmuştur; oturum süresi bitince yeniden giriş gerekir. Bu kayıt teknik testleri gerçek müşteri kabulünden ayırır. Aşağıdaki tarihli paragraflar olay kronolojisidir; **geçerli karar tablosu bu paragrafın altındadır**.
+
+| 23 Eylül güncel kapı | Durum | Kanıt / eksik |
+|---|---|---|
+| HTTPS kayıt, e-posta, MFA, kurtarma, çıkış | PASS (teknik staging) | Doğrulanmış test hesabı ve iki tarayıcıda oturum iptali; gerçek müşteri pilotu değil. |
+| İki bağımsız merchant/kullanıcı ve shopper 403 | YEREL PASS, STAGING BEKLİYOR | İzole DB HTTP entegrasyonunda çift yönlü 403; staging'de iki doğrulanmış kimlik kurulmalı. |
+| Son owner ve soft-close | YEREL PASS, STAGING BEKLİYOR | `OWNER_TRANSFER_REQUIRED`, tüm ShopAI ve Better Auth oturumlarının bitmesi, yeniden giriş reddi, credential kaydının korunması test edildi. Son owner'a transfer/mağaza kapatma tamamlanmadan izin yok. |
+| Legacy pilot migration | YEREL PASS, DIŞ ENVANTER BEKLİYOR | Temsilî DB testinde UUID, üyelik ve keşif kaydı korundu, pilot oturumu iptal edildi. Staging'deki gerçek pilot sayısı belirlenmeden dış migration için PASS/N/A denemez. |
+| Retention/anonymization | SOFT-CLOSE KARARI KAYITLI | Kalıcı silme/anonimleştirme yok; kişisel veri saklama süresi ve hak talebi ayrıca kararlaştırılmalı. |
+
+Hesap kapatma kararı (23 Eylül): Bu aşamada **soft-close** uygulanır; `users.account_status='closed'` ve `closed_at` yazılır. Son owner üyeliği olan hesap, sahiplik transferi veya mağaza kapatma tamamlanmadan kapanamaz (`OWNER_TRANSFER_REQUIRED`). Başarılı kapatmada ShopAI oturumları iptal edilir, Better Auth oturumlarının süresi bitirilir; aynı e-posta/şifreyle yeni giriş reddedilir. UUID, merchant/ticari kayıtlar, e-posta, Better Auth credential/TOTP ve kişisel kullanıcı kayıtları **kalıcı silinmez veya anonimleştirilmez**. Kapatılmış hesap kullanıcıya erişim sağlamaz; ileride yeniden etkinleştirme ancak ayrı, yetkili ve denetlenebilir operasyonla tasarlanabilir. Bu teknik soft-close, kişisel veri silme talebinin yerine geçtiği iddiası değildir. Yasal retention/anonimleştirme süresi, yedek döngüsü ve hak talebi süreci ayrıca kararlaştırılmadan üretim veri silme kabulü verilmez.
 
 | İş | Bağımlılık | Tamamlanma kanıtı |
 |---|---|---|

@@ -13,7 +13,7 @@ import { users } from './schema.js';
 const at = (name: string) =>
   timestamp(name, { withTimezone: true, mode: 'date' });
 
-// Only the verified (issuer, subject) pair identifies an OIDC account.
+// Only an explicitly linked (issuer, subject) pair identifies an account.
 // Email must never be used to upsert or automatically link a pilot user.
 export const userIdentities = pgTable(
   'user_identities',
@@ -32,31 +32,6 @@ export const userIdentities = pgTable(
     check('user_identities_issuer_nonempty', sql`length(${t.issuer}) > 0`),
     check('user_identities_subject_nonempty', sql`length(${t.subject}) > 0`),
     index('user_identities_user_idx').on(t.userId),
-  ],
-);
-
-// This table is not wired into an endpoint yet. The future OIDC service must
-// store *encrypted* verifier ciphertext, hash state/nonce/browser binding,
-// atomically consume the record once, and reject expired records.
-export const oidcAuthTransactions = pgTable(
-  'oidc_auth_transactions',
-  {
-    stateHash: text('state_hash').primaryKey(),
-    browserBindingHash: text('browser_binding_hash').notNull(),
-    clientKind: text('client_kind').notNull(),
-    nonceHash: text('nonce_hash').notNull(),
-    pkceVerifierCiphertext: text('pkce_verifier_ciphertext').notNull(),
-    returnTo: text('return_to').notNull(),
-    expiresAt: at('expires_at').notNull(),
-    consumedAt: at('consumed_at'),
-    createdAt: at('created_at').notNull().defaultNow(),
-  },
-  (t) => [
-    check(
-      'oidc_auth_transactions_client_kind_check',
-      sql`${t.clientKind} in ('shopper','merchant')`,
-    ),
-    index('oidc_auth_transactions_expiry_idx').on(t.expiresAt),
   ],
 );
 

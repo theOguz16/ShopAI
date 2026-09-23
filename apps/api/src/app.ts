@@ -184,6 +184,13 @@ export async function buildApp(
           sql`SELECT 1 FROM memberships WHERE user_id=${userId}::uuid AND role='owner' LIMIT 1`,
         );
         if (owner.rows.length) return 'OWNER_TRANSFER_REQUIRED';
+        await tx.execute(sql`
+          UPDATE shopai_auth."session" SET "expiresAt"=now()
+          WHERE "userId" IN (
+            SELECT subject FROM user_identities
+            WHERE user_id=${userId}::uuid AND issuer='better-auth'
+          )
+        `);
         await tx.execute(
           sql`UPDATE users SET account_status='closed',closed_at=now() WHERE id=${userId}::uuid`,
         );
