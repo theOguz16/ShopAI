@@ -1,11 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
 import { type FormEvent, useEffect, useState } from 'react';
 import {
   betterAuthSignInBody,
   betterAuthSignUpBody,
 } from '../../lib/better-auth-requests';
+import { totpSetupKey } from '../../lib/totp-setup';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const safeReturn = () => {
@@ -33,6 +35,7 @@ export default function LoginPage() {
   const [backupCode, setBackupCode] = useState('');
   const [pilotProof, setPilotProof] = useState('');
   const [totpUri, setTotpUri] = useState('');
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState(false);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -131,9 +134,14 @@ export default function LoginPage() {
       }
       const data = (await response.json()) as { twoFactorRedirect?: boolean };
       if (data.twoFactorRedirect) {
+        setTotpUri('');
+        setBackupCodes([]);
+        setTotpCode('');
+        setTwoFactorChallenge(true);
         setMessage('Doğrulayıcı uygulamanızdaki 6 haneli kodu aşağıya girin.');
         return;
       }
+      setTwoFactorChallenge(false);
       const enrollment = await betterRequest('two-factor/enable', {
         method: 'totp',
         password,
@@ -146,14 +154,15 @@ export default function LoginPage() {
         totpURI?: string;
         backupCodes?: string[];
       };
-      if (!enrolled.totpURI) {
+      if (!enrolled.totpURI || !totpSetupKey(enrolled.totpURI)) {
         setError('Doğrulayıcı kurulum bilgisi alınamadı.');
         return;
       }
       setTotpUri(enrolled.totpURI);
       setBackupCodes(enrolled.backupCodes ?? []);
+      setTotpCode('');
       setMessage(
-        'Doğrulayıcı uygulamanıza kurulum adresini ekleyin, yedek kodları güvenli bir yere kaydedin ve kurulum kodunu onaylayın.',
+        'Telefonunuzdaki doğrulayıcı uygulamayla QR kodunu tarayın. Sonra uygulamanın ürettiği 6 haneli kodla kurulumu onaylayın.',
       );
     } catch {
       setError('Kimlik servisine ulaşılamıyor.');
@@ -172,6 +181,8 @@ export default function LoginPage() {
         return;
       }
       setTotpUri('');
+      setTotpCode('');
+      setTwoFactorChallenge(true);
       setMessage(
         'İki aşamalı doğrulama kuruldu. Güncel kodunuzla güvenli girişi tamamlayın.',
       );
@@ -336,13 +347,27 @@ export default function LoginPage() {
               {totpUri ? (
                 <div>
                   <p>
-                    Kurulum adresi gizlidir; üçüncü taraf QR servisine
-                    göndermeyin.
+                    Telefonunuzdaki doğrulayıcı uygulamada hesap ekleyip QR
+                    kodunu tarayın. QR kodu yalnız bu sayfada oluşturulur;
+                    paylaşmayın.
                   </p>
-                  <code>{totpUri}</code>
+                  <QRCodeSVG
+                    value={totpUri}
+                    size={220}
+                    marginSize={2}
+                    title="ShopAI doğrulayıcı kurulum QR kodu"
+                  />
+                  <details>
+                    <summary>QR kodunu tarayamıyorum</summary>
+                    <p>
+                      Doğrulayıcı uygulamada elle kurulum seçeneğini kullanın.
+                      Kurulum anahtarı gizlidir; kimseyle paylaşmayın.
+                    </p>
+                    <code>{totpSetupKey(totpUri)}</code>
+                  </details>
                   <form onSubmit={confirmTotp}>
                     <label>
-                      Kurulum kodu
+                      Uygulamadaki 6 haneli kurulum kodu
                       <input
                         required
                         inputMode="numeric"
@@ -357,42 +382,45 @@ export default function LoginPage() {
               ) : null}
               {backupCodes.length ? (
                 <p>
-                  Yedek kodları şimdi güvenli bir yere kaydedin:{' '}
+                  Yedek kodlar yalnız hesabı kurtarmak içindir; kurulum alanına
+                  yazmayın. Şimdi güvenli bir yere kaydedin:{' '}
                   {backupCodes.join(' · ')}
                 </p>
               ) : null}
-              <form onSubmit={completeBetterLogin}>
-                <h3>İki aşamalı girişi tamamla</h3>
-                <label>
-                  Güncel 6 haneli kod
-                  <input
-                    required={!backupCode}
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    value={totpCode}
-                    onChange={(event) => setTotpCode(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Doğrulayıcıya erişemiyorsanız tek kullanımlık yedek kod
-                  <input
-                    type="password"
-                    autoComplete="one-time-code"
-                    value={backupCode}
-                    onChange={(event) => setBackupCode(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Mevcut pilot kodu (yalnız eski hesabı bağlarken)
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={pilotProof}
-                    onChange={(event) => setPilotProof(event.target.value)}
-                  />
-                </label>
-                <button type="submit">Güvenli giriş</button>
-              </form>
+              {twoFactorChallenge ? (
+                <form onSubmit={completeBetterLogin}>
+                  <h3>İki aşamalı girişi tamamla</h3>
+                  <label>
+                    Güncel 6 haneli kod
+                    <input
+                      required={!backupCode}
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      value={totpCode}
+                      onChange={(event) => setTotpCode(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Doğrulayıcıya erişemiyorsanız tek kullanımlık yedek kod
+                    <input
+                      type="password"
+                      autoComplete="one-time-code"
+                      value={backupCode}
+                      onChange={(event) => setBackupCode(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Mevcut pilot kodu (yalnız eski hesabı bağlarken)
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={pilotProof}
+                      onChange={(event) => setPilotProof(event.target.value)}
+                    />
+                  </label>
+                  <button type="submit">Güvenli giriş</button>
+                </form>
+              ) : null}
               <form onSubmit={recoverBetter}>
                 <h3>Parolamı unuttum</h3>
                 <label>
