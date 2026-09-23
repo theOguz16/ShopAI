@@ -33,6 +33,22 @@ const hostedProductionEnv = {
 describe('startup environment validation', () => {
   it('defaults the API to credential-free demo mode', () => {
     expect(parseApiEnv({}).CATALOG_MODE).toBe('demo');
+    expect(parseApiEnv({}).BETTER_AUTH_ENABLED).toBe('false');
+  });
+
+  it('requires independent Better Auth and mail secrets when enabled', () => {
+    expect(() =>
+      parseApiEnv({ ...hostedStagingEnv, BETTER_AUTH_ENABLED: 'true' }),
+    ).toThrow(/BETTER_AUTH_SECRET.*AUTH_EMAIL_FROM.*RESEND_API_KEY/);
+    expect(
+      parseApiEnv({
+        ...hostedStagingEnv,
+        BETTER_AUTH_ENABLED: 'true',
+        BETTER_AUTH_SECRET: 'test-only-independent-auth-secret-123456',
+        AUTH_EMAIL_FROM: 'auth@shopai.example',
+        RESEND_API_KEY: 'test-resend-key',
+      }).BETTER_AUTH_ENABLED,
+    ).toBe('true');
   });
 
   it('forbids demo mode outside a local environment', () => {

@@ -1,0 +1,75 @@
+name: Publish staging image
+run-name: Staging image ${{ inputs.release_version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Exact 40-character main commit SHA to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: shopai-staging-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate immutable main release
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo 'Publish from main only'; exit 1; }
+          [[ "$RELEASE_VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a 40-character SHA'; exit 1; }
+          git fetch origin main --quiet
+          git cat-file -e "$RELEASE_VERSION^{commit}"
+          git merge-base --is-ancestor "$RELEASE_VERSION" origin/main || {
+            echo 'Release must be reachable from main'
+            exit 1
+          }
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish linux/amd64 staging image
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shopai-staging:$RELEASE_VERSION"
+          git worktree add --detach /tmp/shopai-staging-release "$RELEASE_VERSION"
+          docker buildx build \
+            --platform linux/amd64 \
+            --file /tmp/shopai-staging-release/infra/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=https://shop.fizyoflow.com \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --tag "$image" \
+            --provenance=true \
+            --sbom=true \
+            --push \
+            /tmp/shopai-staging-release
+          docker buildx imagetools inspect "$image" >/dev/null
+          {
+            echo '### Staging image published'
+            echo "- image: \`$image\`"
+            echo '- architecture: linux/amd64'
+            echo '- publication is not deployment or user acceptance'
+          } >> "$GITHUB_STEP_SUMMARY"

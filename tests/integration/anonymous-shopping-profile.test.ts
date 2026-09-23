@@ -140,6 +140,27 @@ describeWithDatabase('anonymous shopping profile', () => {
     expect(discovery.json().anonymousUserId).not.toBe(spoofedId);
   });
 
+  it('rejects cross-origin storefront discovery before writing a session', async () => {
+    const before = await database.db
+      .select({ id: discoverySessions.id })
+      .from(discoverySessions);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/discovery-session',
+      headers: {
+        origin: 'https://attacker.example',
+        cookie: firstCookie,
+      },
+      payload: { surface: 'web' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ code: 'FORBIDDEN_ORIGIN' });
+    const after = await database.db
+      .select({ id: discoverySessions.id })
+      .from(discoverySessions);
+    expect(after).toEqual(before);
+  });
+
   it('enforces anonymous RLS and gives merchant application role no profile access', async () => {
     const ownRows = await database.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);

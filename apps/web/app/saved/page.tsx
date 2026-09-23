@@ -70,6 +70,7 @@ export default function SavedProductsPage() {
           ShopAI<span>●</span>
         </a>
         <a href="/">Alışverişe dön</a>
+        <a href="/account">Hesap durumu</a>
       </header>
 
       <section className="store-results" aria-labelledby="saved-title">

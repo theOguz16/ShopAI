@@ -29,6 +29,11 @@ services:
     <<: *app
     environment:
       <<: *runtime
+      AUTH_PILOT_LOGIN_ENABLED: "${STAGING_AUTH_PILOT_LOGIN_ENABLED:-true}"
+      BETTER_AUTH_ENABLED: "${STAGING_BETTER_AUTH_ENABLED:-false}"
+      BETTER_AUTH_SECRET: "${STAGING_BETTER_AUTH_SECRET:-}"
+      AUTH_EMAIL_FROM: "${STAGING_AUTH_EMAIL_FROM:-}"
+      RESEND_API_KEY: "${STAGING_RESEND_API_KEY:-}"
       SHOPAI_ROLE: api
       HOST: 0.0.0.0
       PORT: 4000

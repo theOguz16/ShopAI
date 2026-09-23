@@ -35,6 +35,10 @@ services:
     <<: *app
     environment:
       <<: *runtime
+      AUTH_PILOT_LOGIN_ENABLED: "${PRODUCTION_AUTH_PILOT_LOGIN_ENABLED:-true}"
+      BETTER_AUTH_ENABLED: "${PRODUCTION_BETTER_AUTH_ENABLED:-false}"
+      BETTER_AUTH_SECRET: "${PRODUCTION_BETTER_AUTH_SECRET:-}"
+      AUTH_EMAIL_FROM: "${PRODUCTION_AUTH_EMAIL_FROM:-}"
       SHOPAI_ROLE: api
       HOST: 0.0.0.0
       PORT: 4000

@@ -1,60 +1,19 @@
-# Kimlik ve oturum kararı
+# Kimlik ve oturum kararı — ÜRÜN-003
 
-İlk pilotta harici kimlik sağlayıcısı yerine DB destekli opaque session kullanılır.
-Her davet kodu `AUTH_PILOT_CREDENTIALS` secret'ında tek bir normalize e-postaya
-bağlıdır; ortak mağaza kodu yoktur. API e-posta ve kodu birlikte, sabit zamanlı
-karşılaştırmayla doğrulamadan kullanıcı/oturum oluşturmaz. Yanlış e-posta ile başka
-bir kullanıcıya ait geçerli kod aynı genel `INVALID_CREDENTIALS` yanıtını verir.
-Sunucu rastgele oturum değerinin yalnız SHA-256 özetini `sessions` tablosunda tutar.
-Oturum varsayılan olarak 24 saat sonra sona erer, çıkışta veritabanından silinir
-ve cookie aynı özniteliklerle temizlenir. Cookie her ortamda `HttpOnly`,
-`SameSite=Lax` ve `Path=/` taşır; `DEPLOY_ENV=staging|production` olduğunda hem
-login hem logout cookie'sine `Secure` eklenir. Local ve test ortamında HTTP ile
-çalışabilmek için `Secure` bilinçli olarak eklenmez. Staging/production yalnız
-HTTPS origin ayarlarıyla başlatılır.
+Karar (23 Eylül 2026): Tek yeni hesap sistemi self-hosted Better Auth 1.7.5'tir. Önceki harici OIDC sağlayıcısı hedefi iptal edilmiştir; Better Auth harici bir OIDC sağlayıcısı gibi sunulmaz. Çalıştırılabilir eski sağlayıcı kodu, UI, bağımlılık ve dağıtım değişkenleri kaldırılmıştır. Uygulanmış `0031`/`0032` migration geçmişi geriye dönük şema uyumluluğu için korunur; bunlar aktif giriş yöntemi değildir. Production'da Better Auth bayrağı varsayılan kapalı, eski pilot giriş bayrağı varsayılan açıktır.
 
-Login gövdesi strict runtime şemasıyla doğrulanır: e-posta string, geçerli e-posta
-ve en fazla 254 karakter; pilot kodu string ve 16–256 karakter olmalıdır. Sayı,
-nesne, bilinmeyen alan veya aşırı uzun değer `INVALID_INPUT`/400 döndürür. Şemaya
-uyan fakat yanlış e-posta/kod çiftleri hesap varlığını ayırt etmeyen aynı
-`INVALID_CREDENTIALS`/401 yanıtını izler. Genel API limiti 60/dakika iken login
-ayrıca IP başına varsayılan 5/dakika ile sınırlandırılır; değer
-`LOGIN_RATE_LIMIT_MAX` ile 1–30 aralığında ayarlanabilir.
+## Geçerli hesap modeli
 
-Panel session kontrolünden 401 aldığında kullanıcıyı güvenli bir relative
-`returnTo` ile login sayfasına gönderir ve “oturum süresi doldu veya erişiminiz
-iptal edildi” mesajını gösterir.
+- E-posta/parola, doğrulanmış e-posta, parola sıfırlama, TOTP ve yedek kod Better Auth tarafından yönetilir. Credential, verification ve 2FA verisi ayrı `shopai_auth` şemasındadır. Yeni merchant uygulama oturumu ancak gerçek parola ve TOTP/yedek kod doğrulamasından sonra oluşturulur; `twoFactorEnabled` bayrağı tek başına MFA kanıtı değildir.
+- ShopAI `users.id` UUID, mağaza üyelikleri ve tenant RLS ayrı kalır. Better Auth kimliği `user_identities` ile bağlanır. E-posta benzerliği tek başına pilot kullanıcıyı bağlamaz; doğrulanmış adres, geçerli pilot kodu ve atomik link gerekir. Başarılı link eski pilot oturumlarını iptal eder; mevcut UUID ve ilişkili kayıtlar korunur.
+- Yönetim yetkisi yalnız backend'in merchant üyelik sorgusundan gelir. `owner`, `editor`, `viewer` anlamları korunur. Shopper oturumu mağaza yönetimi yapamaz. Oturum çerezi hashli ShopAI oturumuna dayanır; HTTPS ortamında `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/` kullanılır. Değiştirici isteklerde origin ve oturuma bağlı CSRF kontrolü vardır.
+- Web dashboard yalnız merchant hesaplarının yönetim yüzeyidir; son kullanıcı alışverişi ChatGPT üzerinden yürür. Shopper kimliği bu kararda yalnız API/yetki izolasyonu test fixture'ı olarak kullanılır. Dashboard'da shopper onboarding'i veya yeni alışveriş hesabı akışı ÜRÜN-003 özelliği değildir.
+- İlk pilot giriş yöntemi kontrollü geçiş için ayrı olarak açık kalır; doğrulanmış e-posta, parola kurtarma veya MFA sağlamaz. Gerçek pilot kullanıcı varlığı doğrulanmadan sentetik pilot adresi gerçek migration kabulü diye sunulmaz.
 
-Bu pilot kimlik yöntemi parola sıfırlama veya MFA sağlamaz. Daha geniş yayından
-önce doğrulanmış e-posta/MFA destekleyen harici OIDC sağlayıcısına geçiş gerekir.
+## Hesap kapatma ve veri politikası
 
-Pilot kurulumunda ilk giriş yapan kullanıcının `/v1/setup/merchant` endpoint'iyle
-tek bir mağaza oluşturmasına izin verilir. Endpoint ikinci kez veya mevcut üyeliği
-olan kullanıcı için çalışmaz. Rol kontrolü her yönetim endpoint'inde backend'de
-yapılır: `owner` üyelik ve bağlantı yönetir; `editor` katalog/bağlantı yönetir;
-`viewer` yalnız okur. Gönderilen merchant ID ve rol hiçbir zaman yetki kaynağı
-değildir; üyelik veritabanından yüklenir.
+Kullanıcının kararı **soft-close / pasif hesap**tır; kalıcı silme veya anonimleştirme bu işin davranışı değildir. Son `owner` üyeliği olan kişi önce sahipliği devretmeli veya mağazayı kapatma sürecini tamamlamalıdır; mevcut endpoint aksi halde `OWNER_TRANSFER_REQUIRED` döndürür. Uygun hesap kapatıldığında `account_status='closed'` ve `closed_at` yazılır, bütün ShopAI oturumları iptal edilir, Better Auth oturumları sonlandırılır ve mevcut credential ile yeni uygulama girişi reddedilir. UUID, e-posta, credential/TOTP ve ilişkili kişisel/ticari kayıtlar saklanır; bu durum bir kişisel veri silme talebinin karşılandığı anlamına gelmez. Saklama süresi, anonimleştirme ve veri sahibi talep süreci ayrı hukuk/ürün kararı gerektirir. Kapatılan hesabın yeniden etkinleştirilmesi ancak ayrı ve denetlenebilir operasyonla tasarlanabilir; şu an kullanıcı arayüzünde otomatik reaktivasyon yoktur.
 
-## Pilot erişimini kapatma
+## Kabul sınırı
 
-Yetkili operatör önce kullanıcının normalize e-postasını ve pilot kodunu teyit
-eder. Ardından `AUTH_PILOT_CREDENTIALS` içinden o e-posta/kod eşlemesini kaldırır
-ve secret sürümünü yeniden dağıtır; bu yeni login'i kapatır. Mevcut tüm oturumlar
-aynı bakım işlemi içinde e-postaya bağlı kullanıcı üzerinden silinir:
-
-```sql
-begin;
-delete from sessions
-where user_id = (select id from users where email = 'pilot@example.com');
-commit;
-```
-
-Gerçek adres komut geçmişine veya belgeye yazılmaz; operasyon sırasında güvenli
-DB istemcisinde parametre olarak verilir. Sonrasında eski cookie ile
-`GET /v1/auth/session` ve en az bir mağaza yönetim endpoint'inin 401 döndürdüğü
-doğrulanır. Yalnız üyeliği kaldırmak oturumu sonlandırmaz; yalnız session silmek
-ise kullanıcıya yeni kodla tekrar giriş imkânı bırakır, bu yüzden iki adım birlikte
-uygulanır. Olay zamanı, operatör ve anonim pilot kodu audit kaydına yazılır.
-
-Gerçek staging tarayıcısındaki HTTPS giriş → yenileme → çıkış kabulü T04 yayın
-doğrulamasında tamamlanır; yerel HTTP testi bunun yerine geçmez.
+HTTPS staging'de yeni hesap, doğrulama e-postası, MFA, parola kurtarma ve tarayıcılar arası logout-all daha önce gözlendi. `cc858d36ec6ea8a53feda19333efe9c1c8a428bd` ve CSRF düzeltmesini içeren `f9ae3b69735da28d8f9a3b8a3db39ba47bc7bf01` release'lerinde iki farklı doğrulanmış merchant owner'ın kendi mağazası 200 ve birbirinin mağazası 403; shopper test oturumu yönetimde 403 gözlendi. Bu HTTP testlerinde kısa ömürlü MFA session fixture'ı kullanıldı, iki tarayıcıdan parola/TOTP girişi yapıldığı iddia edilmez. Ayrı geçici hesapla son owner 409, uygun soft-close 200, iki ShopAI ve Better Auth oturumlarının iptali ile yeniden giriş reddi 401 doğrulandı. Legacy pilot envanterinde yalnız operatörün sahte geliştirme adresi olarak tanımladığı `pilot@fizyoflow.com` bulundu; taşınacak gerçek kullanıcı olmadığı için dış migration N/A, temsilî PostgreSQL koruma testi PASS'tır. PR #59'daki son dokümantasyon commit'i için exact-head staging/CI eşleşmesi kapanışta ayrıca kontrol edilir. Gerçek müşteri pilotu ÜRÜN-032 kapsamındadır. Ayrıntılı kanıt ve açık kapılar [Better Auth geçiş kaydında](follow-ups/urun-003-better-auth-migration.md).

@@ -2,6 +2,7 @@
 
 import { type StockStatus, stockStatusLabel } from '@shopai/contracts';
 import { useCallback, useEffect, useState } from 'react';
+import { authenticatedFetch } from '../../../lib/authenticated-fetch';
 import { useActiveMerchant } from '../merchant-context';
 import { OnboardingSteps } from '../onboarding-steps';
 
@@ -76,7 +77,7 @@ export default function ProductsPage() {
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       if (!merchantId) return;
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/products`,
         {
           credentials: 'include',
@@ -105,7 +106,7 @@ export default function ProductsPage() {
 
   async function changePublication(ids: string[], published: boolean) {
     if (!canEdit || !merchantId || !ids.length) return;
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${api}/v1/merchants/${merchantId}/products/publication`,
       {
         method: 'POST',

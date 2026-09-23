@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { authenticatedFetch } from '../../../lib/authenticated-fetch';
 import { useActiveMerchant } from '../merchant-context';
 import { OnboardingSteps } from '../onboarding-steps';
 
@@ -44,7 +45,7 @@ export default function ImportsPage() {
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       const generation = merchantGeneration.current;
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/imports`,
         { credentials: 'include', signal },
       );
@@ -111,7 +112,7 @@ export default function ImportsPage() {
     setMessage('');
     const generation = merchantGeneration.current;
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${api}/v1/merchants/${merchantId}/imports`,
         {
           method: 'POST',

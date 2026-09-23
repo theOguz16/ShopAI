@@ -9,12 +9,18 @@ import {
 } from '@shopai/contracts';
 import { searchProductsRequestSchema } from '@shopai/contracts/search-products';
 import { createDatabase } from '@shopai/db';
+import { sql } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { z } from 'zod';
+import { registerBetterAuthRoutes } from './better-auth-routes.js';
 import { type ApiEnv, parseApiEnv } from './env.js';
 import { createMcpServer } from './mcp.js';
 import { createOpsAlertSender } from './ops-alert.js';
-import { registerAuth, requireSameOrigin } from './plugins/auth.js';
+import {
+  registerAuth,
+  requireRecentMfa,
+  requireSameOrigin,
+} from './plugins/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
@@ -69,6 +75,8 @@ export async function buildApp(
   const opsAlerts = createOpsAlertSender(env);
   const app = Fastify({
     routerOptions: { maxParamLength: 1024 },
+    // Verification and reset URLs contain secrets: never log raw request URLs.
+    disableRequestLogging: true,
     logger: {
       level: env.LOG_LEVEL,
       redact: [
@@ -80,6 +88,15 @@ export async function buildApp(
         'req.body.apiKey',
         'req.body.apiSecret',
         'req.body.token',
+        'req.body.pilotToken',
+        'req.body.code',
+        'req.body.password',
+        'req.body.newPassword',
+        'req.query.code',
+        'req.query.state',
+        'req.query.token',
+        'req.body.totp',
+        'req.body.backupCode',
         'req.body.AUTH_PILOT_CREDENTIALS',
         'req.body.email',
       ],
@@ -120,6 +137,11 @@ export async function buildApp(
   });
   await app.register(rateLimit, { max: 60, timeWindow: '1 minute' });
   registerAuth(app, authDatabase?.db, env);
+  registerBetterAuthRoutes(app, authDatabase?.db, env);
+  app.get('/v1/auth/capabilities', async () => ({
+    betterAuthEnabled: env.BETTER_AUTH_ENABLED === 'true',
+    pilotEnabled: app.authApi.pilotEnabled,
+  }));
   app.post(
     '/v1/auth/login',
     {
@@ -140,9 +162,53 @@ export async function buildApp(
     { preHandler: requireSameOrigin },
     (request, reply) => app.authApi.logout(request, reply),
   );
+  app.post(
+    '/v1/auth/logout-all',
+    { preHandler: requireSameOrigin },
+    (request, reply) => app.authApi.logoutAll(request, reply),
+  );
+  app.post(
+    '/v1/auth/account/close',
+    { preHandler: [requireSameOrigin, requireRecentMfa] },
+    async (request, reply) => {
+      if (!request.auth || !authDatabase?.db)
+        return reply.code(401).send({ code: 'UNAUTHENTICATED' });
+      const userId = request.auth.userId;
+      const outcome = await authDatabase.db.transaction(async (tx) => {
+        const account = await tx.execute(
+          sql`SELECT account_status FROM users WHERE id=${userId}::uuid FOR UPDATE`,
+        );
+        if (account.rows[0]?.account_status !== 'active')
+          return 'ACCOUNT_INACTIVE';
+        const owner = await tx.execute(
+          sql`SELECT 1 FROM memberships WHERE user_id=${userId}::uuid AND role='owner' LIMIT 1`,
+        );
+        if (owner.rows.length) return 'OWNER_TRANSFER_REQUIRED';
+        await tx.execute(sql`
+          UPDATE shopai_auth."session" SET "expiresAt"=now()
+          WHERE "userId" IN (
+            SELECT subject FROM user_identities
+            WHERE user_id=${userId}::uuid AND issuer='better-auth'
+          )
+        `);
+        await tx.execute(
+          sql`UPDATE users SET account_status='closed',closed_at=now() WHERE id=${userId}::uuid`,
+        );
+        await tx.execute(
+          sql`UPDATE sessions SET revoked_at=now() WHERE user_id=${userId}::uuid AND revoked_at IS NULL`,
+        );
+        await tx.execute(
+          sql`INSERT INTO auth_audit_events (user_id,event_type,outcome,request_id) VALUES (${userId}::uuid,'account_closing','success',${request.id})`,
+        );
+        return 'OK';
+      });
+      if (outcome !== 'OK') return reply.code(409).send({ code: outcome });
+      return app.authApi.logout(request, reply);
+    },
+  );
   app.get('/v1/auth/session', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ code: 'UNAUTHENTICATED' });
-    return { user: request.auth };
+    return { user: request.auth, csrfToken: app.authApi.csrfToken(request) };
   });
   await registerMerchantRoutes(app, env);
   await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
@@ -166,42 +232,48 @@ export async function buildApp(
       return reply.code(503).send({ status: 'unavailable' });
     }
   });
-  app.post('/discovery-session', async (request, reply) => {
-    const parsed = discoverySessionCreateRequestSchema.safeParse(request.body);
-    if (!parsed.success)
-      return reply
-        .code(400)
-        .send({ code: 'INVALID_INPUT', requestId: request.id });
-    if (!restDiscoverySurfaces.has(parsed.data.surface))
-      return reply.code(400).send({
-        code: 'INVALID_SURFACE_FOR_TRANSPORT',
-        requestId: request.id,
-      });
-    try {
-      const session = await resolvedServices.discoverySessions.create(
-        parsed.data,
-        {
-          transport: 'rest',
-          userId: request.auth?.userId,
-        },
+  app.post(
+    '/discovery-session',
+    { preHandler: requireSameOrigin },
+    async (request, reply) => {
+      const parsed = discoverySessionCreateRequestSchema.safeParse(
+        request.body,
       );
-      return reply.code(201).send(session);
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'statusCode' in error &&
-        error.statusCode === 404 &&
-        'code' in error &&
-        error.code === 'MERCHANT_NOT_FOUND'
-      )
-        return reply.code(404).send({
-          code: 'MERCHANT_NOT_FOUND',
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ code: 'INVALID_INPUT', requestId: request.id });
+      if (!restDiscoverySurfaces.has(parsed.data.surface))
+        return reply.code(400).send({
+          code: 'INVALID_SURFACE_FOR_TRANSPORT',
           requestId: request.id,
         });
-      throw error;
-    }
-  });
+      try {
+        const session = await resolvedServices.discoverySessions.create(
+          parsed.data,
+          {
+            transport: 'rest',
+            userId: request.auth?.userId,
+          },
+        );
+        return reply.code(201).send(session);
+      } catch (error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'statusCode' in error &&
+          error.statusCode === 404 &&
+          'code' in error &&
+          error.code === 'MERCHANT_NOT_FOUND'
+        )
+          return reply.code(404).send({
+            code: 'MERCHANT_NOT_FOUND',
+            requestId: request.id,
+          });
+        throw error;
+      }
+    },
+  );
   const mcpSessions = new Map<
     string,
     {
