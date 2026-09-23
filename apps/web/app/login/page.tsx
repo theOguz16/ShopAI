@@ -39,9 +39,6 @@ export default function LoginPage() {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [accountUse, setAccountUse] = useState<'merchant' | 'shopper'>(
-    'merchant',
-  );
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     setResetToken(query.get('token') ?? '');
@@ -205,7 +202,7 @@ export default function LoginPage() {
           email,
           password,
           ...(backupCode ? { backupCode } : { totp: totpCode }),
-          client: accountUse,
+          client: 'merchant',
           ...(pilotProof ? { pilotToken: pilotProof } : {}),
         }),
       });
@@ -220,7 +217,7 @@ export default function LoginPage() {
         return;
       }
       await betterRequest('sign-out', {});
-      router.replace(accountUse === 'shopper' ? '/saved' : safeReturn());
+      router.replace(safeReturn());
     } catch {
       setError('Kimlik servisine ulaşılamıyor.');
     }
@@ -393,20 +390,6 @@ export default function LoginPage() {
               {twoFactorChallenge ? (
                 <form onSubmit={completeBetterLogin}>
                   <h3>İki aşamalı girişi tamamla</h3>
-                  <label>
-                    Bu oturumun kullanım amacı
-                    <select
-                      value={accountUse}
-                      onChange={(event) =>
-                        setAccountUse(
-                          event.target.value as 'merchant' | 'shopper',
-                        )
-                      }
-                    >
-                      <option value="merchant">Mağaza yönetimi</option>
-                      <option value="shopper">Alışveriş hesabı</option>
-                    </select>
-                  </label>
                   <label>
                     Güncel 6 haneli kod
                     <input

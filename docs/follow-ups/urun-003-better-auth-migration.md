@@ -79,7 +79,7 @@ Bu paragrafın yazıldığı tarihteki kapılar sonraki 24 Eylül staging kabul�
 
 ## 24 Eylül — daraltılmış ÜRÜN-003 staging kabulü
 
-Ürün kararı: Web dashboard **yalnız merchant yönetimi** içindir; son kullanıcı alışverişi ChatGPT üzerindedir. Shopper kimliği burada yalnız API güvenlik fixture'ıdır. Shopper dashboard onboarding'i, yeni kullanıcı tipi veya yeni auth akışı ÜRÜN-003 kapsamına alınmaz.
+Ürün kararı: Web dashboard **yalnız merchant yönetimi** içindir; son kullanıcı alışverişi ChatGPT üzerindedir. Shopper kimliği burada yalnız API güvenlik fixture'ıdır. Önceki giriş ekranındaki “Alışveriş hesabı” seçeneği kaldırıldı; web MFA tamamlaması `client: 'merchant'` gönderir. Shopper dashboard onboarding'i, yeni kullanıcı tipi veya yeni auth akışı ÜRÜN-003 kapsamına alınmaz.
 
 Staging public HTTPS release `cc858d36ec6ea8a53feda19333efe9c1c8a428bd` üzerinde yapılan kabul, son PR head `f9ae3b69735da28d8f9a3b8a3db39ba47bc7bf01` üzerinde **aynen tekrarlandı**. İki **mevcut, farklı, e-postası doğrulanmış owner** hesabı ve çapraz membership sayısı `0` tespit edildi. Ham cookie/şifre/TOTP çıktılanmadan, 15 dakikalık sunucu tarafı MFA oturum fixture'ları üretildi. A'nın A mağazası 200, A'nın B mağazası **403**, B'nin B mağazası 200, B'nin A mağazası **403** döndü. A kullanıcısının shopper türündeki ayrı test oturumu mağaza listesinde ve kendi mağaza yönetiminde **403** aldı. İstekler canlı public HTTPS API'ye yapıldı; bu, iki ayrı tarayıcıdan gerçek parola+TOTP girişinin kanıtı değildir. Geçici A/B/shopper oturumları test sonunda silindi. Müşteri kabulü iddiası yoktur.
 
