@@ -5,6 +5,7 @@ import { productAlertResponseSchema } from '@shopai/contracts/product-alerts';
 import {
   type ProductDetailResponse,
   productDetailResponseSchema,
+  variantOptionLabel,
 } from '@shopai/contracts/product-detail';
 import {
   savedProductResponseSchema,
@@ -131,7 +132,13 @@ export default function ProductDetailPage() {
   }, []);
 
   const colors = useMemo(
-    () => [...new Set(detail?.variants.map((variant) => variant.color) ?? [])],
+    () => [
+      ...new Set(
+        detail?.variants
+          .filter((variant) => variant.color !== 'unspecified')
+          .map((variant) => variant.color) ?? [],
+      ),
+    ],
     [detail],
   );
   const visibleVariants = useMemo(
@@ -155,9 +162,12 @@ export default function ProductDetailPage() {
     selectedOffers
       ?.slice()
       .sort((left, right) => left.priceMinor - right.priceMinor)[0] ??
-    detail?.offers
-      .slice()
-      .sort((left, right) => left.priceMinor - right.priceMinor)[0];
+    (!selectedVariantId
+      ? detail?.offers
+          .slice()
+          .sort((left, right) => left.priceMinor - right.priceMinor)[0]
+      : undefined);
+  const displayImage = selectedVariant?.image ?? detail?.images[0];
   const currentSavedKey = savedKey(productId, selectedVariantId);
   const currentSavedId = savedIds[currentSavedKey];
   const isSaved = Boolean(currentSavedId);
@@ -358,10 +368,10 @@ export default function ProductDetailPage() {
         }}
       >
         <div>
-          {detail.images[0] ? (
+          {displayImage ? (
             <img
-              src={detail.images[0].url}
-              alt={detail.images[0].alt ?? detail.product.title}
+              src={displayImage.url}
+              alt={displayImage.alt ?? detail.product.title}
               style={{ width: '100%', borderRadius: 24, objectFit: 'cover' }}
             />
           ) : (
@@ -407,14 +417,14 @@ export default function ProductDetailPage() {
           ) : null}
 
           <fieldset>
-            <legend>Beden</legend>
+            <legend>Seçenek</legend>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {visibleVariants.map((variant) => (
                 <button
                   key={variant.id}
                   type="button"
                   aria-pressed={selectedVariantId === variant.id}
-                  aria-label={`${variant.size} beden, ${stockStatusLabel(variant.availability)}`}
+                  aria-label={`${variantOptionLabel(variant)}, ${stockStatusLabel(variant.availability)}`}
                   onClick={() => setSelectedVariantId(variant.id)}
                 >
                   {variant.size}
@@ -427,7 +437,7 @@ export default function ProductDetailPage() {
             className={`stock stock-${selectedVariant?.availability ?? detail.availability}`}
           >
             {selectedVariant
-              ? `${selectedVariant.size} ${stockStatusLabel(selectedVariant.availability)}`
+              ? `${variantOptionLabel(selectedVariant)} ${stockStatusLabel(selectedVariant.availability)}`
               : stockStatusLabel(detail.availability)}
             {selectedVariant?.selectable ? ' ✓' : ''}
           </p>

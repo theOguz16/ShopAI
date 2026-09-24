@@ -1,4 +1,8 @@
-import { type SourceRow, sourceRowSchema } from '@shopai/contracts';
+import {
+  type SourceRow,
+  sourceRowSchema,
+  type CatalogAttribute,
+} from '@shopai/contracts';
 import {
   ConnectorHttpError,
   type ConnectorHttpDiagnostics,
@@ -23,9 +27,13 @@ type WooProduct = {
   status: string;
   stock_status?: string;
   date_modified_gmt: string;
-  categories?: Array<{ slug?: string; name?: string }>;
+  categories?: Array<{ id?: number; slug?: string; name?: string }>;
   images?: Array<{ src?: string; alt?: string }>;
-  attributes?: Array<{ name?: string; options?: string[] }>;
+  attributes?: Array<{
+    name?: string;
+    options?: string[];
+    variation?: boolean;
+  }>;
 };
 
 type WooVariation = {
@@ -49,6 +57,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
     incrementalSync: true,
   } as const;
   private readonly baseUrl: URL;
+  private currencyPromise?: Promise<'TRY'>;
 
   constructor(
     private readonly credentials: WooCommerceCredentials,
@@ -56,6 +65,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
     private readonly sleep: Sleep = (milliseconds) =>
       new Promise((resolve) => setTimeout(resolve, milliseconds)),
     private readonly maxAttempts = 3,
+    private readonly currencyResolver?: () => Promise<string>,
   ) {
     this.baseUrl = new URL(credentials.storeUrl);
     if (this.baseUrl.protocol !== 'https:')
@@ -66,6 +76,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
     const url = this.apiUrl('products');
     url.searchParams.set('per_page', '1');
     await this.request(url);
+    await this.resolveCurrency();
   }
 
   async readPage(input: {
@@ -98,6 +109,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
       (totalPages < 1 && !isEmptyIncrementalResult)
     )
       throw new Error('WooCommerce geçersiz sayfalama bilgisi döndürdü.');
+    const currency = products.length ? await this.resolveCurrency() : 'TRY';
     const rows: SourceRow[] = [];
     let variationPagesComplete = true;
     const sourceTimes = products.map((product) =>
@@ -112,7 +124,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
             `WooCommerce variable ürün ${product.id} için varyant bulunamadı.`,
           );
         for (const variation of variations) {
-          rows.push(toVariationSourceRow(product, variation));
+          rows.push(toVariationSourceRow(product, variation, currency));
           sourceTimes.push(isoUtc(variation.date_modified_gmt));
         }
         if (!variationResult.complete) {
@@ -120,7 +132,7 @@ export class WooCommerceConnector implements LiveCatalogConnector {
           break;
         }
       } else {
-        rows.push(toSimpleSourceRow(product));
+        rows.push(toSimpleSourceRow(product, currency));
       }
     }
     const fetchedAt = new Date().toISOString();
@@ -142,6 +154,24 @@ export class WooCommerceConnector implements LiveCatalogConnector {
 
   private apiUrl(path: string) {
     return new URL(`/wp-json/wc/v3/${path}`, this.baseUrl);
+  }
+
+  private resolveCurrency() {
+    this.currencyPromise ??= (async () => {
+      const settings = this.currencyResolver
+        ? await this.currencyResolver()
+        : (
+            (await (
+              await this.request(this.apiUrl('settings/general'))
+            ).json()) as Array<{ id?: string; value?: unknown }>
+          ).find((setting) => setting.id === 'woocommerce_currency')?.value;
+      if (settings !== 'TRY')
+        throw new Error(
+          `WooCommerce para birimi desteklenmiyor veya doğrulanamadı: ${String(settings)}`,
+        );
+      return 'TRY' as const;
+    })();
+    return this.currencyPromise;
   }
 
   private async readVariations(productId: number) {
@@ -213,11 +243,20 @@ export class WooCommerceConnector implements LiveCatalogConnector {
   }
 }
 
-function toSimpleSourceRow(product: WooProduct): SourceRow {
+function toSimpleSourceRow(product: WooProduct, currency: 'TRY'): SourceRow {
   const attribute = (name: RegExp) =>
     product.attributes?.find((item) => name.test(item.name ?? ''))
       ?.options?.[0];
   const price = Number(product.price.replace(',', '.'));
+  const options = optionAttributes(
+    product.attributes
+      ?.filter((item) => item.variation === true)
+      .flatMap((item) =>
+        item.options?.length === 1
+          ? [{ name: item.name, option: item.options[0] }]
+          : [],
+      ) ?? [],
+  );
   return sourceRowSchema.parse({
     externalId: String(product.id),
     productKey: String(product.id),
@@ -229,10 +268,13 @@ function toSimpleSourceRow(product: WooProduct): SourceRow {
       'uncategorized',
     imageUrl: product.images?.[0]?.src ?? null,
     imageAlt: product.images?.[0]?.alt || product.name,
+    productAttributes: productAttributes(product),
+    ...(options.length ? { variantOptions: options } : {}),
+    sourceCategoryId: product.categories?.[0]?.id?.toString(),
     size: attribute(/size|beden/iu) ?? 'ONE_SIZE',
     color: attribute(/colou?r|renk/iu) ?? 'unspecified',
     priceMinor: Math.round(price * 100),
-    currency: 'TRY',
+    currency,
     available:
       product.stock_status === 'instock'
         ? true
@@ -246,6 +288,7 @@ function toSimpleSourceRow(product: WooProduct): SourceRow {
 function toVariationSourceRow(
   product: WooProduct,
   variation: WooVariation,
+  currency: 'TRY',
 ): SourceRow {
   const attribute = (name: RegExp, fallback: string) => {
     const selected = variation.attributes?.find((item) =>
@@ -262,6 +305,7 @@ function toVariationSourceRow(
     );
   };
   const price = Number(variation.price.replace(',', '.'));
+  const options = optionAttributes(variation.attributes ?? []);
   return sourceRowSchema.parse({
     externalId: String(variation.id),
     productKey: String(product.id),
@@ -271,12 +315,17 @@ function toVariationSourceRow(
       product.categories?.[0]?.slug ??
       product.categories?.[0]?.name ??
       'uncategorized',
-    imageUrl: variation.image?.src ?? product.images?.[0]?.src ?? null,
-    imageAlt: variation.image?.alt || product.images?.[0]?.alt || product.name,
+    imageUrl: product.images?.[0]?.src ?? null,
+    variantImageUrl: variation.image?.src ?? null,
+    variantImageAlt: variation.image?.alt ?? null,
+    imageAlt: product.images?.[0]?.alt || product.name,
+    productAttributes: productAttributes(product),
+    ...(options.length ? { variantOptions: options } : {}),
+    sourceCategoryId: product.categories?.[0]?.id?.toString(),
     size: attribute(/size|beden/iu, 'ONE_SIZE'),
     color: attribute(/colou?r|renk/iu, 'unspecified'),
     priceMinor: Math.round(price * 100),
-    currency: 'TRY',
+    currency,
     available:
       variation.stock_status === 'instock'
         ? true
@@ -285,6 +334,43 @@ function toVariationSourceRow(
           : null,
     checkoutUrl: product.permalink,
   });
+}
+
+function optionAttributes(
+  items: Array<{ name?: string; option?: string }>,
+): CatalogAttribute[] {
+  return items
+    .filter((item): item is { name: string; option: string } =>
+      Boolean(item.name?.trim() && item.option?.trim()),
+    )
+    .map((item) => attribute(item.name, item.option));
+}
+
+function productAttributes(product: WooProduct): CatalogAttribute[] {
+  return (product.attributes ?? []).flatMap((item) => {
+    if (item.variation === true || !item.name?.trim() || !item.options?.length)
+      return [];
+    return [
+      {
+        ...attribute(item.name, item.options.join(' | ')),
+        rawValues: item.options,
+      },
+    ];
+  });
+}
+
+function attribute(name: string, rawValue: string): CatalogAttribute {
+  const key = name.trim().toLocaleLowerCase('en-US').replace(/\s+/gu, '_');
+  const match = rawValue
+    .trim()
+    .match(/^([0-9]+(?:[.,][0-9]+)?)\s+([\p{L}%]+)$/u);
+  return {
+    key,
+    label: name.trim(),
+    value: match?.[1] ?? rawValue.trim(),
+    ...(match ? { unit: match[2], rawValue: rawValue.trim() } : {}),
+    sourceKey: name,
+  };
 }
 
 async function collectHttpDiagnostics(

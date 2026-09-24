@@ -1,4 +1,5 @@
 import { type CatalogItem, stockStatusLabel } from '@shopai/contracts';
+import { variantOptionLabel } from '@shopai/contracts/product-detail';
 import { productAlertResponseSchema } from '@shopai/contracts/product-alerts';
 import {
   type ProductDetailResponse,
@@ -402,7 +403,7 @@ function Widget() {
       setAlertNotice(
         alert.conditionType === 'PRICE_BELOW'
           ? `🔔 ${formatMoney(alert.targetValue ?? 0)} altına düşünce ${alert.email} adresine haber vereceğiz.`
-          : `🔔 ${selectedVariant?.size ?? 'Seçili varyant'} gelince ${alert.email} adresine haber vereceğiz.`,
+          : `🔔 ${selectedVariant ? variantOptionLabel(selectedVariant) : 'Seçili varyant'} gelince ${alert.email} adresine haber vereceğiz.`,
       );
     } catch {
       setError('Alert oluşturulamadı. E-posta ve hedef değerini kontrol et.');
@@ -424,7 +425,11 @@ function Widget() {
   const contextChips = queryContextChips(input.query);
   const priceChip = formatPriceFilter(input);
   const detailColors = [
-    ...new Set(detail?.variants.map((variant) => variant.color) ?? []),
+    ...new Set(
+      detail?.variants
+        .filter((variant) => variant.color !== 'unspecified')
+        .map((variant) => variant.color) ?? [],
+    ),
   ];
   const visibleVariants =
     detail?.variants.filter(
@@ -447,9 +452,13 @@ function Widget() {
     detail?.offers
       .filter((offer) => offer.variantId === selectedVariantId)
       .sort((left, right) => left.priceMinor - right.priceMinor)[0] ??
-    detail?.offers
-      .slice()
-      .sort((left, right) => left.priceMinor - right.priceMinor)[0];
+    (!selectedVariantId
+      ? detail?.offers
+          .slice()
+          .sort((left, right) => left.priceMinor - right.priceMinor)[0]
+      : undefined);
+
+  const displayImage = selectedVariant?.image ?? detail?.images[0];
 
   function chooseColor(color: string) {
     setSelectedColor(color);
@@ -687,11 +696,11 @@ function Widget() {
         <section className="detail-shell" aria-label="Ürün detayı">
           <div className="detail-hero">
             <div className="detail-media">
-              {detail.images[0] ? (
+              {displayImage ? (
                 <img
                   className="detail-image"
-                  src={detail.images[0].url}
-                  alt={detail.images[0].alt ?? detail.product.title}
+                  src={displayImage.url}
+                  alt={displayImage.alt ?? detail.product.title}
                 />
               ) : (
                 <div className="shopping-card-placeholder" role="img">
@@ -728,7 +737,7 @@ function Widget() {
               </fieldset>
 
               <fieldset className="option-group">
-                <legend>Beden</legend>
+                <legend>Seçenek</legend>
                 <div className="option-row">
                   {visibleVariants.map((variant) => (
                     <button
@@ -746,7 +755,7 @@ function Widget() {
 
               <p className="availability-line">
                 {selectedVariant
-                  ? `${selectedVariant.size} · ${stockStatusLabel(selectedVariant.availability)}${selectedVariant.selectable ? ' ✓' : ''}`
+                  ? `${variantOptionLabel(selectedVariant)} · ${stockStatusLabel(selectedVariant.availability)}${selectedVariant.selectable ? ' ✓' : ''}`
                   : stockStatusLabel(detail.availability)}
               </p>
 

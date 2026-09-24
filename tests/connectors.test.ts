@@ -46,6 +46,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
     await connector.validate();
     const first = await connector.readPage({
@@ -66,9 +69,11 @@ describe('WooCommerce pilot connector', () => {
       size: 'M',
       color: 'Siyah',
     });
-    expect(calls[1]?.searchParams.get('modified_after')).toBe(
-      '2026-09-01T00:00:00.000Z',
-    );
+    expect(
+      calls
+        .find((url) => url.searchParams.has('modified_after'))
+        ?.searchParams.get('modified_after'),
+    ).toBe('2026-09-01T00:00:00.000Z');
   });
 
   it('completes an empty incremental result with zero total pages', async () => {
@@ -85,6 +90,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
 
     const page = await connector.readPage({
@@ -111,6 +119,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
 
     const page = await connector.readPage({ mode: 'full' });
@@ -138,6 +149,9 @@ describe('WooCommerce pilot connector', () => {
       const connector = new WooCommerceConnector(
         credentials,
         fetcher as typeof fetch,
+        undefined,
+        3,
+        async () => 'TRY',
       );
 
       await expect(connector.readPage({ mode: 'incremental' })).rejects.toThrow(
@@ -157,6 +171,7 @@ describe('WooCommerce pilot connector', () => {
       fetcher as typeof fetch,
       sleep,
       3,
+      async () => 'TRY',
     );
     await expect(connector.validate()).rejects.toBeInstanceOf(
       ConnectorHttpError,
@@ -194,6 +209,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
 
     const page = await connector.readPage({ mode: 'full' });
@@ -208,6 +226,96 @@ describe('WooCommerce pilot connector', () => {
     expect(page.rows[2]?.available).toBe(false);
     expect(new Date(page.fetchedAt).getTime()).toBeGreaterThan(
       new Date(page.sourceObservedAt).getTime(),
+    );
+  });
+
+  it('preserves non-apparel options, units, source images and variant stock', async () => {
+    const variable = {
+      ...product(40, ''),
+      type: 'variable',
+      name: 'Karbon olta',
+      categories: [{ slug: 'fishing-rods' }],
+      attributes: [
+        { name: 'Rod material', options: ['carbon'], variation: false },
+        { name: 'Length', options: ['240 cm', '270 cm'], variation: true },
+      ],
+    };
+    const fetcher = vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      const body = url.pathname.endsWith('/variations')
+        ? [
+            {
+              id: 401,
+              price: '320.00',
+              stock_status: 'instock',
+              date_modified_gmt: '2026-09-07T12:00:00',
+              attributes: [{ name: 'Length', option: '240 cm' }],
+              image: { src: 'https://pilot.example/rod-240.jpg' },
+            },
+            {
+              id: 402,
+              price: '350.00',
+              stock_status: 'outofstock',
+              date_modified_gmt: '2026-09-07T12:00:00',
+              attributes: [{ name: 'Length', option: '270 cm' }],
+            },
+          ]
+        : [variable];
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'x-wp-totalpages': '1' },
+      });
+    });
+    const connector = new WooCommerceConnector(
+      credentials,
+      fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
+    );
+    const page = await connector.readPage({ mode: 'full' });
+    expect(page.rows[0]).toMatchObject({
+      productKey: '40',
+      externalId: '401',
+      priceMinor: 32000,
+      available: true,
+      productAttributes: [
+        { key: 'rod_material', value: 'carbon', rawValues: ['carbon'] },
+      ],
+      variantOptions: [
+        { key: 'length', value: '240', unit: 'cm', rawValue: '240 cm' },
+      ],
+      imageUrl: 'https://pilot.example/image.jpg',
+      variantImageUrl: 'https://pilot.example/rod-240.jpg',
+    });
+    expect(page.rows[1]).toMatchObject({
+      externalId: '402',
+      priceMinor: 35000,
+      available: false,
+      variantImageUrl: null,
+    });
+    expect(page.rows[0]?.productAttributes).not.toEqual(
+      page.rows[0]?.variantOptions,
+    );
+  });
+
+  it('rejects an unsupported WooCommerce currency before importing prices', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([product(1)]), {
+          status: 200,
+          headers: { 'x-wp-totalpages': '1' },
+        }),
+    );
+    const connector = new WooCommerceConnector(
+      credentials,
+      fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'EUR',
+    );
+    await expect(connector.readPage({ mode: 'full' })).rejects.toThrow(
+      'para birimi desteklenmiyor',
     );
   });
 
@@ -246,6 +354,9 @@ describe('WooCommerce pilot connector', () => {
       const connector = new WooCommerceConnector(
         credentials,
         fetcher as typeof fetch,
+        undefined,
+        3,
+        async () => 'TRY',
       );
 
       const page = await connector.readPage({ mode: 'full' });
@@ -285,6 +396,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
 
     const page = await connector.readPage({ mode: 'full' });
@@ -299,6 +413,9 @@ describe('WooCommerce pilot connector', () => {
     const connector = new WooCommerceConnector(
       credentials,
       fetcher as typeof fetch,
+      undefined,
+      3,
+      async () => 'TRY',
     );
     await expect(connector.validate()).rejects.toMatchObject({
       reauthorizationRequired: true,

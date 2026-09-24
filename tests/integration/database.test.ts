@@ -20,6 +20,7 @@ import {
   stockStatus,
 } from '../../packages/commerce/src/index.js';
 import { catalogConnectionHealth } from '../../packages/commerce/src/catalog-health.js';
+import { ProductDetails } from '../../packages/commerce/src/product-detail.js';
 import {
   type LiveCatalogConnector,
   parseCatalogCsv,
@@ -31,6 +32,7 @@ import {
   searchResponseSchema,
 } from '../../packages/contracts/src/index.js';
 import { PostgresCatalogRepository } from '../../packages/db/src/catalog-repository.js';
+import { PostgresProductDetailRepository } from '../../packages/db/src/product-detail-repository.js';
 import { createDatabase } from '../../packages/db/src/client.js';
 import { importCatalog } from '../../packages/db/src/import-catalog.js';
 import {
@@ -46,6 +48,7 @@ import {
 } from '../../packages/db/src/schema.js';
 import { seedDemo } from '../../packages/db/src/seed.js';
 import { setTenantContext } from '../../packages/db/src/tenant-context.js';
+import { genericCatalogRows } from '../fixtures/generic-catalog.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
@@ -132,6 +135,126 @@ beforeEach(async () => {
 afterAll(async () => database.close());
 
 describe('catalog import integrity on PostgreSQL', () => {
+  it('persists generic options, descriptors and selected-variant facts without merchant collisions', async () => {
+    const observedAt = new Date().toISOString();
+    const input = job({ observedAt, rows: genericCatalogRows });
+    await importCatalog(database.db, input);
+    await importCatalog(
+      database.db,
+      job({
+        observedAt,
+        rows: genericCatalogRows.map((item) => ({
+          ...item,
+          variantOptions: item.variantOptions?.slice().reverse(),
+        })),
+      }),
+    );
+    expect(await counts()).toEqual({ products: 3, variants: 4, offers: 4 });
+
+    const stored = await database.db
+      .select({
+        externalId: variants.externalId,
+        options: variants.options,
+        imageUrl: variants.imageUrl,
+        priceMinor: offers.priceMinor,
+        available: inventory.available,
+        checkoutUrl: offers.checkoutUrl,
+      })
+      .from(variants)
+      .innerJoin(offers, eq(offers.variantId, variants.id))
+      .leftJoin(inventory, eq(inventory.offerId, offers.id));
+    expect(stored.find((item) => item.externalId === 'rod-240')).toMatchObject({
+      options: [
+        { key: 'length', value: '240', unit: 'cm', rawValue: '240 cm' },
+        { key: 'power', value: 'medium' },
+      ],
+      imageUrl: 'https://merchant.example/rod-240.jpg',
+      priceMinor: 32000,
+      available: true,
+      checkoutUrl: 'https://merchant.example/products/rod?variant=240',
+    });
+    expect(stored.find((item) => item.externalId === 'rod-270')).toMatchObject({
+      priceMinor: 35000,
+      available: false,
+      imageUrl: null,
+    });
+    expect(
+      stored.find((item) => item.externalId === 'bottle-750'),
+    ).toMatchObject({
+      options: [{ key: 'capacity', value: '750', unit: 'ml' }],
+      available: null,
+    });
+    const [rod] = await database.db
+      .select({ id: products.id, attributes: products.descriptiveAttributes })
+      .from(products)
+      .where(eq(products.externalKey, 'rod-1'));
+    expect(rod?.attributes).toEqual([
+      { key: 'rod_material', label: 'Olta malzemesi', value: 'carbon' },
+    ]);
+    if (!rod) throw new Error('Olta fixture ürünü bulunamadı.');
+    await database.db.transaction(async (tx) => {
+      await setTenantContext(tx, merchantA);
+      await tx
+        .update(products)
+        .set({ published: true })
+        .where(eq(products.merchantId, merchantA));
+    });
+    const service = new ProductDetails(
+      new PostgresProductDetailRepository(database.db),
+      new SearchProducts(
+        new PostgresCatalogRepository(database.db),
+        new DemoQueryParser(),
+        'postgres',
+      ),
+    );
+    const detail = await service.execute({ productId: rod.id });
+    const first = detail.variants.find(
+      (item) => item.sourceVariantId === 'rod-240',
+    );
+    const second = detail.variants.find(
+      (item) => item.sourceVariantId === 'rod-270',
+    );
+    expect(first).toMatchObject({
+      image: { url: 'https://merchant.example/rod-240.jpg' },
+      availability: 'in_stock',
+    });
+    expect(second).toMatchObject({
+      image: { url: 'https://merchant.example/rod.jpg' },
+      availability: 'out_of_stock',
+    });
+    expect(
+      detail.offers.find((item) => item.variantId === first?.id)?.priceMinor,
+    ).toBe(32000);
+    expect(
+      detail.offers.find((item) => item.variantId === second?.id)?.priceMinor,
+    ).toBe(35000);
+    expect(detail.productAttributes).toEqual(rod?.attributes);
+    const [bottle] = await database.db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.externalKey, 'bottle-1'));
+    if (!bottle) throw new Error('Spor fixture ürünü bulunamadı.');
+    const bottleDetail = await service.execute({ productId: bottle.id });
+    expect(bottleDetail.variants[0]).toMatchObject({
+      sourceVariantId: 'bottle-750',
+      availability: 'unknown',
+      selectable: false,
+      options: [{ key: 'capacity', value: '750', unit: 'ml' }],
+    });
+
+    const apparel = genericCatalogRows[0];
+    if (!apparel) throw new Error('Giyim fixture satırı bulunamadı.');
+    await importCatalog(
+      database.db,
+      job({
+        merchantId: merchantB,
+        connectionId: connectionB,
+        observedAt,
+        rows: [apparel],
+      }),
+    );
+    expect(await counts()).toEqual({ products: 4, variants: 5, offers: 5 });
+  });
   it('skips a connection when its secret reference is not owned by the merchant', async () => {
     await database.db.delete(merchantCredentialOwnerships);
     await database.db
@@ -590,6 +713,10 @@ describe('catalog import integrity on PostgreSQL', () => {
       };
       const fetcher = vi.fn(async (input: URL | RequestInfo) => {
         const url = new URL(String(input));
+        if (url.pathname.endsWith('/settings/general'))
+          return new Response(
+            JSON.stringify([{ id: 'woocommerce_currency', value: 'TRY' }]),
+          );
         if (url.pathname.endsWith('/variations')) {
           const page = Number(url.searchParams.get('page'));
           const totalPages = variationHeaders[page - 1];

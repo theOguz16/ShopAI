@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { CatalogItem, StockStatus } from '@shopai/contracts';
+import type {
+  CatalogItem,
+  StockStatus,
+  CatalogAttribute,
+} from '@shopai/contracts';
 import {
   type ProductDetailRequest,
   type ProductDetailResponse,
@@ -27,10 +31,15 @@ export type ProductDetailSnapshot = {
     logoUrl: string | null;
   };
   attributes: Record<string, string[]>;
+  productAttributes?: CatalogAttribute[];
   variants: Array<{
     id: string;
     size: string;
     color: string;
+    options?: CatalogAttribute[];
+    sourceVariantId?: string;
+    imageUrl?: string | null;
+    imageAlt?: string | null;
   }>;
   offers: Array<{
     id: string;
@@ -97,6 +106,8 @@ export class MemoryProductDetailRepository implements ProductDetailRepository {
         id: record.variantId,
         size: record.size,
         color: record.color,
+        options: record.variantOptions,
+        sourceVariantId: record.sourceVariantId,
       })),
       offers: matching.map((record) => ({
         id: record.offerId,
@@ -188,8 +199,20 @@ export class ProductDetails {
       const availability = aggregateAvailability(
         variantOffers.map((offer) => offer.availability),
       );
+      const { imageUrl, imageAlt, ...publicVariant } = variant;
       return {
-        ...variant,
+        ...publicVariant,
+        image: imageUrl
+          ? {
+              url: imageUrl,
+              alt: imageAlt ?? snapshot.product.title,
+            }
+          : snapshot.product.imageUrl
+            ? {
+                url: snapshot.product.imageUrl,
+                alt: snapshot.product.imageAlt ?? snapshot.product.title,
+              }
+            : null,
         availability,
         selectable: variantOffers.some((offer) => offer.checkoutAvailable),
         offerIds: variantOffers.map((offer) => offer.id),
@@ -229,6 +252,7 @@ export class ProductDetails {
         variants.map((variant) => variant.availability),
       ),
       attributes: snapshot.attributes,
+      productAttributes: snapshot.productAttributes ?? [],
       merchant: snapshot.merchant,
       checkoutAvailable: offers.some((offer) => offer.checkoutAvailable),
       similarProducts: uniqueSimilarProducts(

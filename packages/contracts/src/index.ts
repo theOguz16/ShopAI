@@ -7,9 +7,11 @@ export * from './saved-products.js';
 export * from './product-alerts.js';
 export * from './search-analytics.js';
 export * from './interaction-events.js';
+export * from './catalog-attributes.js';
 
 import { z } from 'zod';
 import { searchAnalyticsIntentSchema } from './search-analytics.js';
+import { catalogAttributesSchema } from './catalog-attributes.js';
 
 export const moneySchema = z
   .number()
@@ -93,6 +95,9 @@ export const catalogItemSchema = z.object({
   imageAlt: z.string().nullable().default(null),
   size: z.string(),
   color: z.string(),
+  // Additive generic variant data; size/color remain legacy projections.
+  variantOptions: catalogAttributesSchema.optional(),
+  sourceVariantId: z.string().optional(),
   priceMinor: moneySchema,
   currency: currencySchema,
   available: z.boolean().nullable(),
@@ -190,8 +195,17 @@ export const sourceRowSchema = z.object({
     .optional()
     .nullable(),
   imageAlt: z.string().trim().max(240).optional().nullable(),
-  size: z.string().trim().min(1).max(20),
-  color: z.string().trim().min(1).max(40),
+  size: z.string().trim().min(1).max(20).optional(),
+  color: z.string().trim().min(1).max(40).optional(),
+  productAttributes: catalogAttributesSchema.optional(),
+  variantOptions: catalogAttributesSchema.optional(),
+  variantImageUrl: httpsUrlSchema.optional().nullable(),
+  variantImageAlt: z.string().trim().max(240).optional().nullable(),
+  sourceCategoryId: z.string().trim().min(1).max(160).optional(),
+  sourceCategoryPath: z
+    .array(z.string().trim().min(1).max(160))
+    .max(20)
+    .optional(),
   priceMinor: moneySchema,
   currency: currencySchema,
   available: z.boolean().nullable(),
