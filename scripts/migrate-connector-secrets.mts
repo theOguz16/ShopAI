@@ -12,7 +12,7 @@ import {
   merchantCredentialOwnerships,
   withTenant,
 } from '../packages/db/src/index.js';
-import { and, desc, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 
 const selectedActions = ['--cleanup', '--rollback', '--apply'].filter((flag) =>
   process.argv.includes(flag),
@@ -25,7 +25,10 @@ const action = process.argv.includes('--cleanup')
     : process.argv.includes('--apply')
       ? 'apply'
       : 'plan';
-if (!['local', 'staging'].includes(process.env.DEPLOY_ENV ?? 'local'))
+if (
+  !['local', 'staging'].includes(process.env.DEPLOY_ENV ?? 'local') &&
+  !(process.env.DEPLOY_ENV === 'production' && action === 'rollback')
+)
   throw new Error('Migration yalnız local/staging ortamında çalışır.');
 if (!process.env.DATABASE_URL || !process.env.CONNECTOR_SECRET_ENCRYPTION_KEY)
   throw new Error('DB ve kaynak encryption key gerekli.');
@@ -56,7 +59,8 @@ const target = createConnectorSecretBackend({
 });
 
 try {
-  if (targetBackend === 'openbao') await target.health();
+  if (targetBackend === 'openbao' && action !== 'rollback')
+    await target.health();
   if (action === 'rollback') {
     if (targetBackend !== 'openbao')
       throw new Error('Rollback OpenBao hedefi için desteklenir.');
@@ -73,11 +77,18 @@ try {
     for (const row of rows) {
       if (!row.reference) continue;
       const [current] = await database.db
-        .select({ id: connectorSecrets.id })
+        .select({
+          id: connectorSecrets.id,
+          merchantId: connectorSecrets.merchantId,
+          provider: connectorSecrets.provider,
+          version: connectorSecrets.version,
+        })
         .from(connectorSecrets)
         .where(
           and(
             eq(connectorSecrets.connectionId, row.id),
+            eq(connectorSecrets.merchantId, row.merchantId),
+            eq(connectorSecrets.provider, row.provider),
             eq(connectorSecrets.reference, row.reference),
             eq(connectorSecrets.backend, 'openbao'),
             eq(connectorSecrets.status, 'active'),
@@ -90,6 +101,7 @@ try {
         .from(connectorSecretAudit)
         .where(
           and(
+            eq(connectorSecretAudit.merchantId, row.merchantId),
             eq(connectorSecretAudit.connectionId, row.id),
             eq(connectorSecretAudit.reference, row.reference),
             eq(connectorSecretAudit.actor, 'migration'),
@@ -107,19 +119,39 @@ try {
         .where(
           and(
             eq(connectorSecrets.connectionId, row.id),
+            eq(connectorSecrets.merchantId, row.merchantId),
+            eq(connectorSecrets.provider, row.provider),
             eq(connectorSecrets.backend, 'file'),
             eq(connectorSecrets.status, 'rotated'),
+            eq(connectorSecrets.version, current.version - 1),
           ),
         )
-        .orderBy(desc(connectorSecrets.version))
         .limit(1);
-      if (!previous) continue;
+      if (!previous)
+        throw new Error('Verified scoped-file rollback target missing.');
+      const [retiredByMigration] = await database.db
+        .select({ id: connectorSecretAudit.id })
+        .from(connectorSecretAudit)
+        .where(
+          and(
+            eq(connectorSecretAudit.merchantId, row.merchantId),
+            eq(connectorSecretAudit.connectionId, row.id),
+            eq(connectorSecretAudit.reference, previous.reference),
+            eq(connectorSecretAudit.actor, 'migration'),
+            eq(connectorSecretAudit.event, 'rotated'),
+          ),
+        )
+        .limit(1);
+      if (!retiredByMigration)
+        throw new Error('Rollback target migration audit missing.');
       const scope = {
         merchantId: row.merchantId,
         connectionId: row.id,
         provider: row.provider,
       };
-      await source.resolveScoped(previous.reference, scope);
+      await source.resolveScoped(previous.reference, scope).catch(() => {
+        throw new Error('Rollback scoped-file target verification failed.');
+      });
       const changed = await withTenant(
         database.db,
         row.merchantId,
@@ -143,6 +175,22 @@ try {
             .for('update');
           if (!locked?.active || locked.reference !== row.reference)
             return false;
+          const [lockedTarget] = await tx
+            .select({ id: connectorSecrets.id })
+            .from(connectorSecrets)
+            .where(
+              and(
+                eq(connectorSecrets.id, previous.id),
+                eq(connectorSecrets.merchantId, row.merchantId),
+                eq(connectorSecrets.connectionId, row.id),
+                eq(connectorSecrets.provider, row.provider),
+                eq(connectorSecrets.reference, previous.reference),
+                eq(connectorSecrets.backend, 'file'),
+                eq(connectorSecrets.status, 'rotated'),
+              ),
+            )
+            .limit(1);
+          if (!lockedTarget) throw new Error('Rollback target changed.');
           await tx
             .update(connectorSecrets)
             .set({ status: 'rotated', rotatedAt: new Date() })
@@ -173,6 +221,13 @@ try {
             reference: previous.reference,
             event: 'created',
             actor: 'migration-rollback',
+          });
+          await tx.insert(connectorSecretAudit).values({
+            merchantId: row.merchantId,
+            connectionId: row.id,
+            reference: row.reference!,
+            event: 'rotated',
+            actor: 'migration-rollback-openbao-cleanup-pending',
           });
           return true;
         },

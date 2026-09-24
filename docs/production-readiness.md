@@ -24,7 +24,7 @@ TASK-021'in görev seviyesi mühendislik/dış kabul özeti `docs/06-implementat
 
 Yerel AES-256-GCM backend production kabulü değildir. OpenBao adapter ve Raft compose kodu vardır; gerçek staging policy, unseal, pilot plaintext backup temizliği ve recovery tatbikatı henüz kanıtlanmadı. [Issue #9](https://github.com/theOguz16/ShopAI/issues/9) açık kalır.
 
-ÜRÜN-004 [operasyon ve migration kararındaki](follow-ups/urun-004-managed-secrets.md) staging kanıtı tamamlanmadan production kabulü verilmez. `0034_connector_secret_lifecycle.sql` ve `0035_connector_secret_backend.sql` migration'larını inceleyin; production DB migration'ı bu görevde yapılmaz.
+ÜRÜN-004 [operasyon ve migration kararındaki](follow-ups/urun-004-managed-secrets.md) staging kanıtı tamamlanmadan production kabulü verilmez. `0035_connector_secret_lifecycle.sql` ve `0036_connector_secret_backend.sql` migration'larını inceleyin; production DB migration'ı bu görevde yapılmaz.
 
 ## 2. GitHub `production` environment kurulumu — OPERATÖR GATE
 

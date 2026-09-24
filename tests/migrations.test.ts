@@ -2,6 +2,21 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('database migrations', () => {
+  it('runs generic variants before scoped secret lifecycle and provider backend', async () => {
+    const journal = JSON.parse(
+      await readFile(
+        new URL('../packages/db/drizzle/meta/_journal.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { entries: { idx: number; tag: string }[] };
+    expect(
+      journal.entries.slice(-3).map(({ idx, tag }) => ({ idx, tag })),
+    ).toEqual([
+      { idx: 33, tag: '0034_generic_product_variants' },
+      { idx: 34, tag: '0035_connector_secret_lifecycle' },
+      { idx: 35, tag: '0036_connector_secret_backend' },
+    ]);
+  });
   it('separates and backfills the source sync watermark', async () => {
     const migration = await readFile(
       new URL(

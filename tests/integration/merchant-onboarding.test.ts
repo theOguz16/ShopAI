@@ -97,7 +97,13 @@ if (!databaseUrl || !redisUrl) {
           const value = credentials as WooCommerceCredentials;
           return value.storeUrl.includes('127.0.0.1')
             ? new WooCommerceConnector(value)
-            : new WooCommerceConnector(value, connectorFetcher);
+            : new WooCommerceConnector(
+                value,
+                connectorFetcher,
+                undefined,
+                3,
+                async () => 'TRY',
+              );
         }
         return new TrendyolConnector(
           credentials as TrendyolCredentials,
@@ -210,7 +216,7 @@ if (!databaseUrl || !redisUrl) {
       });
       expect(response.body).not.toContain(consumerKey);
       expect(response.body).not.toContain(consumerSecret);
-      expect(connectorFetchMock).toHaveBeenCalledTimes(2);
+      expect(connectorFetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('creates WooCommerce connector, stores secret material out of DB and queues first sync', async () => {
@@ -336,7 +342,9 @@ if (!databaseUrl || !redisUrl) {
         .from(connections)
         .where(eq(connections.id, before.id));
       expect(still.credentialsRef).toBe(before.credentialsRef);
-      connectorFetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
+      connectorFetchMock.mockImplementation(
+        async () => new Response('[]', { status: 200 }),
+      );
       const accepted = await app.inject({
         method: 'POST',
         url,
@@ -647,6 +655,272 @@ if (!databaseUrl || !redisUrl) {
         .from(connectorSecrets)
         .where(eq(connectorSecrets.connectionId, legacy.id));
       expect(records).toHaveLength(1);
+    });
+
+    it('rolls back a migrated reference while OpenBao is unavailable, then stays idempotent', async () => {
+      const store = new ManagedConnectorSecretStore(uploadDir, encryptionKey);
+      const [connection] = await database.db
+        .insert(connections)
+        .values({
+          merchantId,
+          provider: 'woocommerce',
+          authorizationStatus: 'active',
+        })
+        .returning({ id: connections.id });
+      const scope = {
+        merchantId,
+        connectionId: connection.id,
+        provider: 'woocommerce',
+      };
+      const oldReference = await store.createScoped(wooPayload(), scope);
+      const managedReference = `secret://ONBOARDING_${randomUUID().replaceAll('-', '').toUpperCase()}`;
+      await database.db
+        .update(connections)
+        .set({ credentialsRef: managedReference })
+        .where(eq(connections.id, connection.id));
+      await database.db.insert(merchantCredentialOwnerships).values({
+        merchantId,
+        provider: 'woocommerce',
+        credentialsRef: oldReference,
+      });
+      await database.db.insert(connectorSecrets).values([
+        {
+          ...scope,
+          reference: oldReference,
+          backend: 'file',
+          version: 1,
+          status: 'rotated',
+        },
+        {
+          ...scope,
+          reference: managedReference,
+          backend: 'openbao',
+          version: 2,
+          status: 'active',
+        },
+      ]);
+      await database.db.insert(connectorSecretAudit).values([
+        {
+          merchantId,
+          connectionId: connection.id,
+          reference: oldReference,
+          event: 'rotated',
+          actor: 'migration',
+        },
+        {
+          merchantId,
+          connectionId: connection.id,
+          reference: managedReference,
+          event: 'created',
+          actor: 'migration',
+        },
+      ]);
+      const rollback = () =>
+        execFileSync(
+          'pnpm',
+          [
+            'exec',
+            'tsx',
+            'scripts/migrate-connector-secrets.mts',
+            '--rollback',
+          ],
+          {
+            cwd: process.cwd(),
+            env: {
+              ...process.env,
+              DEPLOY_ENV: 'production',
+              DATABASE_URL: databaseUrl ?? '',
+              UPLOAD_DIR: uploadDir,
+              CONNECTOR_SECRET_ENCRYPTION_KEY: encryptionKey,
+              CONNECTOR_SECRET_BACKEND: 'openbao',
+              CONNECTOR_SECRET_OPENBAO_ADDRESS: 'https://127.0.0.1:1',
+              CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-production',
+              CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'unavailable-role',
+              CONNECTOR_SECRET_OPENBAO_SECRET_ID: 'unavailable-secret-id',
+            },
+            encoding: 'utf8',
+          },
+        );
+      expect(JSON.parse(rollback())).toMatchObject({ restored: 1 });
+      expect(JSON.parse(rollback())).toMatchObject({ restored: 0 });
+      const [active] = await database.db
+        .select({ reference: connections.credentialsRef })
+        .from(connections)
+        .where(eq(connections.id, connection.id));
+      expect(active.reference).toBe(oldReference);
+      await expect(
+        store.resolveScoped(active.reference!, scope),
+      ).resolves.toEqual(wooPayload());
+      await syncCatalogConnection(
+        database.db,
+        { merchantId, connectionId: connection.id },
+        new EnvironmentSecretResolver({
+          UPLOAD_DIR: uploadDir,
+          CONNECTOR_SECRET_ENCRYPTION_KEY: encryptionKey,
+        }),
+        (provider, credentials) => {
+          expect(provider).toBe('woocommerce');
+          expect(credentials).toEqual(wooPayload());
+          return {
+            provider: 'woocommerce',
+            capabilities: { liveInventory: true, incrementalSync: true },
+            validate: async () => undefined,
+            readPage: async () => ({
+              rows: [],
+              nextCursor: null,
+              sourceObservedAt: new Date().toISOString(),
+              fetchedAt: new Date().toISOString(),
+              complete: true,
+            }),
+          };
+        },
+        undefined,
+        undefined,
+        undefined,
+        'file',
+      );
+      const audit = await database.db
+        .select({
+          event: connectorSecretAudit.event,
+          actor: connectorSecretAudit.actor,
+        })
+        .from(connectorSecretAudit)
+        .where(eq(connectorSecretAudit.connectionId, connection.id));
+      expect(
+        audit.filter(
+          (row) => row.actor === 'migration-rollback-openbao-cleanup-pending',
+        ),
+      ).toHaveLength(1);
+      expect(JSON.stringify(audit)).not.toContain(consumerSecret);
+    });
+
+    it('rejects missing, unscoped and wrong-connection rollback targets', async () => {
+      const store = new ManagedConnectorSecretStore(uploadDir, encryptionKey);
+      const [connection] = await database.db
+        .insert(connections)
+        .values({
+          merchantId,
+          provider: 'woocommerce',
+          authorizationStatus: 'active',
+        })
+        .returning({ id: connections.id });
+      const scope = {
+        merchantId,
+        connectionId: connection.id,
+        provider: 'woocommerce',
+      };
+      const oldReference = `secret://ONBOARDING_${randomUUID().replaceAll('-', '').toUpperCase()}`;
+      const managedReference = `secret://ONBOARDING_${randomUUID().replaceAll('-', '').toUpperCase()}`;
+      await database.db
+        .update(connections)
+        .set({ credentialsRef: managedReference })
+        .where(eq(connections.id, connection.id));
+      await database.db.insert(connectorSecrets).values([
+        {
+          ...scope,
+          reference: oldReference,
+          backend: 'file',
+          version: 1,
+          status: 'rotated',
+        },
+        {
+          ...scope,
+          reference: managedReference,
+          backend: 'openbao',
+          version: 2,
+          status: 'active',
+        },
+      ]);
+      await database.db.insert(connectorSecretAudit).values([
+        {
+          merchantId,
+          connectionId: connection.id,
+          reference: oldReference,
+          event: 'rotated',
+          actor: 'migration',
+        },
+        {
+          merchantId,
+          connectionId: connection.id,
+          reference: managedReference,
+          event: 'created',
+          actor: 'migration',
+        },
+      ]);
+      const rollback = () =>
+        execFileSync(
+          'pnpm',
+          [
+            'exec',
+            'tsx',
+            'scripts/migrate-connector-secrets.mts',
+            '--rollback',
+          ],
+          {
+            cwd: process.cwd(),
+            env: {
+              ...process.env,
+              DEPLOY_ENV: 'staging',
+              DATABASE_URL: databaseUrl ?? '',
+              UPLOAD_DIR: uploadDir,
+              CONNECTOR_SECRET_ENCRYPTION_KEY: encryptionKey,
+              CONNECTOR_SECRET_BACKEND: 'openbao',
+              CONNECTOR_SECRET_OPENBAO_ADDRESS: 'https://127.0.0.1:1',
+              CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+              CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'unavailable-role',
+              CONNECTOR_SECRET_OPENBAO_SECRET_ID: 'unavailable-secret-id',
+            },
+            encoding: 'utf8',
+          },
+        );
+      expect(rollback).toThrow();
+      const [unchanged] = await database.db
+        .select({ reference: connections.credentialsRef })
+        .from(connections)
+        .where(eq(connections.id, connection.id));
+      expect(unchanged.reference).toBe(managedReference);
+      const wrongConnectionScope = { ...scope, connectionId: randomUUID() };
+      const wrongReference = await store.createScoped(
+        wooPayload(),
+        wrongConnectionScope,
+      );
+      await database.db
+        .update(connectorSecrets)
+        .set({ reference: wrongReference })
+        .where(eq(connectorSecrets.reference, oldReference));
+      await database.db
+        .update(connectorSecretAudit)
+        .set({ reference: wrongReference })
+        .where(eq(connectorSecretAudit.reference, oldReference));
+      expect(rollback).toThrow();
+      const [stillActive] = await database.db
+        .select({ reference: connections.credentialsRef })
+        .from(connections)
+        .where(eq(connections.id, connection.id));
+      expect(stillActive.reference).toBe(managedReference);
+      const wrongMerchantReference = await store.createScoped(wooPayload(), {
+        ...scope,
+        merchantId: randomUUID(),
+      });
+      await database.db
+        .update(connectorSecrets)
+        .set({ reference: wrongMerchantReference })
+        .where(eq(connectorSecrets.reference, wrongReference));
+      await database.db
+        .update(connectorSecretAudit)
+        .set({ reference: wrongMerchantReference })
+        .where(eq(connectorSecretAudit.reference, wrongReference));
+      expect(rollback).toThrow();
+      const validReference = await store.createScoped(wooPayload(), scope);
+      await database.db
+        .update(connectorSecrets)
+        .set({ reference: validReference })
+        .where(eq(connectorSecrets.reference, wrongMerchantReference));
+      expect(rollback).toThrow();
+      await database.db
+        .update(connections)
+        .set({ active: false })
+        .where(eq(connections.id, connection.id));
     });
 
     it('rejects unsupported onboarding providers', async () => {
