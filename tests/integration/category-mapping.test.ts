@@ -282,12 +282,24 @@ if (!databaseUrl || !redisUrl) {
       });
 
       await withTenant(database.db, merchantA, async (tx) => {
-        await tx.update(merchants).set({ isPublic: true }).where(eq(merchants.id, merchantA));
-        await tx.update(products).set({ published: true }).where(eq(products.merchantId, merchantA));
+        await tx
+          .update(merchants)
+          .set({ isPublic: true })
+          .where(eq(merchants.id, merchantA));
+        await tx
+          .update(products)
+          .set({ published: true })
+          .where(eq(products.merchantId, merchantA));
       });
       await withTenant(database.db, merchantB, async (tx) => {
-        await tx.update(merchants).set({ isPublic: true }).where(eq(merchants.id, merchantB));
-        await tx.update(products).set({ published: true }).where(eq(products.merchantId, merchantB));
+        await tx
+          .update(merchants)
+          .set({ isPublic: true })
+          .where(eq(merchants.id, merchantB));
+        await tx
+          .update(products)
+          .set({ published: true })
+          .where(eq(products.merchantId, merchantB));
       });
 
       const a = await listMappings(ownerACookie, merchantA);
@@ -302,22 +314,23 @@ if (!databaseUrl || !redisUrl) {
         }>;
       }>().mappings;
       shirtMappingA =
-        aMappings.find((item) => item.sourceCategoryId === 'shared-shirt')?.id ??
-        '';
+        aMappings.find((item) => item.sourceCategoryId === 'shared-shirt')
+          ?.id ?? '';
       fishingMappingA =
-        aMappings.find((item) => item.sourceCategoryId === 'fishing-rods')?.id ??
-        '';
+        aMappings.find((item) => item.sourceCategoryId === 'fishing-rods')
+          ?.id ?? '';
       sportsMappingA =
-        aMappings.find((item) => item.sourceCategoryId === 'sports-bottles')?.id ??
-        '';
+        aMappings.find((item) => item.sourceCategoryId === 'sports-bottles')
+          ?.id ?? '';
       unmappedMappingA =
-        aMappings.find((item) => item.sourceCategoryId === 'unmapped-shirt')?.id ??
-        '';
+        aMappings.find((item) => item.sourceCategoryId === 'unmapped-shirt')
+          ?.id ?? '';
 
       const b = await listMappings(ownerBCookie, merchantB);
       expect(b.statusCode).toBe(200);
       shirtMappingB =
-        b.json<{ mappings: Array<{ id: string; sourceCategoryId: string }> }>()
+        b
+          .json<{ mappings: Array<{ id: string; sourceCategoryId: string }> }>()
           .mappings.find((item) => item.sourceCategoryId === 'shared-shirt')
           ?.id ?? '';
 
@@ -400,35 +413,17 @@ if (!databaseUrl || !redisUrl) {
       expect(editorWrite.statusCode).toBe(200);
 
       expect(
-        (
-          await updateMapping(
-            ownerACookie,
-            merchantA,
-            sportsMappingA,
-            'sports',
-          )
-        ).statusCode,
+        (await updateMapping(ownerACookie, merchantA, sportsMappingA, 'sports'))
+          .statusCode,
       ).toBe(200);
       expect(
-        (
-          await updateMapping(
-            ownerBCookie,
-            merchantB,
-            shirtMappingB,
-            'tshirt',
-          )
-        ).statusCode,
+        (await updateMapping(ownerBCookie, merchantB, shirtMappingB, 'tshirt'))
+          .statusCode,
       ).toBe(200);
 
       expect(
-        (
-          await updateMapping(
-            ownerACookie,
-            merchantA,
-            shirtMappingA,
-            'sports',
-          )
-        ).statusCode,
+        (await updateMapping(ownerACookie, merchantA, shirtMappingA, 'sports'))
+          .statusCode,
       ).toBe(200);
       const bAfterAChange = await listMappings(ownerBCookie, merchantB);
       expect(
@@ -502,9 +497,9 @@ if (!databaseUrl || !redisUrl) {
         };
       }>();
       expect(apparelBody.products).toHaveLength(2);
-      expect(apparelBody.products.map((item) => item.sourceCategory?.name)).toEqual(
-        expect.arrayContaining(['Tişört', 'T-shirt']),
-      );
+      expect(
+        apparelBody.products.map((item) => item.sourceCategory?.name),
+      ).toEqual(expect.arrayContaining(['Tişört', 'T-shirt']));
       expect(
         apparelBody.products.every(
           (item) => item.canonicalCategory?.key === 'tshirt',
@@ -581,9 +576,7 @@ if (!databaseUrl || !redisUrl) {
         unit: 'ml',
         values: [{ value: '750', count: 1 }],
       });
-      expect(sportsFacets.number.values).toEqual([
-        { value: '5', count: 1 },
-      ]);
+      expect(sportsFacets.number.values).toEqual([{ value: '5', count: 1 }]);
 
       const global = await app.inject({
         method: 'POST',

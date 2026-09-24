@@ -53,9 +53,7 @@ describe('canonical category facets', () => {
       { value: 'black', count: 1 },
       { value: 'white', count: 1 },
     ]);
-    expect(facets.material?.values).toEqual([
-      { value: 'cotton', count: 2 },
-    ]);
+    expect(facets.material?.values).toEqual([{ value: 'cotton', count: 2 }]);
   });
 
   it('does not invent a size facet for fishing and retains length unit metadata', () => {

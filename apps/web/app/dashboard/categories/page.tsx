@@ -42,8 +42,11 @@ function categoryPath(
 
 export default function CategoryMappingsPage() {
   const { merchantId, activeMerchant } = useActiveMerchant();
-  const canEdit = activeMerchant.role === 'owner' || activeMerchant.role === 'editor';
-  const [filter, setFilter] = useState<'all' | 'mapped' | 'unmapped'>('unmapped');
+  const canEdit =
+    activeMerchant.role === 'owner' || activeMerchant.role === 'editor';
+  const [filter, setFilter] = useState<'all' | 'mapped' | 'unmapped'>(
+    'unmapped',
+  );
   const [data, setData] = useState<MappingResponse>({
     mappings: [],
     categories: [],
@@ -121,9 +124,7 @@ export default function CategoryMappingsPage() {
         const body = (await response.json().catch(() => ({}))) as {
           code?: string;
         };
-        setMessage(
-          `Eşleme kaydedilemedi: ${body.code ?? response.status}`,
-        );
+        setMessage(`Eşleme kaydedilemedi: ${body.code ?? response.status}`);
         return;
       }
       setMessage('Kategori eşlemesi kaydedildi.');
@@ -184,10 +185,9 @@ export default function CategoryMappingsPage() {
                 ID {mapping.sourceCategoryId}
               </p>
               <p>
-                Durum: {mapping.status === 'mapped' ? 'eşlenmiş' : 'eşleme gerekli'}
-                {current
-                  ? ` · ${categoryPath(current, categoriesByKey)}`
-                  : ''}
+                Durum:{' '}
+                {mapping.status === 'mapped' ? 'eşlenmiş' : 'eşleme gerekli'}
+                {current ? ` · ${categoryPath(current, categoriesByKey)}` : ''}
               </p>
               <label>
                 ShopAI kategorisi
