@@ -1,41 +1,49 @@
-# ÜRÜN-004 — connector secret yaşam döngüsü
+# ÜRÜN-004 — OpenBao connector secret yaşam döngüsü
 
-## Production provider kararı
+## Karar ve mimari
 
-VDS üzerinde API ve worker container'ları, PostgreSQL ve Redis çalışıyor. Production için **yalnız AWS Secrets Manager** seçildi. HashiCorp Vault bu tek VDS dışında HA, unseal, token ve backup işletimi gerektirir. Secrets Manager ayrı sunucu gerektirmez; AWS hizmet ve API çağrısı başına ücret, AWS ağına bağımlılık ve IAM credential yönetimi getirir. Fiyat ve erişilebilirlik için dağıtım öncesi AWS hesabında güncel koşullar gözden geçirilmelidir. AWS varsayılan KMS anahtarı kullanılabilir; müşteri yönetimli KMS anahtarı seçilirse onun anahtar, izin ve ücret yaşam döngüsü de operatöre aittir.
+Production ve staging için tek provider **self-hosted OpenBao 2.7.0**. API, worker ve OpenBao ayrı container'lardır. OpenBao yalnız `shopai-<env>-secrets-net` private Docker networkünde dinler; host portu veya public ingress yoktur. API/worker `https://openbao.shopai.internal:8200` sabit hostname'ini ve operatörün sağladığı özel CA'yı kullanır. İleride ayrı VDS'ye taşınırken uygulama backend sözleşmesi korunur; DNS/routing ve TLS SAN yeni hedefe çevrilir. OpenBao Raft verisi kalıcı named volume'dadır. OpenBao barrier şifrelemesi Raft disk içeriğini şifreler; host disk şifrelemesi ayrıca önerilir. OpenBao 2.7 `mlock` desteği kaldırdığı için host swap kapalı veya şifreli olmalıdır. Tek node Raft HA değildir: VDS kaybı hizmet kesintisidir. OpenBao sunucusu, TLS, unseal, patch, snapshot ve audit işletimi ShopAI operatörünün maliyetidir.
 
-`secret://ONBOARDING_...` opaque sözleşmesi korunur. Secrets Manager nesne adı `shopai/<environment>/<merchant>/<connection>/<provider>/<opaque-id>` biçimindedir; sağlayıcı değeri yalnız API ve worker sunucu sürecinde çözülür. PostgreSQL'deki `connector_secrets` satırı merchant, connection, provider, reference, version, backend ve active/revoked durumunu tutar. Worker bu eşleşmeyi çözümlemeden önce kontrol eder. API onboarding/rotation için oluşturma, çözümleme ve revoke; worker yalnız çözümleme yapar. Browser yanıtları, Redis işleri, analytics, log ve hata yanıtları credential veya managed reference içermez.
+Aynı VDS'nin root seviyesinde ele geçirilmesi halinde OpenBao ile ShopAI süreçleri aynı host güvenlik alanını paylaşır. Bu ilk pilot/production dağıtımı için bilinçli risk sınırıdır; host-root'a karşı bağımsız izolasyon iddiası yoktur. Daha güçlü izolasyon için OpenBao ayrı VDS/node'a taşınmalıdır.
 
-API ve worker başlangıçta namespace içindeki `shopai/<environment>/health` sentinel secret'ını okur. Başarısız okuma başlatmayı engeller; API readiness aynı kontrolü yapar. AWS kesintisinde yeni credential işlemleri ve sync çözümlemesi başarısız olur; DB durumu yerel dosyaya otomatik düşmez. Bağlantı revoke işlemi önce DB'de atomik yapılır; provider silme çağrısı başarısızsa erişim yine engellenir ve operatör cleanup retry uyarısı alır. AWS deletion yedi günlük recovery penceresiyle planlanır.
+`secret://ONBOARDING_...` referansı değişmez. KV v2 mount `shopai-staging` veya `shopai-production` ve path `connectors/<merchant>/<connection>/<provider>/<opaque-id>` kullanılır. Deterministik scope yalnız isimlendirmedir; referans veya path tahmini yetki vermez. Secret payload içinde scope ve credential bulunur. PostgreSQL merchant, connection, provider, reference, backend, version, active/revoked ve audit metadata'sını tutar; credential value tutmaz. Worker PostgreSQL tenant/reference/active/backend kontrolünden sonra OpenBao'ya gider. API ve worker ayrı AppRole identity kullanır. API create/verify/revoke, worker read/resolve ve her ikisi health sentinel okuma gerektirir. Root token uygulama env'lerinde bulunmaz.
 
-## Ortam ve erişim politikası
+## Ortam ve fail-closed
 
-| Ortam | Backend | Politika |
-| --- | --- | --- |
-| local/test | `file` varsayılan, test için `aws` açık seçilebilir | PR #61 AES-256-GCM private volume biçimi korunur. |
-| staging | `file` açık fallback veya `aws` | Gerçek kabul için ayrı `shopai/staging` namespace, ayrı test credential ve ayrı IAM kimlikleri gerekir. |
-| production | yalnız `aws` | `file`, eksik region/namespace/health config veya okunamayan health secret ile API/worker başlamaz. `shopai/production` zorunludur. |
+| Ortam | Politika |
+| --- | --- |
+| local/test | Mevcut AES-256-GCM scoped `file` backend varsayılan; OpenBao açık seçilebilir. |
+| staging | `openbao` zorunlu; `shopai-staging` mount, ayrı AppRole/TLS/snapshot. Production credential kullanılmaz. |
+| production | Yalnız `openbao`; file/eksik config/yanlış mount/HTTP/başarısız AppRole veya health sentinel ile API ve worker başlamaz. API readiness aynı health okumasını yineler. Otomatik file fallback yoktur. |
 
-VDS compose API ve worker'a ayrı IAM access key enjekte eder. API rolüne yalnız production namespace altında `CreateSecret`, `GetSecretValue`, `DeleteSecret` ve health secret okuma; worker rolüne yalnız `GetSecretValue` ve health secret okuma verilmelidir. İki rolün staging namespace erişimi olmamalıdır. Customer KMS key seçilmişse API'ye encrypt/data-key, API ve worker'a decrypt izni yalnız ilgili key üzerinde verilir. Runtime kimlikleri ve key'ler dağıtım secret kaynağından enjekte edilir; repoya yazılmaz. Operatör IAM access key'leri yeni key'i ekleyip health/sync kontrolü yaparak, ardından eskisini devre dışı bırakıp silerek döndürür. KMS customer key rotation ve erişim değişikliği AWS politika/anahtar prosedürüyle yürütülür. Bu PR otomatik credential/key rotation yapmaz.
+OpenBao kesintisinde API secret işlemleri ve worker çözümlemesi başarısız olur. Önceden kuyruğa alınmış iş worker'ın DB aktiflik kontrolüne tabi kalır. Revoke önce DB'de atomik yapılır; OpenBao metadata silme başarısızsa DB yine erişimi keser ve operatör retry uyarısı alır. Çalışmakta olan dış connector HTTP isteği anında iptal edilemez.
 
-AWS Secrets Manager replikasyon/şifreleme hizmeti sağlar; uygulama DB snapshot'ı tek başına geri yükleme değildir. Recovery tatbikatı izole staging DB restore ile aynı namespace secret sürümlerini eşlemeli, health ve scoped resolution'ı doğrulamalıdır. Secret silme sonrası yedi günlük AWS recovery penceresi ve yerel backup retention ayrı izlenmelidir. Gerçek staging restore tatbikatı henüz yapılmadı.
+## Bootstrap, policy ve unseal
 
-## Pilot migration ve rollback
+Operatör özel CA ve `openbao.shopai.internal` SAN içeren sunucu sertifikasını hostta erişim kontrollü dosyalardan read-only mount eder; OpenBao container UID 100 TLS private key'i okuyabilmelidir. Staging ve production için KV v2 mount, health sentinel, ayrı AppRole ve audit device kurar. API/worker RoleID ayrı env'de; SecretID ayrı host dosyasında tutulur ve container'a read-only mount edilir. SecretID dosyası rotation'da atomik değiştirilir; adapter her işlemde dosyayı yeniden okuyup kısa ömürlü AppRole token alır. Token loglanmaz. AppRole SecretID kısa TTL/usage limit, dar CIDR ve operatör gözetiminde response wrapping ile dağıtılır. Root token yalnız bootstrap sırasında operatörün güvenli oturumunda kullanılır, sonra revoke edilir; repo, uygulama env'i veya kalıcı VDS dosyasına yazılmaz.
 
-`scripts/migrate-connector-secrets.mts` varsayılan `plan`, `--apply`, `--rollback` ve `--cleanup --confirm-retired-file-deletion` kiplerini sunar. Yalnız local/staging çalışır; production migration otomatik uygulanmaz. AWS hedefi için `CONNECTOR_SECRET_BACKEND=aws`, region, namespace, health ID ve AWS kimliği gerekir. Eski private volume encryption key kaynak çözümlemesi için gerekir.
+Dinamik connection/opaque ID'ler için OpenBao ACL'de **tamamen wildcard içermeyen** tek servis policy'si ile yeni path'lere otomatik create/read mümkün değildir. Bu gereksinim için kullanıcı kararı bekleniyor: ortam + `connectors/` prefix'iyle sınırlı glob veya bağlantı başına dinamik identity/policy provisioning. Bu karar ve gerçek policy uygulanmadan least-privilege kabulü **OPEN**. `path "*"` veya root policy kullanılmayacak. Operatör staging role/policy ayrımını ve worker'ın write/delete reddini gerçek OpenBao üzerinde kanıtlamalıdır.
 
-`--apply` her etkin bağlantının eski dosyasını çözer, AWS'de scoped secret oluşturur, aynı scope ile okuyup credential şemasına göre karşılaştırır ve ancak sonra transaction içinde PostgreSQL reference/backend/version geçişi yapar. Yeniden çalışma zaten AWS aktif olanları atlar. DB yarışında yeni nesne silme için planlanır. Eski dosya rollback için tutulur. `--rollback` yalnız metadata'sı olan eski **scoped** file sürümünü doğrulayıp transaction içinde tekrar active yapar; eski plaintext/unscoped pilot dosyasına otomatik rollback yoktur. Bu tür bağlantıda rollback için operatör ayrı, tenant doğrulamalı recovery planı hazırlamalıdır. `--cleanup` 30 gün geçmiş migration audit kayıtlarını tarar, hâlâ aktif AWS hedefini okur ve yalnız emekliye ayrılmış eski dosyayı siler. Filesystem `unlink` fiziksel blokların veya backup kopyalarının güvenli silindiğini kanıtlamaz; plaintext pilot backup kopyaları retention sonunda ayrıca yok edilmelidir. Cleanup production'da çalışmaz.
+Shamir unseal seçilir; restart sonrası operatör off-host saklanan threshold share'leri güvenli kanaldan girer. Unseal/recovery share'leri VDS üzerinde kalıcı saklanmaz ve Raft snapshot ile aynı yerde tutulmaz. Root token ve share'ler uygulama container'larına verilmez. Operatör tekrar unseal/readiness tatbikatını staging'de kanıtlamalıdır.
+
+## Migration ve recovery
+
+`scripts/migrate-connector-secrets.mts`: `plan → OpenBao write → OpenBao read-back verify → PostgreSQL transaction/reference switch`. `--apply` local/staging ile sınırlı; aynı active backend tekrar taşınmaz. DB yarışında geçici OpenBao kaydı temizlenir. `--rollback` yalnız scoped eski file sürümünü doğrulayarak DB active reference'ı geri alır; plaintext/unscoped pilot dosyaya otomatik rollback yoktur. `--cleanup --confirm-retired-file-deletion`, migration audit'i üzerinden 30 gün retention sonrası aktif OpenBao secret'ı doğrular ve emekli dosyayı siler. Filesystem unlink, fiziksel blok ve backup kopyalarının güvenli silinmesini kanıtlamaz. Production migration çalıştırılmaz.
+
+Operatör düzenli `bao operator raft snapshot save` alır, snapshot'ı VDS dışındaki şifreli/erişim kontrollü depoya kopyalar ve retention uygular. Staging kabulü: kontrollü test secret oluştur, snapshot al, izole OpenBao restore ortamında unseal et, aynı `secret://` scope ile çözümlemeyi doğrula. Snapshot ve unseal share'leri ayrı güvenlik alanlarında kalır. Gerçek staging snapshot/restore henüz yapılmadı.
 
 ## Issue #9 kabul matrisi
 
-| Kabul maddesi | Durum | Kanıt / açık iş |
+| Kabul maddesi | Durum | Kanıt / eksik |
 | --- | --- | --- |
-| Production manager ile at-rest encryption | OPEN | AWS Secrets Manager adapter ve production config var; gerçek staging/production provider kabulü yapılmadı. |
-| Server-side provider ve browser'da credential/reference yok | PASS | `secret-backend.ts`, API/worker inject, onboarding response şeması ve mevcut integration testleri. |
-| Hesap yeniden açmadan rotation ve revocation | PASS | Mevcut PR #61 DB lifecycle; backend create/revoke adapter ve unit test. Gerçek staging operasyonu ayrıca açık. |
-| Merchant/provider/reference/actor access audit | PASS | `connector_secret_audit`, worker çözümleme eventleri ve mevcut integration testleri. |
-| Log, error, analytics, queue'da credential yok | PASS | Opaque queue ID, generic provider errors ve redaction testleri; gerçek staging gözlemlemesi açık. |
-| Pilot filesystem migration ve plaintext safe deletion | OPEN | Plan/apply/verify/rollback/explicit cleanup kodu var; gerçek staging rollout, backup retention ve plaintext fiziksel silme kanıtı yok. |
-| Production pilot backend ile fail-closed | PASS | API/worker env testleri, startup AWS health read ve production compose zorunlu AWS ayarları. |
+| Production manager ile at-rest encryption | OPEN | OpenBao Raft/barrier compose ve adapter var; gerçek staging init, TLS, unseal, policy ve restore henüz kanıtlanmadı. |
+| Server-side abstraction; browser'da credential/reference yok | PASS | Provider interface, API/worker inject ve mevcut response/integration testleri. |
+| Hesap yeniden açmadan rotation/revocation | PASS | PR #61 DB lifecycle ve OpenBao contract unit testi. Gerçek staging doğrulaması açık. |
+| Merchant/provider/reference/actor audit | PASS | PostgreSQL `connector_secret_audit` ve mevcut integration testleri; gerçek OpenBao audit device kabulü açık. |
+| Log/error/analytics/queue'da credential yok | PASS | Generic provider errors, yalnız ID taşıyan queue ve mevcut redaction testleri. |
+| Pilot file migration ve safe deletion planı | OPEN | Plan/apply/verify/rollback/explicit cleanup kodu var; staging rollout ve backup retention/silme kanıtı yok. |
+| Production pilot backend ile fail-closed | PASS | API/worker env testleri, başlangıç ve readiness OpenBao health kontrolü, compose policy. |
 
-Ürün durumu: **KISMİ / OPEN**. Staging'de ayrı gerçek AWS namespace/kimlik ve kontrollü credential ile create, API/worker resolve, successful ve failed rotation, revoke, eski enqueue job, audit, migration retry/rollback/cleanup ve recovery tatbikatı kanıtlanmadan ÜRÜN-004 tamamlandı sayılmaz. Production secret veya migration bu PR için kullanılmaz.
+**ÜRÜN-004 KISMİ / OPEN.** Gerçek staging OpenBao kabulü, least-privilege policy kararı, restart/unseal, Raft snapshot/izole restore ve migration/rollback/cleanup tamamlanmadan tüm zorunlu maddeler PASS değildir.
+
+[İzole yerel OpenBao TLS/Raft/snapshot provası](../evidence/urun-004-openbao-local-rehearsal.md) gerçek staging kanıtı yerine geçmez.

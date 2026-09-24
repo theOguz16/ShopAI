@@ -96,11 +96,12 @@ const baseSchema = z.object({
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
   CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
-  CONNECTOR_SECRET_BACKEND: z.enum(['file', 'aws']).default('file'),
-  CONNECTOR_SECRET_AWS_REGION: optionalNonemptyString,
-  CONNECTOR_SECRET_AWS_NAMESPACE: optionalNonemptyString,
-  CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID: optionalNonemptyString,
-  CONNECTOR_SECRET_AWS_KMS_KEY_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_BACKEND: z.enum(['file', 'openbao']).default('file'),
+  CONNECTOR_SECRET_OPENBAO_ADDRESS: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_MOUNT: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_ROLE_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: optionalNonemptyString,
   OPS_ALERT_WEBHOOK_URL: optionalOpsWebhookUrlSchema,
   OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
   REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
@@ -253,72 +254,77 @@ const apiEnvSchema = z
         message: 'production ortamında harici operasyon alert sink zorunludur',
       });
     if (
-      env.DEPLOY_ENV === 'production' &&
-      env.CONNECTOR_SECRET_BACKEND !== 'aws'
+      (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+      env.CONNECTOR_SECRET_BACKEND !== 'openbao'
     )
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['CONNECTOR_SECRET_BACKEND'],
-        message: 'production managed AWS secret backend gerektirir',
+        message: 'hosted ortam OpenBao secret backend gerektirir',
       });
-    if (env.CONNECTOR_SECRET_BACKEND === 'aws') {
+    if (env.CONNECTOR_SECRET_BACKEND === 'openbao') {
+      for (const key of [
+        'CONNECTOR_SECRET_OPENBAO_ADDRESS',
+        'CONNECTOR_SECRET_OPENBAO_MOUNT',
+        'CONNECTOR_SECRET_OPENBAO_ROLE_ID',
+      ] as const)
+        if (!env[key])
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: 'OpenBao ayarı gerekli',
+          });
       if (
-        !env.CONNECTOR_SECRET_AWS_REGION ||
-        !env.CONNECTOR_SECRET_AWS_NAMESPACE ||
-        !env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID &&
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE
       )
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_REGION'],
-          message: 'AWS secret provider yapılandırması eksik',
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE'],
+          message: 'OpenBao bootstrap credential gerekli',
         });
       if (
-        env.CONNECTOR_SECRET_AWS_REGION &&
-        !/^[a-z]{2}-[a-z]+-\d$/u.test(env.CONNECTOR_SECRET_AWS_REGION)
+        (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE
       )
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_REGION'],
-          message: 'AWS region geçersiz',
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE'],
+          message: 'hosted OpenBao credential dosyası gerekli',
         });
       if (
-        env.CONNECTOR_SECRET_AWS_NAMESPACE &&
-        !/^shopai\/(staging|production|test)$/u.test(
-          env.CONNECTOR_SECRET_AWS_NAMESPACE,
-        )
+        (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+        env.CONNECTOR_SECRET_OPENBAO_SECRET_ID
       )
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
-          message: 'AWS namespace geçersiz',
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID'],
+          message: 'hosted AppRole SecretID env yerine dosyada tutulmalıdır',
         });
-      if (
-        env.CONNECTOR_SECRET_AWS_NAMESPACE &&
-        env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID !==
-          `${env.CONNECTOR_SECRET_AWS_NAMESPACE}/health`
-      )
+      if (env.CONNECTOR_SECRET_OPENBAO_ADDRESS) {
+        try {
+          const url = new URL(env.CONNECTOR_SECRET_OPENBAO_ADDRESS);
+          if (
+            url.protocol !== 'https:' ||
+            url.pathname !== '/' ||
+            url.search ||
+            url.hash
+          )
+            throw new Error('invalid OpenBao URL');
+        } catch {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['CONNECTOR_SECRET_OPENBAO_ADDRESS'],
+            message: 'OpenBao HTTPS origin gerekli',
+          });
+        }
+      }
+      const expectedMount = `shopai-${env.DEPLOY_ENV}`;
+      if (env.CONNECTOR_SECRET_OPENBAO_MOUNT !== expectedMount)
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID'],
-          message: 'AWS health secret namespace ile eşleşmeli',
-        });
-      if (
-        env.DEPLOY_ENV === 'production' &&
-        env.CONNECTOR_SECRET_AWS_NAMESPACE !== 'shopai/production'
-      )
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
-          message: 'production namespace ayrı olmalıdır',
-        });
-      if (
-        env.DEPLOY_ENV === 'staging' &&
-        env.CONNECTOR_SECRET_AWS_NAMESPACE !== 'shopai/staging'
-      )
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
-          message: 'staging namespace ayrı olmalıdır',
+          path: ['CONNECTOR_SECRET_OPENBAO_MOUNT'],
+          message: `${env.DEPLOY_ENV} mount ayrı olmalıdır`,
         });
     }
     if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {

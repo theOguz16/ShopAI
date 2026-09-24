@@ -181,7 +181,7 @@ export const connectorSecrets = pgTable(
       'connector_secret_status',
       sql`${t.status} in ('active','rotated','revoked')`,
     ),
-    check('connector_secret_backend', sql`${t.backend} in ('file','aws')`),
+    check('connector_secret_backend', sql`${t.backend} in ('file','openbao')`),
   ],
 );
 export const connectorSecretAudit = pgTable(

@@ -7,7 +7,7 @@ Ayrıntılı go-live checklist'i: `docs/production-readiness.md`.
 ## Yayın öncesi erişim ve veri kontrolü
 
 - Staging ve production çalışma kimlikleri minimum yetkili olmalıdır.
-- Connector credential'ları repo'ya yazılmaz; DB'de yalnız `secret://` referansı tutulur ve yerel managed-secret dosyası production/staging'de AES-256-GCM encrypted-at-rest'tir. Bu Vault/KMS entegrasyonu değildir; rotation/audit/migration kapsamı issue #9'da açıktır.
+- Connector credential'ları repo'ya yazılmaz; DB'de yalnız `secret://` referansı tutulur ve local managed-secret dosyası AES-256-GCM encrypted-at-rest'tir. Hosted staging/production OpenBao kullanır; gerçek OpenBao kabulü ve migration issue #9'da açıktır.
 - `AUTH_PILOT_CREDENTIALS`, normalize e-posta → benzersiz credential JSON eşlemesidir. Ortak pilot token kullanılmaz.
 - Pilot mağazadan ürün, varyant, fiyat, stok, ürün URL'si ve varsa minimum signed conversion snapshot'ı işlenir. Ödeme kartı, müşteri adı, e-posta, adres veya tam webhook/order gövdesi tutulmaz/loglanmaz.
 - Ürün/görsel kullanımı, attribution ve retention süreleri gerçek merchant agreement ile uyumlu olmalıdır.

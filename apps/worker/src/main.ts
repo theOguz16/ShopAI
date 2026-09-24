@@ -26,12 +26,13 @@ const connectorSecretBackend = createConnectorSecretBackend({
   backend: env.CONNECTOR_SECRET_BACKEND,
   privateRoot: process.env.UPLOAD_DIR ?? 'private/uploads',
   encryptionKey: env.CONNECTOR_SECRET_ENCRYPTION_KEY,
-  region: env.CONNECTOR_SECRET_AWS_REGION,
-  namespace: env.CONNECTOR_SECRET_AWS_NAMESPACE,
-  healthSecretId: env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID,
-  kmsKeyId: env.CONNECTOR_SECRET_AWS_KMS_KEY_ID,
+  address: env.CONNECTOR_SECRET_OPENBAO_ADDRESS,
+  mount: env.CONNECTOR_SECRET_OPENBAO_MOUNT,
+  roleId: env.CONNECTOR_SECRET_OPENBAO_ROLE_ID,
+  secretId: env.CONNECTOR_SECRET_OPENBAO_SECRET_ID,
+  secretIdFile: env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE,
 });
-if (env.CONNECTOR_SECRET_BACKEND === 'aws')
+if (env.CONNECTOR_SECRET_BACKEND === 'openbao')
   await connectorSecretBackend.health();
 const database = createDatabase(env.DATABASE_URL);
 const alertEmailSender = createAlertEmailSender(env);

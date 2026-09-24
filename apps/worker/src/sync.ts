@@ -65,7 +65,7 @@ export class EnvironmentSecretResolver implements SecretResolver {
         ? store.resolveScoped(reference, scope)
         : store.resolve(reference);
     }
-    if (this.backend && this.environment.CONNECTOR_SECRET_BACKEND === 'aws')
+    if (this.backend && this.environment.CONNECTOR_SECRET_BACKEND === 'openbao')
       throw new Error(
         'Legacy environment secret production ortamında desteklenmez.',
       );
@@ -103,7 +103,7 @@ export async function syncCatalogConnection(
   now: () => Date = () => new Date(),
   alertEmailSender?: AlertEmailSender,
   correlationId?: string,
-  expectedBackend?: 'file' | 'aws',
+  expectedBackend?: 'file' | 'openbao',
 ) {
   const job = syncJobSchema.parse(input);
   const startedAt = now();

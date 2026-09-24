@@ -30,9 +30,11 @@ if (!['local', 'staging'].includes(process.env.DEPLOY_ENV ?? 'local'))
 if (!process.env.DATABASE_URL || !process.env.CONNECTOR_SECRET_ENCRYPTION_KEY)
   throw new Error('DB ve kaynak encryption key gerekli.');
 const configuredBackend = process.env.CONNECTOR_SECRET_BACKEND ?? 'file';
-if (configuredBackend !== 'file' && configuredBackend !== 'aws')
+if (configuredBackend !== 'file' && configuredBackend !== 'openbao')
   throw new Error('Geçersiz connector secret backend.');
 const targetBackend = configuredBackend;
+if (process.env.DEPLOY_ENV === 'staging' && targetBackend !== 'openbao')
+  throw new Error('Staging migration OpenBao hedefi gerektirir.');
 const root = process.env.UPLOAD_DIR ?? 'private/uploads';
 const database = createDatabase(process.env.DATABASE_URL, {
   applicationName: 'shopai-secret-migration',
@@ -46,17 +48,18 @@ const target = createConnectorSecretBackend({
   backend: targetBackend,
   privateRoot: root,
   encryptionKey: process.env.CONNECTOR_SECRET_ENCRYPTION_KEY,
-  region: process.env.CONNECTOR_SECRET_AWS_REGION,
-  namespace: process.env.CONNECTOR_SECRET_AWS_NAMESPACE,
-  healthSecretId: process.env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID,
-  kmsKeyId: process.env.CONNECTOR_SECRET_AWS_KMS_KEY_ID,
+  address: process.env.CONNECTOR_SECRET_OPENBAO_ADDRESS,
+  mount: process.env.CONNECTOR_SECRET_OPENBAO_MOUNT,
+  roleId: process.env.CONNECTOR_SECRET_OPENBAO_ROLE_ID,
+  secretId: process.env.CONNECTOR_SECRET_OPENBAO_SECRET_ID,
+  secretIdFile: process.env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE,
 });
 
 try {
-  if (targetBackend === 'aws') await target.health();
+  if (targetBackend === 'openbao') await target.health();
   if (action === 'rollback') {
-    if (targetBackend !== 'aws')
-      throw new Error('Rollback AWS hedefi için desteklenir.');
+    if (targetBackend !== 'openbao')
+      throw new Error('Rollback OpenBao hedefi için desteklenir.');
     const rows = await database.db
       .select({
         id: connections.id,
@@ -76,7 +79,7 @@ try {
           and(
             eq(connectorSecrets.connectionId, row.id),
             eq(connectorSecrets.reference, row.reference),
-            eq(connectorSecrets.backend, 'aws'),
+            eq(connectorSecrets.backend, 'openbao'),
             eq(connectorSecrets.status, 'active'),
           ),
         )
@@ -178,8 +181,8 @@ try {
     }
     console.info(JSON.stringify({ mode: action, restored }));
   } else if (action === 'cleanup') {
-    if (targetBackend !== 'aws')
-      throw new Error('Cleanup AWS hedefi için desteklenir.');
+    if (targetBackend !== 'openbao')
+      throw new Error('Cleanup OpenBao hedefi için desteklenir.');
     if (!process.argv.includes('--confirm-retired-file-deletion'))
       throw new Error('Cleanup explicit confirmation gerektirir.');
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -283,8 +286,8 @@ try {
         )
         .limit(1);
       if (existing?.backend === targetBackend) continue;
-      if (existing?.backend === 'aws')
-        throw new Error("AWS secret file backend'e taşınamaz.");
+      if (existing?.backend === 'openbao')
+        throw new Error("OpenBao secret file backend'e taşınamaz.");
       pending++;
       if (action !== 'apply') continue;
       const scope = {
