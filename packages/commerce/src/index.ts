@@ -15,6 +15,8 @@ export * from './redirects.js';
 export type ResolvedSearchRequest = SearchRequest & {
   textTerms: string[];
   matchNone: boolean;
+  /** Parser-hint or internal category word; filters the legacy products.category field, not the canonical tree. */
+  legacyCategory?: string;
 };
 export type CatalogSearchPage = {
   items: CatalogItem[];
@@ -258,7 +260,7 @@ export class SearchProducts {
   ) {}
   async execute(
     input: unknown,
-    context: { merchantIds?: string[] } = {},
+    context: { merchantIds?: string[]; legacyCategory?: string } = {},
   ): Promise<SearchResponse> {
     // Preserve explicit input fields so parser hints never override UI choices.
     const raw = searchRequestSchema.partial().parse(input);
@@ -285,6 +287,15 @@ export class SearchProducts {
       ...hints.filters,
       ...original.filters,
     };
+    // Explicit request categories are canonical filters resolved through the
+    // mapping table. Parser hints and internal callers (similar products) use
+    // the legacy products.category field so unmapped products stay discoverable
+    // in free-text search (ÜRÜN-006).
+    const hasExplicitCategory = original.filters?.category !== undefined;
+    if (!hasExplicitCategory) filters.category = undefined;
+    const legacyCategory = hasExplicitCategory
+      ? undefined
+      : (hints.filters.category ?? context.legacyCategory);
     if (original.filters?.colors)
       filters.excludedColors = (filters.excludedColors ?? []).filter(
         (color) =>
@@ -324,7 +335,11 @@ export class SearchProducts {
       throw new Error('Alt fiyat üst fiyattan büyük olamaz.');
     const page = await this.repository.search({
       ...parsed,
-      textTerms: extractSearchTerms(parsed.query, parsed.filters),
+      legacyCategory,
+      textTerms: extractSearchTerms(parsed.query, {
+        ...parsed.filters,
+        category: parsed.filters.category ?? legacyCategory,
+      }),
       matchNone: Boolean(
         context.merchantIds &&
           request.merchantIds.length &&
@@ -360,6 +375,7 @@ export class MemoryCatalogRepository implements CatalogRepository {
     cursor,
     textTerms,
     matchNone,
+    legacyCategory,
   }: ResolvedSearchRequest): Promise<CatalogSearchPage> {
     const after = decodeSearchCursor(cursor);
     const matching = this.records
@@ -382,6 +398,11 @@ export class MemoryCatalogRepository implements CatalogRepository {
           r.canonicalCategory?.parentKey === category
         );
       })
+      .filter(
+        (r) =>
+          !legacyCategory ||
+          normalizeCategory(r.category) === normalizeCategory(legacyCategory),
+      )
       .filter(
         (r) =>
           !f.excludedCategories.some((category) => {

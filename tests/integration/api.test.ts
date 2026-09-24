@@ -64,15 +64,15 @@ describe('API and MCP', () => {
         })
       ).statusCode,
     ).toBe(400);
-    expect(
-      (
-        await app.inject({
-          method: 'POST',
-          url: '/v1/search',
-          payload: { attributes: { material: ['cotton'] } },
-        })
-      ).statusCode,
-    ).toBe(400);
+    // Generic attribute keys are accepted as filters since ÜRÜN-005/ÜRÜN-006;
+    // the demo catalog carries no material attributes, so the result is empty.
+    const genericAttribute = await app.inject({
+      method: 'POST',
+      url: '/v1/search',
+      payload: { attributes: { material: ['cotton'] } },
+    });
+    expect(genericAttribute.statusCode).toBe(200);
+    expect(genericAttribute.json().products).toHaveLength(0);
     expect(
       (
         await app.inject({

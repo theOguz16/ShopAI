@@ -53,6 +53,7 @@ export class PostgresCatalogRepository implements CatalogRepository {
     cursor,
     matchNone,
     tenantId,
+    legacyCategory,
   }: ResolvedSearchRequest & { tenantId?: string }) {
     if (tenantId !== undefined) requireTenantId(tenantId);
 
@@ -88,6 +89,8 @@ export class PostgresCatalogRepository implements CatalogRepository {
         )
       `);
     }
+    if (legacyCategory)
+      predicates.push(eq(p.category, normalizeCategory(legacyCategory)));
 
     if (f.sizes.length) {
       const genericSize = or(

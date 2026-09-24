@@ -104,6 +104,14 @@ provider/connection/source ID provenance'ına bağlıdır ve yalnız
 `status = mapped` target'ları kabul eder. Parent node seçimi doğrudan child
 mapping'lerini de kapsar.
 
+Canonical mapped-only filtre yalnız istekte açıkça gönderilen `category`
+alanına uygulanır. Parser'ın serbest metinden çıkardığı kategori ipucu ve
+ürün detayındaki benzer ürün sorgusu legacy `products.category` normalize
+değeri üzerinden filtreler; aksi halde kategori içeren her serbest metin
+araması, merchant eşleme yapana kadar unmapped ürünleri tamamen gizlerdi.
+İki yol aynı `filters.category` alanını paylaşmaz: explicit istek canonical
+join'e, ipucu/sistem kaynaklı değer legacy predicate'e gider.
+
 Unmapped ürün:
 
 - source category bilgisini kaybetmez,

@@ -38,7 +38,7 @@ if (!databaseUrl || !redisUrl) {
     WIDGET_ORIGIN: 'https://widget.category-mapping.test',
     REDIRECT_SIGNING_SECRET: 'category-mapping-redirect-secret-000000000000',
     AUTH_PILOT_CREDENTIALS: JSON.stringify(credentials),
-    LOGIN_RATE_LIMIT_MAX: '60',
+    LOGIN_RATE_LIMIT_MAX: '30',
     LOG_LEVEL: 'silent',
   });
   const database = createDatabase(databaseUrl, {
@@ -161,6 +161,7 @@ if (!databaseUrl || !redisUrl) {
       });
 
       await importCatalog(database.db, {
+        schemaVersion: 1,
         runId: randomUUID(),
         merchantId: merchantA,
         connectionId: connectionA,
@@ -253,6 +254,7 @@ if (!databaseUrl || !redisUrl) {
       });
 
       await importCatalog(database.db, {
+        schemaVersion: 1,
         runId: randomUUID(),
         merchantId: merchantB,
         connectionId: connectionB,
@@ -614,6 +616,14 @@ if (!databaseUrl || !redisUrl) {
             0,
           ),
       ).toBe(4);
+      expect(global.json().products).toHaveLength(5);
+      expect(
+        global
+          .json()
+          .products.find(
+            (item: { title: string }) => item.title === 'A Eşlenmemiş Ürün',
+          ),
+      ).toMatchObject({ canonicalCategory: null });
 
       const health = await app.inject({
         method: 'GET',

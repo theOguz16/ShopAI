@@ -219,14 +219,14 @@ export class ProductDetails {
       };
     });
 
-    const similarResult = await this.search.execute({
-      merchantIds: [snapshot.merchant.id],
-      filters: {
-        category: snapshot.product.category,
-        inStockOnly: false,
+    const similarResult = await this.search.execute(
+      {
+        merchantIds: [snapshot.merchant.id],
+        filters: { inStockOnly: false },
+        limit: 12,
       },
-      limit: 12,
-    });
+      { legacyCategory: snapshot.product.category },
+    );
 
     return productDetailResponseSchema.parse({
       searchId: request.searchId ?? randomUUID(),

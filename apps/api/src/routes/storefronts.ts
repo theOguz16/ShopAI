@@ -110,10 +110,7 @@ export async function registerStorefrontRoutes(app: FastifyInstance) {
       .select({ slug: categories.slug })
       .from(categories)
       .where(
-        and(
-          eq(categories.slug, parsedSlug.data),
-          eq(categories.active, true),
-        ),
+        and(eq(categories.slug, parsedSlug.data), eq(categories.active, true)),
       )
       .limit(1);
     if (!category) return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
