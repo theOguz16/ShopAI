@@ -38,8 +38,8 @@ Operatör düzenli `bao operator raft snapshot save` alır, snapshot'ı VDS dı�
 | --- | --- | --- |
 | Production manager ile at-rest encryption | OPEN | OpenBao Raft/barrier compose ve adapter var; gerçek staging init, TLS, unseal, policy ve restore henüz kanıtlanmadı. |
 | Server-side abstraction; browser'da credential/reference yok | PASS | Provider interface, API/worker inject ve mevcut response/integration testleri. |
-| Hesap yeniden açmadan rotation/revocation | PASS | PR #61 DB lifecycle ve OpenBao contract unit testi. Gerçek staging doğrulaması açık. |
-| Merchant/provider/reference/actor audit | PASS | PostgreSQL `connector_secret_audit` ve mevcut integration testleri; gerçek OpenBao audit device kabulü açık. |
+| Hesap yeniden açmadan rotation/revocation | OPEN | PR #61 DB lifecycle ve OpenBao contract unit testi var; gerçek OpenBao staging rotation/revoke henüz çalıştırılmadı. |
+| Merchant/provider/reference/actor audit | OPEN | PostgreSQL `connector_secret_audit` integration testi var; gerçek staging ve OpenBao audit device kabulü açık. |
 | Log/error/analytics/queue'da credential yok | PASS | Generic provider errors, yalnız ID taşıyan queue ve mevcut redaction testleri. |
 | Pilot file migration ve safe deletion planı | OPEN | Plan/apply/verify/rollback/explicit cleanup kodu var; staging rollout ve backup retention/silme kanıtı yok. |
 | Production pilot backend ile fail-closed | PASS | API/worker env testleri, başlangıç ve readiness OpenBao health kontrolü, compose policy. |
