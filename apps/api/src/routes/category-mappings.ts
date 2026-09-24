@@ -1,4 +1,3 @@
-import { buildCategoryFacetMap } from '@shopai/commerce/category-facets';
 import {
   categories,
   categoryFacets,
@@ -174,32 +173,6 @@ export async function registerCategoryMappingRoutes(app: FastifyInstance) {
       });
     },
   );
-
-  app.get('/categories/:slug/facets', async (request, reply) => {
-    const { slug } = request.params as FacetParams;
-    const db = app.authApi.db;
-    if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
-    const [category] = await db
-      .select({ key: categories.slug })
-      .from(categories)
-      .where(and(eq(categories.slug, slug), eq(categories.active, true)));
-    if (!category) return reply.code(404).send({ code: 'NOT_FOUND' });
-    const rows = await db
-      .select({ key: categoryFacets.key, options: categoryFacets.options })
-      .from(categoryFacets)
-      .where(
-        and(
-          eq(categoryFacets.categorySlug, slug),
-          eq(categoryFacets.active, true),
-        ),
-      )
-      .orderBy(asc(categoryFacets.position));
-    return buildCategoryFacetMap(
-      rows.filter(
-        (row) => Array.isArray(row.options) && row.options.length > 0,
-      ),
-    );
-  });
 
   app.get('/v1/categories/:slug/facet-definitions', async (request, reply) => {
     const { slug } = request.params as FacetParams;
