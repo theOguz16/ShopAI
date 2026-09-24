@@ -1,6 +1,6 @@
 # ÜRÜN-015 — Instagram bio → ChatGPT mağaza girişi: araştırma kanıtı
 
-Tarih: 2026-09-24. Branch: `research/urun-015-chatgpt-store-entry`. İncelenen başlangıç commit'i: `7a4be830044d54475eb458b6b53e68f4637bfd2a`. Bu kayıt platform araştırması ve kaynak kod incelemesidir; canlı ChatGPT giriş kabulü değildir. Tam senaryo listesi: [test matrisi](urun-015-entry-matrix.csv).
+Tarih: 2026-09-24. Branch: `research/urun-015-chatgpt-store-entry`. İncelenen ve 2026-09-24 tarihinde yeniden fetch edilen `origin/main` commit'i: `7a4be830044d54475eb458b6b53e68f4637bfd2a`. Rebase bu commit üzerine no-op oldu. Bu kayıt platform araştırması ve kaynak kod incelemesidir; canlı ChatGPT giriş kabulü değildir. Tam senaryo listesi: [test matrisi](urun-015-entry-matrix.csv).
 
 ## Karar
 
@@ -71,9 +71,7 @@ Bu aşamada production flow veya DB şeması değiştirilmedi. Mevcut repo integ
 
 ## Bu branch'teki doğrulama
 
-- `pnpm format:check` ve `pnpm lint`: geçti; lint mevcut 47 uyarı verdi.
-- `pnpm test`: 147 test geçti, 3 test mevcut skip durumunda.
-- `pnpm check`: typecheck aşamasında `apps/web/app/login/page.tsx` için `qrcode.react` modülü çözülemediğinden durdu. Araştırma dosyaları bu modülü değiştirmedi.
-- `pnpm build`: `apps/api/src/better-auth-routes.ts` içinde `@shopai/auth` çözümleme ve buna bağlı TypeScript hatalarıyla durdu; web build'i eşzamanlı görev iptaliyle kesildi. Bunlar bu araştırmanın kod kapsamı dışındadır.
+- İlk `pnpm check` ve `pnpm build` denemeleri sırasıyla `qrcode.react` ve `@shopai/auth` modüllerini çözemedi. Her iki bağımlılık `origin/main` exact SHA `7a4be830044d54475eb458b6b53e68f4637bfd2a` manifest/lockfile'ında bulunuyordu; yerel `apps/web/node_modules/qrcode.react` ve `apps/api/node_modules/@shopai/auth` linkleri yoktu. Bu, kaynak kod regressiyonu değil, eksik yerel kurulumdu.
+- `pnpm install --frozen-lockfile --offline` lockfile değiştirmeden eksik workspace/dependency linklerini tamamladı. Sonrasında **`pnpm check` PASS** (format, lint, typecheck, 147 geçen birim testi ve build dahil) ve ayrı **`pnpm build` PASS**. Lint mevcut 47 uyarı verdi; testlerde 3 mevcut skip vardı.
 - `discovery-session.test.ts` ve `storefront.test.ts` integration koşusu: `DATABASE_URL` ile `REDIS_URL` bulunmadığı için test altyapısı başlamadı; PASS değildir.
 - Canlı ChatGPT/Instagram giriş testi: çalıştırılmadı; 144 CSV satırının tamamı `external verification required`.
