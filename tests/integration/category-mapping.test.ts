@@ -539,6 +539,21 @@ if (!databaseUrl || !redisUrl) {
       expect(cotton.json().products).toHaveLength(1);
       expect(cotton.json().products[0].sourceCategory.name).toBe('Tişört');
 
+      const medium = await app.inject({
+        method: 'POST',
+        url: '/v1/search',
+        payload: {
+          query: 'ürün',
+          category: 'tshirt',
+          attributes: { size: 'M' },
+          inStockOnly: false,
+          limit: 20,
+        },
+      });
+      expect(medium.statusCode).toBe(200);
+      expect(medium.json().products).toHaveLength(1);
+      expect(medium.json().products[0].sourceCategory.name).toBe('Tişört');
+
       const fishing = await app.inject({
         method: 'POST',
         url: '/v1/search',

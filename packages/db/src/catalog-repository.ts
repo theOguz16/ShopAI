@@ -89,12 +89,34 @@ export class PostgresCatalogRepository implements CatalogRepository {
       `);
     }
 
-    if (f.sizes.length)
-      predicates.push(inArray(v.size, f.sizes.map(normalizeSize)));
+    if (f.sizes.length) {
+      const genericSize = or(
+        ...f.sizes.map((value) => {
+          const serialized = JSON.stringify([{ key: 'size', value }]);
+          return sql`${v.options} @> ${serialized}::jsonb`;
+        }),
+      );
+      const sizePredicate = or(
+        inArray(v.size, f.sizes.map(normalizeSize)),
+        genericSize,
+      );
+      if (sizePredicate) predicates.push(sizePredicate);
+    }
     if (f.excludedSizes.length)
       predicates.push(notInArray(v.size, f.excludedSizes.map(normalizeSize)));
-    if (f.colors.length)
-      predicates.push(inArray(v.color, f.colors.map(normalizeColor)));
+    if (f.colors.length) {
+      const genericColor = or(
+        ...f.colors.map((value) => {
+          const serialized = JSON.stringify([{ key: 'color', value }]);
+          return sql`${v.options} @> ${serialized}::jsonb`;
+        }),
+      );
+      const colorPredicate = or(
+        inArray(v.color, f.colors.map(normalizeColor)),
+        genericColor,
+      );
+      if (colorPredicate) predicates.push(colorPredicate);
+    }
     if (f.excludedColors.length)
       predicates.push(
         notInArray(v.color, f.excludedColors.map(normalizeColor)),
