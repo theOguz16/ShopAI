@@ -72,12 +72,7 @@ export const sourceCategoryMappings = pgTable(
     updatedBy: uuid('updated_by').references(() => users.id),
   },
   (t) => [
-    unique().on(
-      t.merchantId,
-      t.connectionId,
-      t.provider,
-      t.sourceCategoryId,
-    ),
+    unique().on(t.merchantId, t.connectionId, t.provider, t.sourceCategoryId),
     foreignKey({
       columns: [t.merchantId, t.connectionId],
       foreignColumns: [connections.merchantId, connections.id],

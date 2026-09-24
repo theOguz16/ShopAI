@@ -164,11 +164,7 @@ export class PostgresCatalogRepository implements CatalogRepository {
         )
         .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
         .where(
-          and(
-            ...predicates,
-            eq(cm.status, 'mapped'),
-            eq(cat.active, true),
-          ),
+          and(...predicates, eq(cm.status, 'mapped'), eq(cat.active, true)),
         )
         .groupBy(cm.canonicalCategorySlug)
         .orderBy(asc(cm.canonicalCategorySlug));
@@ -227,10 +223,7 @@ export class PostgresCatalogRepository implements CatalogRepository {
           .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
           .where(and(...predicates));
 
-        attributeFacets = buildCanonicalFacetValues(
-          definitions,
-          facetRecords,
-        );
+        attributeFacets = buildCanonicalFacetValues(definitions, facetRecords);
       }
 
       const rows = await tx

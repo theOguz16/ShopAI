@@ -78,7 +78,7 @@ export function buildCanonicalFacetValues(
     }
     if (!counts.size) continue;
     const observedUnit =
-      observedUnits.size === 1 ? [...observedUnits][0] ?? null : null;
+      observedUnits.size === 1 ? ([...observedUnits][0] ?? null) : null;
     result[key] = {
       label: definition.label,
       unit: definition.unit ?? observedUnit,

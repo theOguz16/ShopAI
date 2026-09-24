@@ -150,9 +150,7 @@ export const searchFacetsSchema = z.object({
   categories: z.array(facetValueSchema),
   sizes: z.array(facetValueSchema),
   colors: z.array(facetValueSchema),
-  attributes: z
-    .record(z.string().min(1), attributeFacetSchema)
-    .optional(),
+  attributes: z.record(z.string().min(1), attributeFacetSchema).optional(),
 });
 export type SearchFacets = z.infer<typeof searchFacetsSchema>;
 export const parserTelemetrySchema = z.object({

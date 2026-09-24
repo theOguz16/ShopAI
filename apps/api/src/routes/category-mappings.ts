@@ -55,8 +55,7 @@ export async function registerCategoryMappingRoutes(app: FastifyInstance) {
             sourceCategoryId: sourceCategoryMappings.sourceCategoryId,
             sourceCategoryName: sourceCategoryMappings.sourceCategoryName,
             sourceCategoryPath: sourceCategoryMappings.sourceCategoryPath,
-            canonicalCategoryKey:
-              sourceCategoryMappings.canonicalCategorySlug,
+            canonicalCategoryKey: sourceCategoryMappings.canonicalCategorySlug,
             canonicalCategoryLabel: categories.name,
             status: sourceCategoryMappings.status,
             updatedAt: sourceCategoryMappings.updatedAt,
