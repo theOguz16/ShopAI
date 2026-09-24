@@ -61,7 +61,7 @@
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 15px;
-  background: var(--background);
+  background: var(--shopai-color-surface);
 }
 
 .metric dt {
@@ -104,7 +104,7 @@
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 15px;
-  background: var(--background);
+  background: var(--shopai-color-surface);
 }
 
 .connection + .connection {

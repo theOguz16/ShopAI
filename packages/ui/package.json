@@ -11,7 +11,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./states": {
+      "types": "./dist/states.d.ts",
+      "import": "./dist/states.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "import": "./dist/format.js"
+    },
+    "./tokens.css": "./src/tokens.css",
+    "./states.css": "./src/states.css"
   },
   "dependencies": {
     "@shopai/contracts": "workspace:*",

@@ -159,7 +159,7 @@
   min-width: 0;
   padding: 14px;
   border-radius: 12px;
-  background: var(--background);
+  background: var(--shopai-color-surface);
 }
 
 .sessionStep p,

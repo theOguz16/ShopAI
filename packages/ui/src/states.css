@@ -1,0 +1,284 @@
+/*
+ * ÜRÜN-019 ortak durum bileşeni stilleri.
+ * packages/ui/src/states.tsx ile eşleşir; renkler yalnızca tokens.css'ten
+ * gelir, burada hard-coded renk tutulmaz. `@shopai/ui/states.css` olarak
+ * import edilir ve tokens.css'ten sonra yüklenmelidir.
+ */
+
+.shopai-state {
+  display: flex;
+  gap: var(--shopai-space-3);
+  align-items: flex-start;
+  padding: var(--shopai-space-4);
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-lg);
+  background: var(--shopai-color-surface);
+  color: var(--shopai-color-text-primary);
+}
+
+.shopai-state--loading {
+  border-color: var(--shopai-color-border);
+}
+
+.shopai-state--empty {
+  border-style: dashed;
+  border-color: var(--shopai-color-border-strong);
+  background: var(--shopai-color-surface);
+}
+
+.shopai-state--error {
+  border-color: var(--shopai-color-error-border);
+  background: var(--shopai-color-error-bg);
+}
+
+.shopai-state--error .shopai-state-title,
+.shopai-state--error .shopai-state-glyph {
+  color: var(--shopai-color-error-text);
+}
+
+.shopai-state--warning {
+  border-color: var(--shopai-color-warning-border);
+  background: var(--shopai-color-warning-bg);
+}
+
+.shopai-state--warning .shopai-state-title,
+.shopai-state--warning .shopai-state-glyph {
+  color: var(--shopai-color-warning-text);
+}
+
+.shopai-state--success {
+  border-color: var(--shopai-color-success-border);
+  background: var(--shopai-color-success-bg);
+}
+
+.shopai-state--success .shopai-state-title,
+.shopai-state--success .shopai-state-glyph {
+  color: var(--shopai-color-success-text);
+}
+
+.shopai-state--info {
+  border-color: var(--shopai-color-info-border);
+  background: var(--shopai-color-info-bg);
+}
+
+.shopai-state--info .shopai-state-title,
+.shopai-state--info .shopai-state-glyph {
+  color: var(--shopai-color-info-text);
+}
+
+.shopai-state-glyph {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--shopai-radius-pill);
+  background: var(--shopai-color-neutral-bg);
+  color: var(--shopai-color-neutral-text);
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.shopai-state--error .shopai-state-glyph,
+.shopai-state--warning .shopai-state-glyph,
+.shopai-state--success .shopai-state-glyph,
+.shopai-state--info .shopai-state-glyph {
+  background: transparent;
+}
+
+.shopai-state-body {
+  min-width: 0;
+  display: grid;
+  gap: var(--shopai-space-1);
+}
+
+.shopai-state-title {
+  margin: 0;
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.shopai-state-description {
+  margin: 0;
+  color: var(--shopai-color-text-secondary);
+  font-size: var(--shopai-font-size-md);
+}
+
+.shopai-state-action {
+  margin-top: var(--shopai-space-2);
+}
+
+.shopai-loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: shopai-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes shopai-pulse {
+  from {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* --- İskelet --- */
+
+.shopai-skeleton {
+  border-radius: var(--shopai-radius-sm);
+  background: var(--shopai-color-neutral-bg);
+  animation: shopai-shimmer 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes shopai-shimmer {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.shopai-card-skeleton {
+  display: grid;
+  gap: var(--shopai-space-2);
+  padding: var(--shopai-space-3);
+  border: 1px solid var(--shopai-color-border);
+  border-radius: var(--shopai-radius-xl);
+  background: var(--shopai-color-surface);
+}
+
+.shopai-card-skeleton-image {
+  width: 100%;
+}
+
+.shopai-card-skeleton-line {
+  height: 14px;
+}
+
+.shopai-card-skeleton-line--short {
+  width: 60%;
+}
+
+/* --- Görsel placeholder --- */
+
+.shopai-missing-image {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  place-items: center;
+  border-radius: var(--shopai-radius-md);
+  background: var(--shopai-color-surface-muted);
+  color: var(--shopai-color-text-muted);
+  font-size: var(--shopai-font-size-2xl);
+}
+
+/* --- Stok rozeti --- */
+
+.shopai-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--shopai-font-size-sm);
+  font-weight: var(--shopai-font-weight-bold);
+}
+
+.shopai-stock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.shopai-stock-badge--in_stock {
+  color: var(--shopai-color-stock-in-stock);
+}
+
+.shopai-stock-badge--out_of_stock {
+  color: var(--shopai-color-stock-out-of-stock);
+}
+
+.shopai-stock-badge--unknown {
+  color: var(--shopai-color-stock-unknown);
+}
+
+.shopai-stock-badge--stale {
+  color: var(--shopai-color-stock-stale);
+}
+
+/* --- Buton primitive'leri --- */
+
+.shopai-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--shopai-space-2);
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--shopai-radius-md);
+  font: inherit;
+  font-weight: var(--shopai-font-weight-extrabold);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--shopai-transition-fast),
+    border-color var(--shopai-transition-fast);
+}
+
+.shopai-btn:focus-visible {
+  outline: 3px solid var(--shopai-color-focus-ring);
+  outline-offset: 3px;
+}
+
+.shopai-btn:disabled {
+  cursor: not-allowed;
+  border-color: transparent;
+  background: var(--shopai-color-action-disabled-bg);
+  color: var(--shopai-color-action-disabled-text);
+}
+
+.shopai-btn--primary {
+  border-color: var(--shopai-color-action-primary);
+  background: var(--shopai-color-action-primary);
+  color: var(--shopai-color-text-on-action);
+}
+
+.shopai-btn--primary:hover:not(:disabled),
+.shopai-btn--primary:focus-visible:not(:disabled) {
+  border-color: var(--shopai-color-action-primary-hover);
+  background: var(--shopai-color-action-primary-hover);
+}
+
+.shopai-btn--secondary {
+  border-color: var(--shopai-color-action-secondary-border);
+  background: var(--shopai-color-action-secondary-bg);
+  color: var(--shopai-color-action-secondary-text);
+}
+
+.shopai-btn--secondary:hover:not(:disabled) {
+  background: var(--shopai-color-action-secondary-hover);
+}
+
+.shopai-btn--ghost {
+  background: transparent;
+  color: var(--shopai-color-text-primary);
+}
+
+.shopai-btn--ghost:hover:not(:disabled) {
+  background: var(--shopai-color-surface-muted);
+}
+
+/* --- Hareket azaltma tercihi --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .shopai-loading-dot,
+  .shopai-skeleton {
+    animation: none;
+  }
+}
