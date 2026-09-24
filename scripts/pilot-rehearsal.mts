@@ -416,6 +416,8 @@ async function connectorScenarios(results: ScenarioResult[]) {
       async (milliseconds) => {
         waits.push(milliseconds);
       },
+      3,
+      async () => 'TRY',
     );
     const page = await connector.readPage({ mode: 'full' });
     assert(
@@ -437,6 +439,8 @@ async function connectorScenarios(results: ScenarioResult[]) {
             });
       },
       async () => {},
+      3,
+      async () => 'TRY',
     );
     await connector.readPage({ mode: 'full' });
     assert(calls === 2, 'Transient 5xx was not retried exactly once.');
