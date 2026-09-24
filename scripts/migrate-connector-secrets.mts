@@ -183,8 +183,9 @@ try {
   } else if (action === 'cleanup') {
     if (targetBackend !== 'openbao')
       throw new Error('Cleanup OpenBao hedefi için desteklenir.');
-    if (!process.argv.includes('--confirm-retired-file-deletion'))
-      throw new Error('Cleanup explicit confirmation gerektirir.');
+    const confirmDeletion = process.argv.includes(
+      '--confirm-retired-file-deletion',
+    );
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const retired = await database.db
       .select()
@@ -196,6 +197,7 @@ try {
           lte(connectorSecretAudit.createdAt, cutoff),
         ),
       );
+    let verified = 0;
     let removed = 0;
     for (const old of retired) {
       if (!ManagedConnectorSecretStore.supports(old.reference)) continue;
@@ -237,11 +239,20 @@ try {
         connectionId: old.connectionId,
         provider: active.provider,
       });
-      await source.remove(old.reference);
-      removed++;
+      verified++;
+      if (confirmDeletion) {
+        await source.remove(old.reference);
+        removed++;
+      }
     }
     console.info(
-      JSON.stringify({ mode: action, eligible: retired.length, removed }),
+      JSON.stringify({
+        mode: action,
+        dryRun: !confirmDeletion,
+        eligible: retired.length,
+        verified,
+        removed,
+      }),
     );
   } else {
     const candidates = await database.db

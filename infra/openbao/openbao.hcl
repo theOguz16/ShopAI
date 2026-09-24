@@ -15,3 +15,11 @@ storage "raft" {
   path = "/openbao/data"
   node_id = "shopai-raft-1"
 }
+
+audit "file" "to-stdout" {
+  description = "Container audit stream; collect off host"
+  options {
+    file_path = "stdout"
+    log_raw = "false"
+  }
+}
