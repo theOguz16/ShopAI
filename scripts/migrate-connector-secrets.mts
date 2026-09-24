@@ -149,9 +149,12 @@ try {
         connectionId: row.id,
         provider: row.provider,
       };
-      await source.resolveScoped(previous.reference, scope).catch(() => {
-        throw new Error('Rollback scoped-file target verification failed.');
-      });
+      await source
+        .resolveScoped(previous.reference, scope)
+        .catch(() => source.resolve(previous.reference!))
+        .catch(() => {
+          throw new Error('Rollback scoped-file target verification failed.');
+        });
       const changed = await withTenant(
         database.db,
         row.merchantId,
