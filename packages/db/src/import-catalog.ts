@@ -3,7 +3,12 @@ import {
   normalizeColor,
   normalizeSize,
 } from '@shopai/commerce';
-import { type ImportJob, importJobSchema } from '@shopai/contracts';
+import {
+  type ImportJob,
+  importJobSchema,
+  canonicalCatalogAttributes,
+  type SourceRow,
+} from '@shopai/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import {
@@ -103,6 +108,11 @@ export async function importCatalog(
         title: row.title,
         description: row.description,
         category: normalizeCategory(row.category),
+        sourceCategoryId: row.sourceCategoryId ?? null,
+        sourceCategoryPath: row.sourceCategoryPath ?? null,
+        descriptiveAttributes: canonicalCatalogAttributes(
+          row.productAttributes ?? [],
+        ),
         imageUrl: row.imageUrl ?? null,
         imageAlt: row.imageAlt ?? null,
         observedAt,
@@ -133,8 +143,11 @@ export async function importCatalog(
       if (!product) throw new Error('Ürün yazılamadı.');
       const variantData = {
         productId: product.id,
-        size: normalizeSize(row.size),
-        color: normalizeColor(row.color),
+        size: normalizeSize(row.size ?? 'ONE_SIZE'),
+        color: normalizeColor(row.color ?? 'unspecified'),
+        options: canonicalCatalogAttributes(optionsForRow(row)),
+        imageUrl: row.variantImageUrl ?? null,
+        imageAlt: row.variantImageAlt ?? null,
         observedAt,
         fetchedAt,
       };
@@ -258,6 +271,9 @@ function assertConsistentProductRows(job: ImportJob) {
       row.title.trim(),
       row.description,
       normalizeCategory(row.category),
+      row.sourceCategoryId ?? null,
+      row.sourceCategoryPath ?? null,
+      canonicalCatalogAttributes(row.productAttributes ?? []),
     ]);
     const existing = productsByKey.get(row.productKey);
     if (existing && existing !== identity)
@@ -266,4 +282,14 @@ function assertConsistentProductRows(job: ImportJob) {
       );
     productsByKey.set(row.productKey, identity);
   }
+}
+
+function optionsForRow(row: SourceRow) {
+  if (row.variantOptions !== undefined) return row.variantOptions;
+  const options = [];
+  if (row.size && row.size !== 'ONE_SIZE')
+    options.push({ key: 'size', value: row.size });
+  if (row.color && row.color !== 'unspecified')
+    options.push({ key: 'color', value: row.color });
+  return options;
 }

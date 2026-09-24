@@ -5,6 +5,7 @@ import {
   moneySchema,
   stockStatusSchema,
 } from './index.js';
+import { catalogAttributesSchema } from './catalog-attributes.js';
 
 const publicUrlSchema = z
   .string()
@@ -57,11 +58,38 @@ export const productDetailVariantSchema = z
     id: z.string().uuid(),
     size: z.string(),
     color: z.string(),
+    options: catalogAttributesSchema.optional(),
+    sourceVariantId: z.string().optional(),
+    image: productDetailImageSchema.nullable().optional(),
     availability: stockStatusSchema,
     selectable: z.boolean(),
     offerIds: z.array(z.string().uuid()),
   })
   .strict();
+
+export function variantOptionLabel(variant: {
+  options?: Array<{
+    label?: string;
+    key: string;
+    value: string;
+    unit?: string;
+  }>;
+  size: string;
+  color: string;
+}) {
+  if (variant.options?.length)
+    return variant.options
+      .map(
+        (option) =>
+          `${option.label ?? option.key}: ${option.value}${option.unit ? ` ${option.unit}` : ''}`,
+      )
+      .join(' · ');
+  const legacy = [
+    variant.size !== 'ONE_SIZE' ? variant.size : null,
+    variant.color !== 'unspecified' ? variant.color : null,
+  ].filter(Boolean);
+  return legacy.join(' · ') || 'Tek seçenek';
+}
 
 export const productDetailResponseSchema = z
   .object({
@@ -81,6 +109,7 @@ export const productDetailResponseSchema = z
     offers: z.array(productDetailOfferSchema),
     availability: stockStatusSchema,
     attributes: z.record(z.string(), z.array(z.string())),
+    productAttributes: catalogAttributesSchema.optional(),
     merchant: z
       .object({
         id: z.string().uuid(),

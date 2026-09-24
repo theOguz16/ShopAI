@@ -39,6 +39,7 @@ export class PostgresProductDetailRepository
           category: products.category,
           imageUrl: products.imageUrl,
           imageAlt: products.imageAlt,
+          descriptiveAttributes: products.descriptiveAttributes,
           merchantId: merchants.id,
           merchantName: merchants.name,
           merchantSlug: merchants.slug,
@@ -56,6 +57,10 @@ export class PostgresProductDetailRepository
           id: variants.id,
           size: variants.size,
           color: variants.color,
+          options: variants.options,
+          sourceVariantId: variants.externalId,
+          imageUrl: variants.imageUrl,
+          imageAlt: variants.imageAlt,
         })
         .from(variants)
         .where(
@@ -150,12 +155,16 @@ export class PostgresProductDetailRepository
           logoUrl: base.merchantLogoUrl,
         },
         attributes,
+        productAttributes: base.descriptiveAttributes,
         variants: variantRows,
         offers: offerRows.map((row) => ({
           id: row.id,
           variantId: row.variantId,
           priceMinor: row.priceMinor,
-          currency: 'TRY' as const,
+          currency:
+            row.currency === 'TRY'
+              ? ('TRY' as const)
+              : unsupportedCurrency(row.currency),
           available: row.available ?? null,
           offerObservedAt: row.offerObservedAt.toISOString(),
           stockObservedAt: row.stockObservedAt?.toISOString() ?? null,
@@ -164,4 +173,8 @@ export class PostgresProductDetailRepository
       };
     });
   }
+}
+
+function unsupportedCurrency(currency: string): never {
+  throw new Error(`Desteklenmeyen para birimi: ${currency}`);
 }

@@ -181,7 +181,15 @@ if (!databaseUrl || !redisUrl) {
     });
 
     it('confirms valid WooCommerce credentials without echoing them', async () => {
-      connectorFetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
+      connectorFetchMock.mockImplementation(
+        async (input) =>
+          new Response(
+            new URL(String(input)).pathname.endsWith('/settings/general')
+              ? JSON.stringify([{ id: 'woocommerce_currency', value: 'TRY' }])
+              : '[]',
+            { status: 200 },
+          ),
+      );
       const response = await app.inject({
         method: 'POST',
         url: endpoint('woocommerce', 'test'),
@@ -195,15 +203,18 @@ if (!databaseUrl || !redisUrl) {
       });
       expect(response.body).not.toContain(consumerKey);
       expect(response.body).not.toContain(consumerSecret);
-      expect(connectorFetchMock).toHaveBeenCalledTimes(1);
+      expect(connectorFetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('creates WooCommerce connector, stores secret material out of DB and queues first sync', async () => {
-      connectorFetchMock.mockResolvedValue(
-        new Response('[]', {
-          status: 200,
-          headers: { 'x-wp-totalpages': '1' },
-        }),
+      connectorFetchMock.mockImplementation(
+        async (input) =>
+          new Response(
+            new URL(String(input)).pathname.endsWith('/settings/general')
+              ? JSON.stringify([{ id: 'woocommerce_currency', value: 'TRY' }])
+              : '[]',
+            { status: 200, headers: { 'x-wp-totalpages': '1' } },
+          ),
       );
       const response = await app.inject({
         method: 'POST',

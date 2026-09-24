@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { CatalogAttribute } from '@shopai/contracts';
 import {
   bigint,
   boolean,
@@ -166,6 +167,12 @@ export const products = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     category: text('category').notNull(),
+    sourceCategoryId: text('source_category_id'),
+    sourceCategoryPath: jsonb('source_category_path').$type<string[]>(),
+    descriptiveAttributes: jsonb('descriptive_attributes')
+      .$type<CatalogAttribute[]>()
+      .notNull()
+      .default([]),
     published: boolean('published').notNull().default(false),
     imageUrl: text('image_url'),
     imageAlt: text('image_alt'),
@@ -196,6 +203,9 @@ export const variants = pgTable(
     externalId: text('external_id').notNull(),
     size: text('size').notNull(),
     color: text('color').notNull(),
+    options: jsonb('options').$type<CatalogAttribute[]>().notNull().default([]),
+    imageUrl: text('image_url'),
+    imageAlt: text('image_alt'),
     observedAt: at('observed_at').notNull(),
     fetchedAt: at('fetched_at').notNull().defaultNow(),
   },
