@@ -36,6 +36,7 @@
     { "idx": 31, "version": "7", "when": 1790098200000, "tag": "0032_auth0_verified_link", "breakpoints": true },
     { "idx": 32, "version": "7", "when": 1790100000000, "tag": "0033_better_auth", "breakpoints": true },
     { "idx": 33, "version": "7", "when": 1790251200000, "tag": "0034_generic_product_variants", "breakpoints": true },
-    { "idx": 34, "version": "7", "when": 1790300000000, "tag": "0035_connector_secret_lifecycle", "breakpoints": true }
+    { "idx": 34, "version": "7", "when": 1790300000000, "tag": "0035_connector_secret_lifecycle", "breakpoints": true },
+    { "idx": 35, "version": "7", "when": 1790400000000, "tag": "0036_connector_secret_backend", "breakpoints": true }
   ]
 }

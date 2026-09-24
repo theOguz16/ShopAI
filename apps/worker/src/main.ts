@@ -1,4 +1,8 @@
-import { ConnectorHttpError, LIVE_CATALOG_PROVIDERS } from '@shopai/connectors';
+import {
+  ConnectorHttpError,
+  LIVE_CATALOG_PROVIDERS,
+  createConnectorSecretBackend,
+} from '@shopai/connectors';
 import { IMPORT_QUEUE, SYNC_QUEUE } from '@shopai/contracts';
 import {
   connections,
@@ -18,6 +22,17 @@ import { connectionToSyncJob } from './scheduler.js';
 import { EnvironmentSecretResolver, syncCatalogConnection } from './sync.js';
 
 const env = parseWorkerEnv(process.env);
+const connectorSecretBackend = createConnectorSecretBackend({
+  backend: env.CONNECTOR_SECRET_BACKEND,
+  privateRoot: process.env.UPLOAD_DIR ?? 'private/uploads',
+  encryptionKey: env.CONNECTOR_SECRET_ENCRYPTION_KEY,
+  region: env.CONNECTOR_SECRET_AWS_REGION,
+  namespace: env.CONNECTOR_SECRET_AWS_NAMESPACE,
+  healthSecretId: env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID,
+  kmsKeyId: env.CONNECTOR_SECRET_AWS_KMS_KEY_ID,
+});
+if (env.CONNECTOR_SECRET_BACKEND === 'aws')
+  await connectorSecretBackend.health();
 const database = createDatabase(env.DATABASE_URL);
 const alertEmailSender = createAlertEmailSender(env);
 const opsAlerts = createOpsAlertSender(env);
@@ -64,11 +79,12 @@ const syncWorker = new Worker(
     syncCatalogConnection(
       database.db,
       job.data,
-      new EnvironmentSecretResolver(process.env),
+      new EnvironmentSecretResolver(process.env, connectorSecretBackend),
       undefined,
       undefined,
       alertEmailSender,
       job.id,
+      env.CONNECTOR_SECRET_BACKEND,
     ),
   {
     connection: {

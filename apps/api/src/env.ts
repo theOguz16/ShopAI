@@ -18,6 +18,11 @@ const optionalConnectorEncryptionKeySchema = z.preprocess(
     )
     .optional(),
 );
+const optionalNonemptyString = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().min(1).optional(),
+);
 
 const optionalOpsWebhookUrlSchema = z.preprocess(
   (value) =>
@@ -91,6 +96,11 @@ const baseSchema = z.object({
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
   CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
+  CONNECTOR_SECRET_BACKEND: z.enum(['file', 'aws']).default('file'),
+  CONNECTOR_SECRET_AWS_REGION: optionalNonemptyString,
+  CONNECTOR_SECRET_AWS_NAMESPACE: optionalNonemptyString,
+  CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_AWS_KMS_KEY_ID: optionalNonemptyString,
   OPS_ALERT_WEBHOOK_URL: optionalOpsWebhookUrlSchema,
   OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
   REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
@@ -242,8 +252,80 @@ const apiEnvSchema = z
         path: ['OPS_ALERT_WEBHOOK_URL'],
         message: 'production ortamında harici operasyon alert sink zorunludur',
       });
+    if (
+      env.DEPLOY_ENV === 'production' &&
+      env.CONNECTOR_SECRET_BACKEND !== 'aws'
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CONNECTOR_SECRET_BACKEND'],
+        message: 'production managed AWS secret backend gerektirir',
+      });
+    if (env.CONNECTOR_SECRET_BACKEND === 'aws') {
+      if (
+        !env.CONNECTOR_SECRET_AWS_REGION ||
+        !env.CONNECTOR_SECRET_AWS_NAMESPACE ||
+        !env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_REGION'],
+          message: 'AWS secret provider yapılandırması eksik',
+        });
+      if (
+        env.CONNECTOR_SECRET_AWS_REGION &&
+        !/^[a-z]{2}-[a-z]+-\d$/u.test(env.CONNECTOR_SECRET_AWS_REGION)
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_REGION'],
+          message: 'AWS region geçersiz',
+        });
+      if (
+        env.CONNECTOR_SECRET_AWS_NAMESPACE &&
+        !/^shopai\/(staging|production|test)$/u.test(
+          env.CONNECTOR_SECRET_AWS_NAMESPACE,
+        )
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
+          message: 'AWS namespace geçersiz',
+        });
+      if (
+        env.CONNECTOR_SECRET_AWS_NAMESPACE &&
+        env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID !==
+          `${env.CONNECTOR_SECRET_AWS_NAMESPACE}/health`
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID'],
+          message: 'AWS health secret namespace ile eşleşmeli',
+        });
+      if (
+        env.DEPLOY_ENV === 'production' &&
+        env.CONNECTOR_SECRET_AWS_NAMESPACE !== 'shopai/production'
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
+          message: 'production namespace ayrı olmalıdır',
+        });
+      if (
+        env.DEPLOY_ENV === 'staging' &&
+        env.CONNECTOR_SECRET_AWS_NAMESPACE !== 'shopai/staging'
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_AWS_NAMESPACE'],
+          message: 'staging namespace ayrı olmalıdır',
+        });
+    }
     if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {
-      if (!env.CONNECTOR_SECRET_ENCRYPTION_KEY)
+      if (
+        env.CONNECTOR_SECRET_BACKEND === 'file' &&
+        !env.CONNECTOR_SECRET_ENCRYPTION_KEY
+      )
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['CONNECTOR_SECRET_ENCRYPTION_KEY'],

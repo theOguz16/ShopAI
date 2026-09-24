@@ -164,6 +164,7 @@ export const connectorSecrets = pgTable(
     provider: text('provider').notNull(),
     kind: text('kind').notNull().default('catalog_credentials'),
     reference: text('reference').notNull().unique(),
+    backend: text('backend').notNull().default('file'),
     version: bigint('version', { mode: 'number' }).notNull(),
     status: text('status').notNull(),
     createdAt: at('created_at').notNull().defaultNow(),
@@ -180,6 +181,7 @@ export const connectorSecrets = pgTable(
       'connector_secret_status',
       sql`${t.status} in ('active','rotated','revoked')`,
     ),
+    check('connector_secret_backend', sql`${t.backend} in ('file','aws')`),
   ],
 );
 export const connectorSecretAudit = pgTable(

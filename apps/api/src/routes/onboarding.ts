@@ -1,7 +1,7 @@
 import {
   createLiveCatalogConnector,
   type LiveCatalogConnector,
-  ManagedConnectorSecretStore,
+  type ConnectorSecretBackend,
 } from '@shopai/connectors';
 import {
   connectorOnboardingProviderSchema,
@@ -45,12 +45,9 @@ const onboardingCredentialSchemas = {
 export async function registerOnboardingRoutes(
   app: FastifyInstance,
   env: ApiEnv,
+  secretStore: ConnectorSecretBackend,
   connectorFactory: OnboardingConnectorFactory = createOnboardingConnector,
 ) {
-  const secretStore = new ManagedConnectorSecretStore(
-    env.UPLOAD_DIR,
-    env.CONNECTOR_SECRET_ENCRYPTION_KEY,
-  );
   let syncQueue: Queue | undefined;
   const getSyncQueue = () => {
     syncQueue ??= new Queue(SYNC_QUEUE, {
@@ -100,15 +97,12 @@ export async function registerOnboardingRoutes(
       );
       if (!parsed.success)
         return reply.code(400).send({ code: 'INVALID_INPUT' });
-      const reference = await secretStore.createScoped(parsed.data, {
-        merchantId,
-        connectionId,
-        provider,
-      });
+      const scope = { merchantId, connectionId, provider };
+      const reference = await secretStore.rotateScoped(parsed.data, scope);
       try {
         await validateConnector(provider, parsed.data, connectorFactory);
       } catch {
-        await secretStore.remove(reference);
+        await secretStore.remove(reference, scope);
         return reply.code(422).send({ code: 'CONNECTION_FAILED' });
       }
       try {
@@ -156,6 +150,7 @@ export async function registerOnboardingRoutes(
             connectionId,
             provider,
             reference,
+            backend: env.CONNECTOR_SECRET_BACKEND,
             version: old ? old.version + 1 : 1,
             status: 'active',
           });
@@ -194,12 +189,12 @@ export async function registerOnboardingRoutes(
           return true;
         });
         if (!rotated) {
-          await secretStore.remove(reference);
+          await secretStore.remove(reference, scope);
           return reply.code(409).send({ code: 'CONNECTION_CHANGED' });
         }
         return { ok: true };
       } catch {
-        await secretStore.remove(reference).catch(() => undefined);
+        await secretStore.remove(reference, scope).catch(() => undefined);
         return reply.code(500).send({ code: 'ROTATION_FAILED' });
       }
     },
@@ -259,11 +254,8 @@ export async function registerOnboardingRoutes(
       }
 
       const connectionId = randomUUID();
-      const credentialsRef = await secretStore.createScoped(parsed.data, {
-        merchantId,
-        connectionId,
-        provider,
-      });
+      const scope = { merchantId, connectionId, provider };
+      const credentialsRef = await secretStore.createScoped(parsed.data, scope);
       let created:
         | 'exists'
         | {
@@ -319,6 +311,7 @@ export async function registerOnboardingRoutes(
             connectionId,
             provider,
             reference: credentialsRef,
+            backend: env.CONNECTOR_SECRET_BACKEND,
             version: 1,
             status: 'active',
           });
@@ -350,12 +343,12 @@ export async function registerOnboardingRoutes(
           };
         });
       } catch (error) {
-        await secretStore.remove(credentialsRef).catch(() => undefined);
+        await secretStore.remove(credentialsRef, scope).catch(() => undefined);
         throw error;
       }
 
       if (created === 'exists') {
-        await secretStore.remove(credentialsRef).catch(() => undefined);
+        await secretStore.remove(credentialsRef, scope).catch(() => undefined);
         return reply.code(409).send({ code: 'CONNECTION_ALREADY_EXISTS' });
       }
 

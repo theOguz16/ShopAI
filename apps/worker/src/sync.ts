@@ -9,6 +9,7 @@ import {
   createLiveCatalogConnector,
   type LiveCatalogConnector,
   ManagedConnectorSecretStore,
+  type ConnectorSecretBackend,
 } from '@shopai/connectors';
 import { type SourceRow, type SyncJob, syncJobSchema } from '@shopai/contracts';
 import {
@@ -38,7 +39,10 @@ export interface SecretResolver {
 }
 
 export class EnvironmentSecretResolver implements SecretResolver {
-  constructor(private readonly environment: NodeJS.ProcessEnv) {}
+  constructor(
+    private readonly environment: NodeJS.ProcessEnv,
+    private readonly backend?: ConnectorSecretBackend,
+  ) {}
   async resolve(
     reference: string,
     scope?: { merchantId: string; connectionId: string; provider: string },
@@ -49,6 +53,10 @@ export class EnvironmentSecretResolver implements SecretResolver {
     if (!/^[A-Z][A-Z0-9_]{2,80}$/u.test(key))
       throw new Error('Geçersiz secret referansı.');
     if (ManagedConnectorSecretStore.supports(reference)) {
+      if (this.backend) {
+        if (!scope) throw new Error('Connector secret kapsamı gerekli.');
+        return this.backend.resolveScoped(reference, scope);
+      }
       const store = new ManagedConnectorSecretStore(
         this.environment.UPLOAD_DIR ?? 'private/uploads',
         this.environment.CONNECTOR_SECRET_ENCRYPTION_KEY,
@@ -57,6 +65,10 @@ export class EnvironmentSecretResolver implements SecretResolver {
         ? store.resolveScoped(reference, scope)
         : store.resolve(reference);
     }
+    if (this.backend && this.environment.CONNECTOR_SECRET_BACKEND === 'aws')
+      throw new Error(
+        'Legacy environment secret production ortamında desteklenmez.',
+      );
     const value = this.environment[key];
     if (value) return JSON.parse(value);
     throw new Error('Secret çözülemedi.');
@@ -91,6 +103,7 @@ export async function syncCatalogConnection(
   now: () => Date = () => new Date(),
   alertEmailSender?: AlertEmailSender,
   correlationId?: string,
+  expectedBackend?: 'file' | 'aws',
 ) {
   const job = syncJobSchema.parse(input);
   const startedAt = now();
@@ -144,6 +157,9 @@ export async function syncCatalogConnection(
             eq(connectorSecrets.provider, row.provider),
             eq(connectorSecrets.reference, row.credentialsRef),
             eq(connectorSecrets.status, 'active'),
+            ...(expectedBackend
+              ? [eq(connectorSecrets.backend, expectedBackend)]
+              : []),
           ),
         )
         .limit(1);

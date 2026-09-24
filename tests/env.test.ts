@@ -28,6 +28,10 @@ const hostedProductionEnv = {
   WIDGET_ORIGIN: 'https://widget.shopai.example',
   OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
   OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+  CONNECTOR_SECRET_BACKEND: 'aws',
+  CONNECTOR_SECRET_AWS_REGION: 'eu-central-1',
+  CONNECTOR_SECRET_AWS_NAMESPACE: 'shopai/production',
+  CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID: 'shopai/production/health',
 } as const;
 
 describe('startup environment validation', () => {
@@ -178,6 +182,10 @@ describe('startup environment validation', () => {
         DATABASE_URL: hostedProductionEnv.DATABASE_URL,
         REDIS_URL: 'rediss://redis.example',
         CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+        CONNECTOR_SECRET_BACKEND: 'aws',
+        CONNECTOR_SECRET_AWS_REGION: 'eu-central-1',
+        CONNECTOR_SECRET_AWS_NAMESPACE: 'shopai/production',
+        CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID: 'shopai/production/health',
         OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
         OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
       }),
@@ -185,6 +193,41 @@ describe('startup environment validation', () => {
       OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
       OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
     });
+  });
+
+  it('fails closed for file or misconfigured AWS production backends', () => {
+    const worker = {
+      DEPLOY_ENV: 'production',
+      RELEASE_VERSION: hostedProductionEnv.RELEASE_VERSION,
+      DATABASE_URL: hostedProductionEnv.DATABASE_URL,
+      REDIS_URL: 'rediss://redis.example',
+      OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+      OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+    };
+    expect(() =>
+      parseApiEnv({ ...hostedProductionEnv, CONNECTOR_SECRET_BACKEND: 'file' }),
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
+    expect(() =>
+      parseWorkerEnv({ ...worker, CONNECTOR_SECRET_BACKEND: 'file' }),
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
+    expect(() =>
+      parseApiEnv({ ...hostedProductionEnv, CONNECTOR_SECRET_AWS_REGION: '' }),
+    ).toThrow(/CONNECTOR_SECRET_AWS_REGION/);
+    expect(() =>
+      parseApiEnv({
+        ...hostedProductionEnv,
+        CONNECTOR_SECRET_AWS_NAMESPACE: 'shopai/staging',
+      }),
+    ).toThrow(/production namespace/);
+    expect(() =>
+      parseWorkerEnv({
+        ...worker,
+        CONNECTOR_SECRET_BACKEND: 'aws',
+        CONNECTOR_SECRET_AWS_REGION: 'eu-central-1',
+        CONNECTOR_SECRET_AWS_NAMESPACE: 'shopai/staging',
+        CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID: 'shopai/staging/health',
+      }),
+    ).toThrow(/production namespace/);
   });
 
   it('rejects partial or unsafe operations alert configuration', () => {

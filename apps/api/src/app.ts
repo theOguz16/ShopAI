@@ -8,6 +8,7 @@ import {
   searchRequestSchema,
 } from '@shopai/contracts';
 import { searchProductsRequestSchema } from '@shopai/contracts/search-products';
+import { createConnectorSecretBackend } from '@shopai/connectors';
 import { createDatabase } from '@shopai/db';
 import { sql } from 'drizzle-orm';
 import Fastify from 'fastify';
@@ -73,6 +74,17 @@ export async function buildApp(
       ? createDatabase(env.DATABASE_URL)
       : undefined;
   const opsAlerts = createOpsAlertSender(env);
+  const connectorSecretBackend = createConnectorSecretBackend({
+    backend: env.CONNECTOR_SECRET_BACKEND,
+    privateRoot: env.UPLOAD_DIR,
+    encryptionKey: env.CONNECTOR_SECRET_ENCRYPTION_KEY,
+    region: env.CONNECTOR_SECRET_AWS_REGION,
+    namespace: env.CONNECTOR_SECRET_AWS_NAMESPACE,
+    healthSecretId: env.CONNECTOR_SECRET_AWS_HEALTH_SECRET_ID,
+    kmsKeyId: env.CONNECTOR_SECRET_AWS_KMS_KEY_ID,
+  });
+  if (env.CONNECTOR_SECRET_BACKEND === 'aws')
+    await connectorSecretBackend.health();
   const app = Fastify({
     routerOptions: { maxParamLength: 1024 },
     // Verification and reset URLs contain secrets: never log raw request URLs.
@@ -210,8 +222,13 @@ export async function buildApp(
     if (!request.auth) return reply.code(401).send({ code: 'UNAUTHENTICATED' });
     return { user: request.auth, csrfToken: app.authApi.csrfToken(request) };
   });
-  await registerMerchantRoutes(app, env);
-  await registerOnboardingRoutes(app, env, options.onboardingConnectorFactory);
+  await registerMerchantRoutes(app, env, connectorSecretBackend);
+  await registerOnboardingRoutes(
+    app,
+    env,
+    connectorSecretBackend,
+    options.onboardingConnectorFactory,
+  );
   await registerSyncStatusRoutes(app);
   await registerStorefrontRoutes(app);
   await registerSavedProductRoutes(app, resolvedServices, env);
@@ -227,6 +244,8 @@ export async function buildApp(
   app.get('/health/ready', async (_request, reply) => {
     try {
       await resolvedServices.repository.health();
+      if (env.CONNECTOR_SECRET_BACKEND === 'aws')
+        await connectorSecretBackend.health();
       return { status: 'ok', release: env.RELEASE_VERSION };
     } catch {
       return reply.code(503).send({ status: 'unavailable' });

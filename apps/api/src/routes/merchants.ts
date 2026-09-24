@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { ManagedConnectorSecretStore } from '@shopai/connectors';
+import {
+  ManagedConnectorSecretStore,
+  type ConnectorSecretBackend,
+} from '@shopai/connectors';
 import {
   bootstrapMerchant,
   connections,
@@ -28,6 +31,7 @@ const errorChainIncludes = (error: unknown, marker: string) => {
 export async function registerMerchantRoutes(
   app: FastifyInstance,
   env: ApiEnv,
+  secretStore: ConnectorSecretBackend,
 ) {
   app.get('/v1/stores/:slug', async (request, reply) => {
     const parsedSlug = storeSlugSchema.safeParse(
@@ -282,7 +286,10 @@ export async function registerMerchantRoutes(
       if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
       const connection = await withTenant(db, merchantId, async (tx) => {
         const [current] = await tx
-          .select({ credentialsRef: connections.credentialsRef })
+          .select({
+            credentialsRef: connections.credentialsRef,
+            provider: connections.provider,
+          })
           .from(connections)
           .where(
             and(
@@ -311,6 +318,18 @@ export async function registerMerchantRoutes(
           current?.credentialsRef &&
           ManagedConnectorSecretStore.supports(current.credentialsRef)
         ) {
+          const [managed] = await tx
+            .select({ backend: connectorSecrets.backend })
+            .from(connectorSecrets)
+            .where(
+              and(
+                eq(connectorSecrets.merchantId, merchantId),
+                eq(connectorSecrets.connectionId, connectionId),
+                eq(connectorSecrets.reference, current.credentialsRef),
+                eq(connectorSecrets.status, 'active'),
+              ),
+            )
+            .limit(1);
           await tx
             .update(connectorSecrets)
             .set({ status: 'revoked', revokedAt: new Date() })
@@ -329,9 +348,45 @@ export async function registerMerchantRoutes(
             actor: request.auth?.userId ?? 'api',
             correlationId: request.id,
           });
+          return {
+            ...row,
+            reference: current.credentialsRef,
+            provider: current.provider,
+            backend: managed?.backend,
+          };
         }
-        return row;
+        return row
+          ? {
+              ...row,
+              reference: current?.credentialsRef,
+              provider: current?.provider,
+              backend: undefined,
+            }
+          : undefined;
       });
+      if (
+        connection?.reference &&
+        connection.provider &&
+        connection.backend === env.CONNECTOR_SECRET_BACKEND &&
+        ManagedConnectorSecretStore.supports(connection.reference)
+      ) {
+        await secretStore
+          .revoke(connection.reference, {
+            merchantId,
+            connectionId,
+            provider: connection.provider,
+          })
+          .catch(() => {
+            request.log.warn(
+              {
+                event: 'connector_secret_provider_revoke_failed',
+                merchantId,
+                connectionId,
+              },
+              'Provider cleanup requires retry',
+            );
+          });
+      }
       return connection
         ? { ok: true }
         : reply.code(404).send({ code: 'NOT_FOUND' });
