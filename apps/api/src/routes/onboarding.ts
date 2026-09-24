@@ -126,7 +126,8 @@ export async function registerOnboardingRoutes(
                 eq(connections.active, true),
               ),
             )
-            .limit(1);
+            .limit(1)
+            .for('update');
           if (
             !row ||
             row.authorizationStatus === 'revoked' ||

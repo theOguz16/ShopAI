@@ -290,7 +290,8 @@ export async function registerMerchantRoutes(
               eq(connections.merchantId, merchantId),
             ),
           )
-          .limit(1);
+          .limit(1)
+          .for('update');
         const [row] = await tx
           .update(connections)
           .set({
