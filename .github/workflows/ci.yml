@@ -61,6 +61,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      postgres-fresh:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: shopai_fresh
+          POSTGRES_PASSWORD: shopai_fresh_test
+          POSTGRES_DB: shopai_restore_fresh
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U shopai_fresh -d shopai_restore_fresh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports:
@@ -125,6 +138,9 @@ jobs:
           BACKUP_DIR=/tmp/shopai-backups infra/backup.sh > /tmp/shopai-backup-path
           PGPASSWORD=shopai_test createdb --host=127.0.0.1 --username=shopai shopai_restore_test
           DATABASE_URL=postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_restore_test BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
+      - name: Exercise restore role bootstrap on a fresh PostgreSQL instance
+        run: |
+          DATABASE_URL=postgresql://shopai_fresh:shopai_fresh_test@127.0.0.1:5433/shopai_restore_fresh BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
   design-evidence:
     runs-on: ubuntu-latest
     steps:
