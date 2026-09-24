@@ -1,6 +1,6 @@
 # OpenBao bootstrap and operations
 
-Run these steps from an operator workstation over the private TLS endpoint. `BAO_TOKEN` is an operator bootstrap/admin token **on that workstation only**; it must never enter the API, worker, Compose environment, repository, or VDS persistent files. Do not run `bao login` on the VDS because the CLI token helper can persist a token. Keep unseal shares off the VDS and separate from snapshots. Use an off-host operator identity for later administration, then revoke the initial root token.
+Run these steps from an operator workstation over a private VPN or tightly controlled tunnel to the TLS endpoint. `BAO_TOKEN` is an operator bootstrap/admin token **on that workstation only**; it must never enter the API, worker, Compose environment, repository, or VDS persistent files. Do not run `bao login` on the VDS because the CLI token helper can persist a token. Keep unseal shares off the VDS and separate from snapshots. Use an off-host operator identity for later administration, then revoke the initial root token.
 
 The first deployment has one Raft node on the ShopAI VDS. `openbao.shopai.internal` is the stable application hostname. TLS CA and server key are operator-provisioned host files. The secret Docker network has no public ingress. Raft data uses a persistent named volume. Collect the declarative, HMAC-protected audit stream from container stdout to restricted off-host storage; `log_raw` stays false. Monitor audit delivery and disk capacity because an unusable audit device can block OpenBao requests.
 
