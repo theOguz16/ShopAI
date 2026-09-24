@@ -281,4 +281,29 @@ describe('database migrations', () => {
       'CREATE POLICY "anonymous_shopping_profiles_update_own"',
     );
   });
+  it('adds tenant-scoped source category mappings without overwriting source provenance', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0038_category_mapping.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('ADD COLUMN "source_category_name" text');
+    expect(migration).toContain('ADD COLUMN "source_category_provider" text');
+    expect(migration).toContain('CREATE TABLE "source_category_mappings"');
+    expect(migration).toContain(
+      'UNIQUE("merchant_id","connection_id","provider","source_category_id")',
+    );
+    expect(migration).toContain(
+      "CHECK (\"status\" in ('mapped','needs_mapping'))",
+    );
+    expect(migration).toContain(
+      'CREATE POLICY "tenant_source_category_mappings"',
+    );
+    expect(migration).toContain("('apparel', 'Giyim', NULL, true)");
+    expect(migration).toContain("('fishing', 'Balıkçılık', NULL, true)");
+    expect(migration).toContain("('sports', 'Spor', NULL, true)");
+  });
 });

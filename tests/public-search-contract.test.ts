@@ -36,12 +36,12 @@ describe('public product discovery contract', () => {
     });
   });
 
-  it('fails closed for attributes the current commerce engine cannot apply', () => {
-    expect(() =>
+  it('passes generic attributes to the commerce engine without category-specific code', () => {
+    expect(
       toInternalSearchInput(
         parseSearchProductsRequest({ attributes: { material: 'cotton' } }),
-      ),
-    ).toThrow('Desteklenmeyen ürün niteliği: material');
+      ).filters.attributes,
+    ).toEqual({ material: ['cotton'] });
   });
 
   it('returns only the stabilized public response fields', () => {
