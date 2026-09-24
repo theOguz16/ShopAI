@@ -220,6 +220,7 @@ export const products = pgTable(
     description: text('description').notNull().default(''),
     category: text('category').notNull(),
     sourceCategoryName: text('source_category_name'),
+    sourceCategoryProvider: text('source_category_provider'),
     sourceCategoryId: text('source_category_id'),
     sourceCategoryPath: jsonb('source_category_path').$type<string[]>(),
     descriptiveAttributes: jsonb('descriptive_attributes')

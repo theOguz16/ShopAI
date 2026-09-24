@@ -96,8 +96,8 @@ export const catalogItemSchema = z.object({
     .object({
       id: z.string().nullable(),
       name: z.string(),
-      path: z.array(z.string()),
-      provider: z.string(),
+      path: z.array(z.string()).nullable(),
+      provider: z.string().nullable(),
     })
     .strict()
     .optional(),

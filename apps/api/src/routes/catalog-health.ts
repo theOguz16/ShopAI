@@ -8,6 +8,7 @@ import {
   offers,
   products,
   setTenantContext,
+  sourceCategoryMappings,
   variants,
 } from '@shopai/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
@@ -47,6 +48,21 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
             activeProducts: sql<number>`(count(distinct ${products.id}) filter (where ${products.published} = true and ${offers.active} = true))::integer`,
             inStockProducts: sql<number>`(count(distinct ${products.id}) filter (where ${products.published} = true and ${offers.active} = true and ${inventory.available} = true))::integer`,
             missingImages: sql<number>`(count(distinct ${products.id}) filter (where coalesce(nullif(btrim(${products.imageUrl}), ''), '') = ''))::integer`,
+            unmappedProducts: sql<number>`(
+              count(distinct ${products.id}) filter (
+                where ${products.sourceCategoryId} is null
+                   or ${products.sourceCategoryProvider} is null
+                   or not exists (
+                     select 1
+                     from ${sourceCategoryMappings} scm
+                     where scm.merchant_id = ${products.merchantId}
+                       and scm.connection_id = ${products.connectionId}
+                       and scm.provider = ${products.sourceCategoryProvider}
+                       and scm.source_category_id = ${products.sourceCategoryId}
+                       and scm.status = 'mapped'
+                   )
+              )
+            )::integer`,
           })
           .from(products)
           .leftJoin(
@@ -71,6 +87,18 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
             ),
           )
           .where(eq(products.merchantId, merchantId));
+
+        const [mappingCounts] = await tx
+          .select({
+            unmappedCategories: sql<number>`count(*)::integer`,
+          })
+          .from(sourceCategoryMappings)
+          .where(
+            and(
+              eq(sourceCategoryMappings.merchantId, merchantId),
+              eq(sourceCategoryMappings.status, 'needs_mapping'),
+            ),
+          );
 
         const connectionRows = await tx
           .select({
@@ -127,6 +155,8 @@ export async function registerCatalogHealthRoutes(app: FastifyInstance) {
           inStockProducts: counts?.inStockProducts ?? 0,
           missingImages: counts?.missingImages ?? 0,
           missingPrices: Math.max(0, totalProducts - pricedProducts),
+          unmappedCategories: mappingCounts?.unmappedCategories ?? 0,
+          unmappedProducts: counts?.unmappedProducts ?? 0,
           lastSuccessfulSyncAt: latestSuccessfulSync?.toISOString() ?? null,
           lastSuccessfulSyncAgeMs: latestSuccessfulSync
             ? Math.max(0, now.getTime() - latestSuccessfulSync.getTime())

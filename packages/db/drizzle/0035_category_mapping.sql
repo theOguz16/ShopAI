@@ -3,9 +3,19 @@
 -- production application is intentionally outside this task.
 ALTER TABLE "products" ADD COLUMN "source_category_name" text;
 --> statement-breakpoint
-UPDATE "products"
-SET "source_category_name" = "category"
-WHERE "source_category_name" IS NULL;
+ALTER TABLE "products" ADD COLUMN "source_category_provider" text;
+--> statement-breakpoint
+UPDATE "products" AS p
+SET
+  "source_category_name" = p."category",
+  "source_category_provider" = c."provider"
+FROM "source_connections" c
+WHERE c."id" = p."connection_id"
+  AND c."merchant_id" = p."merchant_id"
+  AND (
+    p."source_category_name" IS NULL
+    OR p."source_category_provider" IS NULL
+  );
 --> statement-breakpoint
 CREATE INDEX "products_source_category"
 ON "products" ("merchant_id", "connection_id", "source_category_id");
@@ -140,7 +150,7 @@ SELECT DISTINCT ON (
 )
   p."merchant_id",
   p."connection_id",
-  c."provider",
+  COALESCE(p."source_category_provider", c."provider"),
   p."source_category_id",
   COALESCE(p."source_category_name", p."category"),
   p."source_category_path",

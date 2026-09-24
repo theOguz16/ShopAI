@@ -26,6 +26,8 @@ import {
   requireSameOrigin,
 } from './plugins/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
+import { registerCatalogHealthRoutes } from './routes/catalog-health.js';
+import { registerCategoryMappingRoutes } from './routes/category-mappings.js';
 import { registerConversionRoutes } from './routes/conversions.js';
 import { registerImportRoutes } from './routes/imports.js';
 import { registerInteractionEventRoutes } from './routes/interaction-events.js';
@@ -243,6 +245,8 @@ export async function buildApp(
   await registerImportRoutes(app, env);
   await registerInteractionEventRoutes(app, resolvedServices);
   await registerProductRoutes(app);
+  await registerCatalogHealthRoutes(app);
+  await registerCategoryMappingRoutes(app);
   await registerProductDetailRoutes(app, resolvedServices);
   await registerRedirectRoutes(app, resolvedServices);
   await registerAnalyticsRoutes(app, env);

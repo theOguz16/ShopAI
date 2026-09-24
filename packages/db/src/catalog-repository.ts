@@ -9,11 +9,11 @@ import {
   STOCK_STALE_AFTER_MS,
   stockStatus,
 } from '@shopai/commerce';
+import { buildCanonicalFacetValues } from '@shopai/commerce/category-facets';
 import { catalogItemSchema } from '@shopai/contracts';
 import {
   and,
   asc,
-  count,
   eq,
   gt,
   gte,
@@ -23,6 +23,11 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import {
+  categories as cat,
+  categoryFacets as cf,
+  sourceCategoryMappings as cm,
+} from './category-model.js';
 import type { Database } from './client.js';
 import {
   inventory as i,
@@ -35,9 +40,11 @@ import { requireTenantId } from './tenant-context.js';
 
 export class PostgresCatalogRepository implements CatalogRepository {
   constructor(private readonly db: Database) {}
+
   async health() {
     await this.db.execute(sql`select 1`);
   }
+
   async search({
     textTerms,
     filters: f,
@@ -47,9 +54,8 @@ export class PostgresCatalogRepository implements CatalogRepository {
     matchNone,
     tenantId,
   }: ResolvedSearchRequest & { tenantId?: string }) {
-    // Consumer discovery deliberately has no tenant scope; the public DB role
-    // and is_public gate expose only explicitly public, published catalog rows.
     if (tenantId !== undefined) requireTenantId(tenantId);
+
     const predicates = [
       eq(m.active, true),
       eq(m.isPublic, true),
@@ -58,16 +64,31 @@ export class PostgresCatalogRepository implements CatalogRepository {
       eq(o.currency, f.currency),
     ];
     if (matchNone) predicates.push(sql`false`);
+
     const normalizedDocument = sql<string>`translate(lower(${p.title} || ' ' || ${p.description}), 'ıİğĞüÜşŞöÖçÇ', 'iigguussoocc')`;
     for (const term of textTerms)
       predicates.push(sql`${normalizedDocument} like ${`%${term}%`}`);
     if (merchantIds.length) predicates.push(inArray(m.id, merchantIds));
-    if (f.category)
-      predicates.push(eq(p.category, normalizeCategory(f.category)));
-    if (f.excludedCategories.length)
-      predicates.push(
-        notInArray(p.category, f.excludedCategories.map(normalizeCategory)),
-      );
+
+    if (f.category) {
+      const category = normalizeCategory(f.category);
+      predicates.push(sql`
+        ${cm.status} = 'mapped'
+        AND ${cat.active} = true
+        AND (${cat.slug} = ${category} OR ${cat.parentSlug} = ${category})
+      `);
+    }
+    for (const excludedCategory of f.excludedCategories) {
+      const category = normalizeCategory(excludedCategory);
+      predicates.push(sql`
+        NOT (
+          ${cm.status} = 'mapped'
+          AND ${cat.active} = true
+          AND (${cat.slug} = ${category} OR ${cat.parentSlug} = ${category})
+        )
+      `);
+    }
+
     if (f.sizes.length)
       predicates.push(inArray(v.size, f.sizes.map(normalizeSize)));
     if (f.excludedSizes.length)
@@ -78,6 +99,19 @@ export class PostgresCatalogRepository implements CatalogRepository {
       predicates.push(
         notInArray(v.color, f.excludedColors.map(normalizeColor)),
       );
+
+    for (const [key, values] of Object.entries(f.attributes ?? {})) {
+      const alternatives = values.map((value) => {
+        const serialized = JSON.stringify([{ key, value }]);
+        return sql`(
+          ${v.options} @> ${serialized}::jsonb
+          OR ${p.descriptiveAttributes} @> ${serialized}::jsonb
+        )`;
+      });
+      const attributePredicate = or(...alternatives);
+      if (attributePredicate) predicates.push(attributePredicate);
+    }
+
     if (f.minPriceMinor !== undefined)
       predicates.push(gte(o.priceMinor, f.minPriceMinor));
     if (f.maxPriceMinor !== undefined)
@@ -88,6 +122,7 @@ export class PostgresCatalogRepository implements CatalogRepository {
         gte(i.fetchedAt, new Date(Date.now() - STOCK_STALE_AFTER_MS)),
       );
     }
+
     const decodedCursor = decodeSearchCursor(cursor);
     const cursorPredicate = decodedCursor
       ? or(
@@ -98,12 +133,15 @@ export class PostgresCatalogRepository implements CatalogRepository {
           ),
         )
       : undefined;
+
     return this.db.transaction(async (tx) => {
-      // Public search runs as the restricted DB role, even when the pool login
-      // is the management role. SET LOCAL is cleared when this transaction ends.
       await tx.execute(sql`set local role shopai_public`);
+
       const categoryFacets = await tx
-        .select({ value: p.category, count: count() })
+        .select({
+          value: cm.canonicalCategorySlug,
+          count: sql<number>`count(distinct ${p.id})::integer`,
+        })
         .from(o)
         .innerJoin(m, eq(m.id, o.merchantId))
         .innerJoin(
@@ -115,41 +153,86 @@ export class PostgresCatalogRepository implements CatalogRepository {
           and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
         )
         .innerJoin(i, and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)))
-        .where(and(...predicates))
-        .groupBy(p.category)
-        .orderBy(asc(p.category));
-      const sizeFacets = await tx
-        .select({ value: v.size, count: count() })
-        .from(o)
-        .innerJoin(m, eq(m.id, o.merchantId))
-        .innerJoin(
-          v,
-          and(eq(v.id, o.variantId), eq(v.merchantId, o.merchantId)),
+        .leftJoin(
+          cm,
+          and(
+            eq(cm.merchantId, p.merchantId),
+            eq(cm.connectionId, p.connectionId),
+            eq(cm.provider, p.sourceCategoryProvider),
+            eq(cm.sourceCategoryId, p.sourceCategoryId),
+          ),
         )
-        .innerJoin(
-          p,
-          and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
+        .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
+        .where(
+          and(
+            ...predicates,
+            eq(cm.status, 'mapped'),
+            eq(cat.active, true),
+          ),
         )
-        .innerJoin(i, and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)))
-        .where(and(...predicates))
-        .groupBy(v.size)
-        .orderBy(asc(v.size));
-      const colorFacets = await tx
-        .select({ value: v.color, count: count() })
-        .from(o)
-        .innerJoin(m, eq(m.id, o.merchantId))
-        .innerJoin(
-          v,
-          and(eq(v.id, o.variantId), eq(v.merchantId, o.merchantId)),
-        )
-        .innerJoin(
-          p,
-          and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
-        )
-        .innerJoin(i, and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)))
-        .where(and(...predicates))
-        .groupBy(v.color)
-        .orderBy(asc(v.color));
+        .groupBy(cm.canonicalCategorySlug)
+        .orderBy(asc(cm.canonicalCategorySlug));
+
+      let attributeFacets: ReturnType<typeof buildCanonicalFacetValues> = {};
+      if (f.category) {
+        const category = normalizeCategory(f.category);
+        const definitions = await tx
+          .select({
+            key: cf.key,
+            label: cf.label,
+            attributeScope: cf.attributeScope,
+            attributeKey: cf.attributeKey,
+            unit: cf.unit,
+            active: cf.active,
+          })
+          .from(cf)
+          .innerJoin(cat, eq(cat.slug, cf.categorySlug))
+          .where(
+            and(
+              eq(cf.active, true),
+              eq(cat.active, true),
+              or(eq(cf.categorySlug, category), eq(cat.parentSlug, category)),
+            ),
+          )
+          .orderBy(asc(cf.position), asc(cf.key));
+
+        const facetRecords = await tx
+          .select({
+            productAttributes: p.descriptiveAttributes,
+            variantOptions: v.options,
+          })
+          .from(o)
+          .innerJoin(m, eq(m.id, o.merchantId))
+          .innerJoin(
+            v,
+            and(eq(v.id, o.variantId), eq(v.merchantId, o.merchantId)),
+          )
+          .innerJoin(
+            p,
+            and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
+          )
+          .innerJoin(
+            i,
+            and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)),
+          )
+          .leftJoin(
+            cm,
+            and(
+              eq(cm.merchantId, p.merchantId),
+              eq(cm.connectionId, p.connectionId),
+              eq(cm.provider, p.sourceCategoryProvider),
+              eq(cm.sourceCategoryId, p.sourceCategoryId),
+            ),
+          )
+          .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
+          .where(and(...predicates));
+
+        attributeFacets = buildCanonicalFacetValues(
+          definitions,
+          facetRecords,
+        );
+      }
+
       const rows = await tx
         .select({
           productId: p.id,
@@ -160,6 +243,15 @@ export class PostgresCatalogRepository implements CatalogRepository {
           title: p.title,
           description: p.description,
           category: p.category,
+          sourceCategoryId: p.sourceCategoryId,
+          sourceCategoryName: p.sourceCategoryName,
+          sourceCategoryPath: p.sourceCategoryPath,
+          sourceCategoryProvider: p.sourceCategoryProvider,
+          mappingStatus: cm.status,
+          canonicalCategorySlug: cm.canonicalCategorySlug,
+          canonicalCategoryLabel: cat.name,
+          canonicalCategoryParent: cat.parentSlug,
+          canonicalCategoryActive: cat.active,
           imageUrl: sql<string | null>`coalesce(${v.imageUrl}, ${p.imageUrl})`,
           imageAlt: sql<string | null>`coalesce(${v.imageAlt}, ${p.imageAlt})`,
           size: v.size,
@@ -187,13 +279,43 @@ export class PostgresCatalogRepository implements CatalogRepository {
           and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
         )
         .innerJoin(i, and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)))
+        .leftJoin(
+          cm,
+          and(
+            eq(cm.merchantId, p.merchantId),
+            eq(cm.connectionId, p.connectionId),
+            eq(cm.provider, p.sourceCategoryProvider),
+            eq(cm.sourceCategoryId, p.sourceCategoryId),
+          ),
+        )
+        .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
         .where(and(...predicates, cursorPredicate))
         .orderBy(asc(o.priceMinor), asc(o.id))
         .limit(limit + 1);
+
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit).map((r) =>
         catalogItemSchema.parse({
           ...r,
+          sourceCategory: r.sourceCategoryName
+            ? {
+                id: r.sourceCategoryId,
+                name: r.sourceCategoryName,
+                path: r.sourceCategoryPath,
+                provider: r.sourceCategoryProvider,
+              }
+            : undefined,
+          canonicalCategory:
+            r.mappingStatus === 'mapped' &&
+            r.canonicalCategorySlug &&
+            r.canonicalCategoryLabel &&
+            r.canonicalCategoryActive
+              ? {
+                  key: r.canonicalCategorySlug,
+                  label: r.canonicalCategoryLabel,
+                  parentKey: r.canonicalCategoryParent,
+                }
+              : null,
           stockStatus: stockStatus(
             r.available,
             r.stockObservedAt?.toISOString() ?? null,
@@ -214,9 +336,14 @@ export class PostgresCatalogRepository implements CatalogRepository {
               })
             : null,
         facets: {
-          categories: categoryFacets,
-          sizes: sizeFacets,
-          colors: colorFacets,
+          categories: categoryFacets.flatMap((facet) =>
+            facet.value ? [{ value: facet.value, count: facet.count }] : [],
+          ),
+          sizes: attributeFacets.size?.values ?? [],
+          colors: attributeFacets.color?.values ?? [],
+          ...(Object.keys(attributeFacets).length
+            ? { attributes: attributeFacets }
+            : {}),
         },
       };
     });

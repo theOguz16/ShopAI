@@ -110,6 +110,7 @@ export async function importCatalog(
         description: row.description,
         category: normalizeCategory(row.category),
         sourceCategoryName: row.category,
+        sourceCategoryProvider: connection.provider,
         sourceCategoryId: row.sourceCategoryId ?? null,
         sourceCategoryPath: row.sourceCategoryPath ?? null,
         descriptiveAttributes: canonicalCatalogAttributes(
