@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('database migrations', () => {
-  it('runs generic variants before scoped secret lifecycle and provider backend', async () => {
+  it('runs generic variants before scoped secret lifecycle, provider backend and legacy backfill', async () => {
     const journal = JSON.parse(
       await readFile(
         new URL('../packages/db/drizzle/meta/_journal.json', import.meta.url),
@@ -10,12 +10,34 @@ describe('database migrations', () => {
       ),
     ) as { entries: { idx: number; tag: string }[] };
     expect(
-      journal.entries.slice(-3).map(({ idx, tag }) => ({ idx, tag })),
+      journal.entries.slice(-4).map(({ idx, tag }) => ({ idx, tag })),
     ).toEqual([
       { idx: 33, tag: '0034_generic_product_variants' },
       { idx: 34, tag: '0035_connector_secret_lifecycle' },
       { idx: 35, tag: '0036_connector_secret_backend' },
+      { idx: 36, tag: '0037_connector_secret_legacy_backfill' },
     ]);
+  });
+  it('backfills legacy scoped-file lifecycle rows idempotently without touching connection state', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0037_connector_secret_legacy_backfill.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(migration).toContain("credentials_ref LIKE 'secret://%'");
+    expect(migration).toContain("c.provider IN ('woocommerce', 'trendyol')");
+    expect(migration).toContain(
+      'WHERE s.connection_id = c.id AND s.reference = c.credentials_ref',
+    );
+    expect(migration).toContain(
+      'WHERE s.connection_id = c.id AND s.version = 1',
+    );
+    expect(migration).toContain("1, 'active'");
+    expect(migration).not.toMatch(/update|delete|drop/i);
+    expect(migration).not.toContain('consumerKey');
+    expect(migration).not.toContain('consumerSecret');
   });
   it('separates and backfills the source sync watermark', async () => {
     const migration = await readFile(

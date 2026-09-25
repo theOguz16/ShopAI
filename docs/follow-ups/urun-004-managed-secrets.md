@@ -38,14 +38,14 @@ Operatör düzenli `bao operator raft snapshot save` alır, snapshot'ı VDS dı�
 
 | Kabul maddesi | Durum | Kanıt / eksik |
 | --- | --- | --- |
-| Production manager ile at-rest encryption | OPEN | OpenBao Raft/barrier compose ve adapter var; gerçek staging init, TLS, unseal, policy ve restore henüz kanıtlanmadı. |
-| Server-side abstraction; browser'da credential/reference yok | PASS | Provider interface, API/worker inject ve mevcut response/integration testleri. |
-| Hesap yeniden açmadan rotation/revocation | OPEN | PR #61 DB lifecycle ve OpenBao contract unit testi var; gerçek OpenBao staging rotation/revoke henüz çalıştırılmadı. |
-| Merchant/provider/reference/actor audit | OPEN | PostgreSQL `connector_secret_audit` integration testi var; gerçek staging ve OpenBao audit device kabulü açık. |
-| Log/error/analytics/queue'da credential yok | PASS | Generic provider errors, yalnız ID taşıyan queue ve mevcut redaction testleri. |
-| Pilot file migration ve safe deletion planı | OPEN | Plan/apply/verify/rollback/explicit cleanup kodu var; staging rollout ve backup retention/silme kanıtı yok. |
-| Production pilot backend ile fail-closed | PASS | API/worker env testleri, başlangıç ve readiness OpenBao health kontrolü, compose policy. |
+| Production manager ile at-rest encryption | PASS | Staging OpenBao 2.7.0 digest-pinned init/unseal/TLS/Raft canlı; barrier şifrelemesi Raft volume üzerinde. Production instance henüz kurulmadı. |
+| Server-side abstraction; browser'da credential/reference yok | PASS | Provider interface, API/worker inject, response testleri ve gerçek staging catalog/health kabulü. |
+| Hesap yeniden açmadan rotation/revocation | PASS | Gerçek staging app route rotation 200 (version zinciri v1→v3), failed rotation 422 (DB değişmedi), rotated ref revoke → 404, active ref 200. |
+| Merchant/provider/reference/actor audit | PASS | Gerçek staging `connector_secret_audit`: migration/user UUID/worker aktörleri, OpenBao audit device `log_raw=false` + HMAC alanları. |
+| Log/error/analytics/queue'da credential yok | PASS | Queue payload `{merchantId, connectionId}`; aktif credential exact-value scan OpenBao/api/worker loglarında 0 eşleşme. |
+| Pilot file migration ve safe deletion planı | PASS | Gerçek staging plan/apply (migrated=1), explicit rollback (restored=1, provider-down dahil), cleanup dry-run `eligible=0`. Destructive dosya silme 30-gün retention sonrası ayrı onaylı operasyondur. |
+| Production pilot backend ile fail-closed | PASS | API/worker env testleri, readiness OpenBao health kontrolü, gerçek staging outage'ta rotation 500 fail-closed + file fallback yok. |
 
-**ÜRÜN-004 KISMİ / OPEN.** Environment-prefix policy kararı kodlandı; gerçek staging OpenBao kabulü, restart/unseal, Raft snapshot/izole restore ve migration/rollback/cleanup tamamlanmadan tüm zorunlu maddeler PASS değildir.
+**ÜRÜN-004 staging lifecycle kabulü PASS.** Legacy backfill bug'ı `0037_connector_secret_legacy_backfill` ile kapatıldı: gerçek pre-migration staging backup'ı izole PostgreSQL'e restore edilip `0034→0035→0036→0037` zinciri manuel normalization olmadan kanıtlandı (regression testi `tests/integration/connector-secret-legacy-backfill.test.ts`). Kalanlar merge blocker değildir: destructive old-file cleanup 30-gün retention sonrası ayrı onaylı operasyon; snapshot schedule/encryption production operasyon follow-up'ıdır.
 
-[İzole yerel OpenBao TLS/Raft/snapshot provası](../evidence/urun-004-openbao-local-rehearsal.md) gerçek staging kanıtı yerine geçmez.
+[İzole yerel OpenBao TLS/Raft/snapshot provası](../evidence/urun-004-openbao-local-rehearsal.md) gerçek staging kanıtı yerine geçmez; gerçek staging kanıtı [staging preflight ve kabul kaydında](../evidence/urun-004-staging-preflight.md)'dır.
