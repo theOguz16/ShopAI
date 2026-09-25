@@ -15,12 +15,14 @@ import {
   and,
   asc,
   eq,
+  exists,
   gt,
   gte,
   inArray,
   lte,
   notInArray,
   or,
+  type SQL,
   sql,
 } from 'drizzle-orm';
 import {
@@ -71,23 +73,50 @@ export class PostgresCatalogRepository implements CatalogRepository {
       predicates.push(sql`${normalizedDocument} like ${`%${term}%`}`);
     if (merchantIds.length) predicates.push(inArray(m.id, merchantIds));
 
+    // Canonical category predicates reference the mapping join and are applied
+    // outside the search base subquery (see the transaction below). The rows
+    // query uses the correlated EXISTS forms: letting the planner reach the
+    // mapping tables through a join predicate lets it reorder the join tree
+    // into per-row RLS re-evaluation on large catalogs.
+    const mappingPredicates: SQL[] = [];
+    const rowsMappingPredicates: SQL[] = [];
+    const mappedCategoryMatches = (category: string) =>
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(cm)
+          .innerJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
+          .where(
+            and(
+              eq(cm.merchantId, p.merchantId),
+              eq(cm.connectionId, p.connectionId),
+              eq(cm.provider, p.sourceCategoryProvider),
+              eq(cm.sourceCategoryId, p.sourceCategoryId),
+              eq(cm.status, 'mapped'),
+              eq(cat.active, true),
+              or(eq(cat.slug, category), eq(cat.parentSlug, category)),
+            ),
+          ),
+      );
     if (f.category) {
       const category = normalizeCategory(f.category);
-      predicates.push(sql`
+      mappingPredicates.push(sql`
         ${cm.status} = 'mapped'
         AND ${cat.active} = true
         AND (${cat.slug} = ${category} OR ${cat.parentSlug} = ${category})
       `);
+      rowsMappingPredicates.push(mappedCategoryMatches(category));
     }
     for (const excludedCategory of f.excludedCategories) {
       const category = normalizeCategory(excludedCategory);
-      predicates.push(sql`
+      mappingPredicates.push(sql`
         NOT (
           ${cm.status} = 'mapped'
           AND ${cat.active} = true
           AND (${cat.slug} = ${category} OR ${cat.parentSlug} = ${category})
         )
       `);
+      rowsMappingPredicates.push(sql`not ${mappedCategoryMatches(category)}`);
     }
     if (legacyCategory)
       predicates.push(eq(p.category, normalizeCategory(legacyCategory)));
@@ -162,10 +191,22 @@ export class PostgresCatalogRepository implements CatalogRepository {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`set local role shopai_public`);
 
-      const categoryFacets = await tx
+      // The mapping joins must stay outside these base subqueries: a LIMIT in
+      // the subquery is an optimizer fence that keeps the base join tree in the
+      // shape the RLS policies can hoist into hashed subplans. Letting the
+      // planner inline the mapping join made it re-evaluate those policies per
+      // row on large catalogs (a 10k-product facet query went from ~0.3s to
+      // over 30 minutes). drizzle drops offset(0) (falsy), so the fence is a
+      // limit that exceeds any real public catalog.
+      const searchFenceLimit = Number.MAX_SAFE_INTEGER;
+
+      const categoryFacetsBase = tx
         .select({
-          value: cm.canonicalCategorySlug,
-          count: sql<number>`count(distinct ${p.id})::integer`,
+          productId: p.id,
+          merchantId: p.merchantId,
+          connectionId: p.connectionId,
+          sourceCategoryProvider: p.sourceCategoryProvider,
+          sourceCategoryId: p.sourceCategoryId,
         })
         .from(o)
         .innerJoin(m, eq(m.id, o.merchantId))
@@ -178,18 +219,32 @@ export class PostgresCatalogRepository implements CatalogRepository {
           and(eq(p.id, v.productId), eq(p.merchantId, v.merchantId)),
         )
         .innerJoin(i, and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)))
-        .leftJoin(
+        .where(and(...predicates))
+        .limit(searchFenceLimit)
+        .as('category_facets_base');
+
+      const categoryFacets = await tx
+        .select({
+          value: cm.canonicalCategorySlug,
+          count: sql<number>`count(distinct ${categoryFacetsBase.productId})::integer`,
+        })
+        .from(categoryFacetsBase)
+        .innerJoin(
           cm,
           and(
-            eq(cm.merchantId, p.merchantId),
-            eq(cm.connectionId, p.connectionId),
-            eq(cm.provider, p.sourceCategoryProvider),
-            eq(cm.sourceCategoryId, p.sourceCategoryId),
+            eq(cm.merchantId, categoryFacetsBase.merchantId),
+            eq(cm.connectionId, categoryFacetsBase.connectionId),
+            eq(cm.provider, categoryFacetsBase.sourceCategoryProvider),
+            eq(cm.sourceCategoryId, categoryFacetsBase.sourceCategoryId),
           ),
         )
-        .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
+        .innerJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
         .where(
-          and(...predicates, eq(cm.status, 'mapped'), eq(cat.active, true)),
+          and(
+            ...mappingPredicates,
+            eq(cm.status, 'mapped'),
+            eq(cat.active, true),
+          ),
         )
         .groupBy(cm.canonicalCategorySlug)
         .orderBy(asc(cm.canonicalCategorySlug));
@@ -217,10 +272,14 @@ export class PostgresCatalogRepository implements CatalogRepository {
           )
           .orderBy(asc(cf.position), asc(cf.key));
 
-        const facetRecords = await tx
+        const facetRecordsBase = tx
           .select({
             productAttributes: p.descriptiveAttributes,
             variantOptions: v.options,
+            merchantId: p.merchantId,
+            connectionId: p.connectionId,
+            sourceCategoryProvider: p.sourceCategoryProvider,
+            sourceCategoryId: p.sourceCategoryId,
           })
           .from(o)
           .innerJoin(m, eq(m.id, o.merchantId))
@@ -236,17 +295,33 @@ export class PostgresCatalogRepository implements CatalogRepository {
             i,
             and(eq(i.offerId, o.id), eq(i.merchantId, o.merchantId)),
           )
-          .leftJoin(
+          .where(and(...predicates))
+          .limit(searchFenceLimit)
+          .as('attribute_facets_base');
+
+        const facetRecords = await tx
+          .select({
+            productAttributes: facetRecordsBase.productAttributes,
+            variantOptions: facetRecordsBase.variantOptions,
+          })
+          .from(facetRecordsBase)
+          .innerJoin(
             cm,
             and(
-              eq(cm.merchantId, p.merchantId),
-              eq(cm.connectionId, p.connectionId),
-              eq(cm.provider, p.sourceCategoryProvider),
-              eq(cm.sourceCategoryId, p.sourceCategoryId),
+              eq(cm.merchantId, facetRecordsBase.merchantId),
+              eq(cm.connectionId, facetRecordsBase.connectionId),
+              eq(cm.provider, facetRecordsBase.sourceCategoryProvider),
+              eq(cm.sourceCategoryId, facetRecordsBase.sourceCategoryId),
             ),
           )
-          .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
-          .where(and(...predicates));
+          .innerJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
+          .where(
+            and(
+              ...mappingPredicates,
+              eq(cm.status, 'mapped'),
+              eq(cat.active, true),
+            ),
+          );
 
         attributeFacets = buildCanonicalFacetValues(definitions, facetRecords);
       }
@@ -307,7 +382,7 @@ export class PostgresCatalogRepository implements CatalogRepository {
           ),
         )
         .leftJoin(cat, eq(cat.slug, cm.canonicalCategorySlug))
-        .where(and(...predicates, cursorPredicate))
+        .where(and(...predicates, ...rowsMappingPredicates, cursorPredicate))
         .orderBy(asc(o.priceMinor), asc(o.id))
         .limit(limit + 1);
 
