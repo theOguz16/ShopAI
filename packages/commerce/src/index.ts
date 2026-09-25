@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  type CatalogAttribute,
   type CatalogItem,
   type ParserTelemetry,
   type SearchFacets,
@@ -14,6 +15,8 @@ export * from './redirects.js';
 export type ResolvedSearchRequest = SearchRequest & {
   textTerms: string[];
   matchNone: boolean;
+  /** Parser-hint or internal category word; filters the legacy products.category field, not the canonical tree. */
+  legacyCategory?: string;
 };
 export type CatalogSearchPage = {
   items: CatalogItem[];
@@ -239,7 +242,11 @@ function facets(items: readonly CatalogItem[]): SearchFacets {
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => a.value.localeCompare(b.value, 'tr-TR'));
   return {
-    categories: collect(items.map((item) => item.category)),
+    categories: collect(
+      items.flatMap((item) =>
+        item.canonicalCategory ? [item.canonicalCategory.key] : [],
+      ),
+    ),
     sizes: collect(items.map((item) => item.size)),
     colors: collect(items.map((item) => item.color)),
   };
@@ -253,7 +260,7 @@ export class SearchProducts {
   ) {}
   async execute(
     input: unknown,
-    context: { merchantIds?: string[] } = {},
+    context: { merchantIds?: string[]; legacyCategory?: string } = {},
   ): Promise<SearchResponse> {
     // Preserve explicit input fields so parser hints never override UI choices.
     const raw = searchRequestSchema.partial().parse(input);
@@ -280,6 +287,15 @@ export class SearchProducts {
       ...hints.filters,
       ...original.filters,
     };
+    // Explicit request categories are canonical filters resolved through the
+    // mapping table. Parser hints and internal callers (similar products) use
+    // the legacy products.category field so unmapped products stay discoverable
+    // in free-text search (ÜRÜN-006).
+    const hasExplicitCategory = original.filters?.category !== undefined;
+    if (!hasExplicitCategory) filters.category = undefined;
+    const legacyCategory = hasExplicitCategory
+      ? undefined
+      : (hints.filters.category ?? context.legacyCategory);
     if (original.filters?.colors)
       filters.excludedColors = (filters.excludedColors ?? []).filter(
         (color) =>
@@ -319,7 +335,11 @@ export class SearchProducts {
       throw new Error('Alt fiyat üst fiyattan büyük olamaz.');
     const page = await this.repository.search({
       ...parsed,
-      textTerms: extractSearchTerms(parsed.query, parsed.filters),
+      legacyCategory,
+      textTerms: extractSearchTerms(parsed.query, {
+        ...parsed.filters,
+        category: parsed.filters.category ?? legacyCategory,
+      }),
       matchNone: Boolean(
         context.merchantIds &&
           request.merchantIds.length &&
@@ -342,6 +362,7 @@ export type MemoryRecord = CatalogItem & {
   published: boolean;
   merchantActive: boolean;
   offerActive: boolean;
+  productAttributes?: CatalogAttribute[];
 };
 export class MemoryCatalogRepository implements CatalogRepository {
   constructor(private readonly records: readonly MemoryRecord[]) {}
@@ -354,6 +375,7 @@ export class MemoryCatalogRepository implements CatalogRepository {
     cursor,
     textTerms,
     matchNone,
+    legacyCategory,
   }: ResolvedSearchRequest): Promise<CatalogSearchPage> {
     const after = decodeSearchCursor(cursor);
     const matching = this.records
@@ -368,17 +390,44 @@ export class MemoryCatalogRepository implements CatalogRepository {
         const searchable = normalizeTurkish(`${r.title} ${r.description}`);
         return textTerms.every((term) => searchable.includes(term));
       })
+      .filter((r) => {
+        if (!f.category) return true;
+        const category = normalizeCategory(f.category);
+        return (
+          r.canonicalCategory?.key === category ||
+          r.canonicalCategory?.parentKey === category
+        );
+      })
       .filter(
         (r) =>
-          !f.category ||
-          normalizeCategory(r.category) === normalizeCategory(f.category),
+          !legacyCategory ||
+          normalizeCategory(r.category) === normalizeCategory(legacyCategory),
       )
       .filter(
         (r) =>
-          !f.excludedCategories.some(
-            (category) =>
-              normalizeCategory(category) === normalizeCategory(r.category),
-          ),
+          !f.excludedCategories.some((category) => {
+            const excluded = normalizeCategory(category);
+            return (
+              r.canonicalCategory?.key === excluded ||
+              r.canonicalCategory?.parentKey === excluded
+            );
+          }),
+      )
+      .filter((r) =>
+        Object.entries(f.attributes ?? {}).every(([key, values]) => {
+          const normalizedKey = key.toLocaleLowerCase('en-US');
+          const attributes = [
+            ...(r.productAttributes ?? []),
+            ...(r.variantOptions ?? []),
+          ];
+          return values.some((value) =>
+            attributes.some(
+              (attribute) =>
+                attribute.key.toLocaleLowerCase('en-US') === normalizedKey &&
+                attribute.value === value,
+            ),
+          );
+        }),
       )
       .filter(
         (r) =>
@@ -466,6 +515,11 @@ export const demoRecords: MemoryRecord[] = [
   description:
     'Sentetik geliştirme ürünü; gerçek satış veya canlı stok değildir.',
   category: 'tshirt',
+  canonicalCategory: {
+    key: 'tshirt',
+    label: 'Tişört',
+    parentKey: 'apparel',
+  },
   imageUrl: null,
   imageAlt: null,
   size: String(size),

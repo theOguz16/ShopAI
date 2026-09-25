@@ -37,6 +37,12 @@ const publicLinkSchema = z
 export const searchFiltersSchema = z
   .object({
     category: z.string().trim().min(1).max(80).optional(),
+    attributes: z
+      .record(
+        z.string().trim().min(1).max(80),
+        z.array(z.string().trim().min(1).max(120)).min(1).max(20),
+      )
+      .optional(),
     sizes: z.array(z.string().min(1).max(20)).max(20).default([]),
     colors: z.array(z.string().min(1).max(40)).max(20).default([]),
     excludedSizes: z.array(z.string().min(1).max(20)).max(20).default([]),
@@ -86,6 +92,24 @@ export const catalogItemSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   category: z.string(),
+  sourceCategory: z
+    .object({
+      id: z.string().nullable(),
+      name: z.string(),
+      path: z.array(z.string()).nullable(),
+      provider: z.string().nullable(),
+    })
+    .strict()
+    .optional(),
+  canonicalCategory: z
+    .object({
+      key: z.string().min(1),
+      label: z.string().min(1),
+      parentKey: z.string().nullable(),
+    })
+    .strict()
+    .nullable()
+    .optional(),
   imageUrl: z
     .string()
     .url()
@@ -114,10 +138,19 @@ export const facetValueSchema = z.object({
   value: z.string().min(1),
   count: z.number().int().nonnegative(),
 });
+export const attributeFacetSchema = z
+  .object({
+    label: z.string().min(1),
+    unit: z.string().min(1).nullable(),
+    values: z.array(facetValueSchema),
+  })
+  .strict();
+
 export const searchFacetsSchema = z.object({
   categories: z.array(facetValueSchema),
   sizes: z.array(facetValueSchema),
   colors: z.array(facetValueSchema),
+  attributes: z.record(z.string().min(1), attributeFacetSchema).optional(),
 });
 export type SearchFacets = z.infer<typeof searchFacetsSchema>;
 export const parserTelemetrySchema = z.object({

@@ -219,6 +219,8 @@ export const products = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     category: text('category').notNull(),
+    sourceCategoryName: text('source_category_name'),
+    sourceCategoryProvider: text('source_category_provider'),
     sourceCategoryId: text('source_category_id'),
     sourceCategoryPath: jsonb('source_category_path').$type<string[]>(),
     descriptiveAttributes: jsonb('descriptive_attributes')
@@ -243,6 +245,11 @@ export const products = pgTable(
       foreignColumns: [connections.merchantId, connections.id],
     }),
     index('products_public_category').on(t.published, t.category),
+    index('products_source_category').on(
+      t.merchantId,
+      t.connectionId,
+      t.sourceCategoryId,
+    ),
   ],
 );
 export const variants = pgTable(

@@ -11,6 +11,7 @@ import {
 } from '@shopai/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
+import { sourceCategoryMappings } from './category-model.js';
 import {
   connections,
   importRuns,
@@ -108,6 +109,8 @@ export async function importCatalog(
         title: row.title,
         description: row.description,
         category: normalizeCategory(row.category),
+        sourceCategoryName: row.category,
+        sourceCategoryProvider: connection.provider,
         sourceCategoryId: row.sourceCategoryId ?? null,
         sourceCategoryPath: row.sourceCategoryPath ?? null,
         descriptiveAttributes: canonicalCatalogAttributes(
@@ -118,6 +121,31 @@ export async function importCatalog(
         observedAt,
         fetchedAt,
       };
+      if (row.sourceCategoryId) {
+        await tx
+          .insert(sourceCategoryMappings)
+          .values({
+            merchantId: job.merchantId,
+            connectionId: job.connectionId,
+            provider: connection.provider,
+            sourceCategoryId: row.sourceCategoryId,
+            sourceCategoryName: row.category,
+            sourceCategoryPath: row.sourceCategoryPath ?? null,
+            status: 'needs_mapping',
+          })
+          .onConflictDoUpdate({
+            target: [
+              sourceCategoryMappings.merchantId,
+              sourceCategoryMappings.connectionId,
+              sourceCategoryMappings.provider,
+              sourceCategoryMappings.sourceCategoryId,
+            ],
+            set: {
+              sourceCategoryName: row.category,
+              sourceCategoryPath: row.sourceCategoryPath ?? null,
+            },
+          });
+      }
       await tx
         .insert(products)
         .values({
@@ -270,6 +298,7 @@ function assertConsistentProductRows(job: ImportJob) {
     const identity = JSON.stringify([
       row.title.trim(),
       row.description,
+      row.category.trim(),
       normalizeCategory(row.category),
       row.sourceCategoryId ?? null,
       row.sourceCategoryPath ?? null,

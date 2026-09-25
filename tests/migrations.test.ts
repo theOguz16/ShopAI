@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('database migrations', () => {
-  it('runs generic variants before scoped secret lifecycle, provider backend and legacy backfill', async () => {
+  it('runs generic variants before scoped secret lifecycle, provider backend, legacy backfill and category mapping', async () => {
     const journal = JSON.parse(
       await readFile(
         new URL('../packages/db/drizzle/meta/_journal.json', import.meta.url),
@@ -10,12 +10,13 @@ describe('database migrations', () => {
       ),
     ) as { entries: { idx: number; tag: string }[] };
     expect(
-      journal.entries.slice(-4).map(({ idx, tag }) => ({ idx, tag })),
+      journal.entries.slice(-5).map(({ idx, tag }) => ({ idx, tag })),
     ).toEqual([
       { idx: 33, tag: '0034_generic_product_variants' },
       { idx: 34, tag: '0035_connector_secret_lifecycle' },
       { idx: 35, tag: '0036_connector_secret_backend' },
       { idx: 36, tag: '0037_connector_secret_legacy_backfill' },
+      { idx: 37, tag: '0038_category_mapping' },
     ]);
   });
   it('backfills legacy scoped-file lifecycle rows idempotently without touching connection state', async () => {
@@ -280,5 +281,30 @@ describe('database migrations', () => {
     expect(migration).toContain(
       'CREATE POLICY "anonymous_shopping_profiles_update_own"',
     );
+  });
+  it('adds tenant-scoped source category mappings without overwriting source provenance', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0038_category_mapping.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('ADD COLUMN "source_category_name" text');
+    expect(migration).toContain('ADD COLUMN "source_category_provider" text');
+    expect(migration).toContain('CREATE TABLE "source_category_mappings"');
+    expect(migration).toContain(
+      'UNIQUE("merchant_id","connection_id","provider","source_category_id")',
+    );
+    expect(migration).toContain(
+      "CHECK (\"status\" in ('mapped','needs_mapping'))",
+    );
+    expect(migration).toContain(
+      'CREATE POLICY "tenant_source_category_mappings"',
+    );
+    expect(migration).toContain("('apparel', 'Giyim', NULL, true)");
+    expect(migration).toContain("('fishing', 'Balıkçılık', NULL, true)");
+    expect(migration).toContain("('sports', 'Spor', NULL, true)");
   });
 });

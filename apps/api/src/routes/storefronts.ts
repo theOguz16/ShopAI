@@ -109,17 +109,30 @@ export async function registerStorefrontRoutes(app: FastifyInstance) {
     const [category] = await db
       .select({ slug: categories.slug })
       .from(categories)
-      .where(eq(categories.slug, parsedSlug.data))
+      .where(
+        and(eq(categories.slug, parsedSlug.data), eq(categories.active, true)),
+      )
       .limit(1);
     if (!category) return reply.code(404).send({ code: 'CATEGORY_NOT_FOUND' });
 
     const rows = await db
       .select({ key: categoryFacets.key, options: categoryFacets.options })
       .from(categoryFacets)
-      .where(eq(categoryFacets.categorySlug, category.slug))
+      .where(
+        and(
+          eq(categoryFacets.categorySlug, category.slug),
+          eq(categoryFacets.active, true),
+        ),
+      )
       .orderBy(asc(categoryFacets.position), asc(categoryFacets.key));
 
-    return categoryFacetsResponseSchema.parse(buildCategoryFacetMap(rows));
+    return categoryFacetsResponseSchema.parse(
+      buildCategoryFacetMap(
+        rows.filter(
+          (row) => Array.isArray(row.options) && row.options.length > 0,
+        ),
+      ),
+    );
   });
 
   app.get('/v1/storefronts/:slug', async (request, reply) => {

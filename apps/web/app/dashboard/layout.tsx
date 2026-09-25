@@ -59,6 +59,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <>
       <nav aria-label="Hesap işlemleri">
         <a href="/account">Hesap durumu</a>
+        <a href="/dashboard/categories">Kategori eşleme</a>
         <button
           type="button"
           disabled={signingOut}

@@ -14,8 +14,6 @@ export type InternalSearchInput = Omit<Partial<SearchRequest>, 'filters'> & {
   filters?: Partial<SearchFilters>;
 };
 
-const supportedAttributeKeys = new Set(['size', 'sizes', 'color', 'colors']);
-
 function valuesFor(
   attributes: SearchProductsRequest['attributes'],
   keys: readonly string[],
@@ -38,16 +36,18 @@ export function toInternalSearchInput(
   request: SearchProductsRequest,
 ): InternalSearchInput {
   const attributes = request.attributes ?? {};
-  const unsupported = Object.keys(attributes).filter(
-    (key) => !supportedAttributeKeys.has(key),
-  );
-  if (unsupported.length)
-    throw Object.assign(
-      new Error(`Desteklenmeyen ürün niteliği: ${unsupported.join(', ')}`),
-      { statusCode: 400, code: 'UNSUPPORTED_SEARCH_ATTRIBUTE' },
-    );
-
   const filters: Partial<SearchFilters> = {};
+  const legacyAttributeKeys = new Set(['size', 'sizes', 'color', 'colors']);
+  const genericAttributes = Object.fromEntries(
+    Object.entries(attributes)
+      .filter(([key]) => !legacyAttributeKeys.has(key))
+      .map(([key, value]) => [
+        key,
+        [...new Set(Array.isArray(value) ? value : [value])],
+      ]),
+  );
+  if (Object.keys(genericAttributes).length)
+    filters.attributes = genericAttributes;
   if (request.category !== undefined) filters.category = request.category;
   if (request.price?.min !== undefined)
     filters.minPriceMinor = request.price.min;

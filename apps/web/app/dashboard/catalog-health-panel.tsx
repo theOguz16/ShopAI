@@ -17,6 +17,8 @@ export type CatalogHealthSnapshot = {
   inStockProducts: number;
   missingImages: number;
   missingPrices: number;
+  unmappedCategories: number;
+  unmappedProducts: number;
   lastSuccessfulSyncAt: string | null;
   lastSuccessfulSyncAgeMs: number | null;
   connections: Array<{
@@ -82,6 +84,8 @@ export function CatalogHealthPanel({
     ['Stokta', health.inStockProducts],
     ['Eksik görsel', health.missingImages],
     ['Eksik fiyat', health.missingPrices],
+    ['Eşlenmemiş kategori', health.unmappedCategories],
+    ['Eşlenmemiş ürün', health.unmappedProducts],
   ] as const;
 
   return (

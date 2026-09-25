@@ -260,6 +260,13 @@
       "when": 1790500000000,
       "tag": "0037_connector_secret_legacy_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790600000000,
+      "tag": "0038_category_mapping",
+      "breakpoints": true
     }
   ]
 }

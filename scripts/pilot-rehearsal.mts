@@ -266,16 +266,27 @@ async function bootstrapFixtures(databaseUrl: string, seed: number) {
              (substr(md5($1 || ':product:' || n),1,8)||'-'||substr(md5($1 || ':product:' || n),9,4)||'-4'||substr(md5($1 || ':product:' || n),14,3)||'-a'||substr(md5($1 || ':product:' || n),18,3)||'-'||substr(md5($1 || ':product:' || n),21,12))::uuid as product_id
            from generate_series(1, $4::int) n
          )
-         insert into products (id, merchant_id, connection_id, external_key, title, description, category, published, image_url, image_alt, observed_at, fetched_at)
+         insert into products (id, merchant_id, connection_id, external_key, title, description, category, source_category_id, source_category_provider, published, image_url, image_alt, observed_at, fetched_at)
          select product_id, $2::uuid, $3::uuid, 'large-'||n,
            'Synthetic Product '||lpad(n::text,5,'0'),
            'Deterministic synthetic rehearsal item '||n,
            case when n % 3 = 0 then 'fishing-rod' else 'tshirt' end,
+           case when n % 3 = 0 then 'src-rod' else 'src-tshirt' end,
+           'woocommerce',
            true,
            case when n % 17 = 0 then null else 'https://images.synthetic.invalid/products/'||n||'.jpg' end,
            'Synthetic Product '||n, now(), now()
          from generated`,
         [String(seed), merchantIds[0], connectionIds[0], PRODUCT_COUNT],
+      );
+      await pool.query(
+        `insert into source_category_mappings
+           (merchant_id, connection_id, provider, source_category_id, source_category_name, status, canonical_category_slug)
+         values
+           ($1::uuid, $2::uuid, 'woocommerce', 'src-tshirt', 'tshirt', 'mapped', 'tshirt'),
+           ($1::uuid, $2::uuid, 'woocommerce', 'src-rod', 'fishing-rod', 'mapped', 'fishing-rod')
+         on conflict (merchant_id, connection_id, provider, source_category_id) do nothing`,
+        [merchantIds[0], connectionIds[0]],
       );
       await pool.query(
         `with generated as (
@@ -332,6 +343,9 @@ async function bootstrapFixtures(databaseUrl: string, seed: number) {
         title: `Synthetic Merchant ${merchantIndex + 1} Product ${rowIndex + 1}`,
         description: 'Small deterministic synthetic catalog item',
         category: rowIndex % 2 ? 'tshirt' : 'fishing-rod',
+        sourceCategoryId: rowIndex % 2 ? 'src-tshirt' : 'src-rod',
+        sourceCategoryPath:
+          rowIndex % 2 ? ['Synthetic', 'T-shirts'] : ['Synthetic', 'Rods'],
         imageUrl: `https://images.synthetic.invalid/m${merchantIndex}/${rowIndex}.jpg`,
         imageAlt: `Synthetic item ${rowIndex + 1}`,
         size: ['S', 'M', 'L', 'XL'][rowIndex % 4] as string,
@@ -354,11 +368,24 @@ async function bootstrapFixtures(databaseUrl: string, seed: number) {
         .set({ published: true })
         .where(eq(products.merchantId, merchantIds[merchantIndex] as string));
     }
+    // Simulate merchants completing ÜRÜN-006 category mapping for the seeded
+    // catalogs: import created needs_mapping rows for every sourceCategoryId,
+    // and the canonical slugs equal the synthetic source category IDs.
+    await database.db.execute(sql`
+      update source_category_mappings
+      set status = 'mapped',
+          canonical_category_slug = case
+            when source_category_id = 'src-rod' then 'fishing-rod'
+            else 'tshirt'
+          end,
+          updated_at = now()
+      where status = 'needs_mapping'
+    `);
     // The rehearsal immediately queries a freshly bulk-loaded 10k+ catalog.
     // Do not race PostgreSQL auto-analyze: stale/default planner estimates made
     // identical seeded runs vary from seconds to tens of minutes in CI.
     await database.db.execute(
-      sql`analyze merchants, products, variants, offers, inventory`,
+      sql`analyze merchants, products, variants, offers, inventory, source_category_mappings, categories, category_facets`,
     );
     return { database, merchantIds, connectionIds };
   } catch (error) {
@@ -1352,6 +1379,8 @@ async function main() {
         title: 'Synthetic Merchant 2 Product 1',
         description: 'Small deterministic synthetic catalog item',
         category: 'fishing-rod',
+        sourceCategoryId: 'src-rod',
+        sourceCategoryPath: ['Synthetic', 'Rods'],
         imageUrl: 'https://images.synthetic.invalid/m1/0.jpg',
         imageAlt: 'Synthetic item 1',
         size: 'S',
