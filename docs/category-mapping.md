@@ -146,16 +146,17 @@ grant edilmez.
 
 ## Migration ve merge sırası
 
-Branch migration'ı `0035_category_mapping.sql` olarak oluşturuldu ve Drizzle
-`meta/_journal.json` içine eklendi. Migration additive schema değişiklikleri,
-legacy provenance backfill'i, canonical seed ve RLS/grant kurallarını içerir;
-production DB'ye bu task kapsamında uygulanmaz.
+Branch migration'ı `0038_category_mapping.sql` olarak numaralandırıldı ve
+Drizzle `meta/_journal.json` içine eklendi. Migration additive schema
+değişiklikleri, legacy provenance backfill'i, canonical seed ve RLS/grant
+kurallarını içerir; production DB'ye bu task kapsamında uygulanmaz.
 
-ÜRÜN-004 secret lifecycle branch'i de migration üretiyor. Bu nedenle
-`0035` numarası merge edilene kadar geçicidir. ÜRÜN-006 main'e alınmadan hemen
-önce güncel `main` migration sırası yeniden kontrol edilir; bir çakışma varsa
-yalnız ÜRÜN-006 migration/journal entry'si güvenli biçimde renumber edilir.
-Secret/env/OpenBao dosyaları ÜRÜN-006 tarafından değiştirilmez.
+`0035_category_mapping.sql` olarak oluşturulan migration, ÜRÜN-004 secret
+lifecycle branch'i main'e `0035/0036/0037` migration'larıyla merge edildikten
+sonra `0038` olarak yeniden numaralandırıldı; ÜRÜN-004 migration geçmişi ve
+staging'de uygulanmış `0035/0036` kayıtları değiştirilmedi. Fresh zincir
+`0034→0035→0036→0037→0038` olarak doğrulanır. Secret/env/OpenBao dosyaları
+ÜRÜN-006 tarafından değiştirilmez.
 
 ## Kapsam dışı
 

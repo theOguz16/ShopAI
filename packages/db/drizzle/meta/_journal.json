@@ -2,7 +2,6 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-<<<<<<< HEAD
     {
       "idx": 0,
       "version": "7",
