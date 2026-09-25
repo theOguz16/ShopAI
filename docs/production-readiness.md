@@ -7,8 +7,8 @@ TASK-021'in görev seviyesi mühendislik/dış kabul özeti `docs/06-implementat
 ## 1. Otomatik teknik kontroller
 
 - [x] HTTPS-only hosted origin validation API startup'ta enforce ediliyor.
-- [x] Connector credential'ları production/staging'de AES-256-GCM ile encrypted-at-rest tutuluyor.
-- [x] Production API/worker `CONNECTOR_SECRET_ENCRYPTION_KEY` olmadan başlamıyor.
+- [x] Local file connector credential'ları AES-256-GCM ile encrypted-at-rest tutuluyor; staging/production yalnız OpenBao backend'i kabul ediyor.
+- [x] Production API/worker OpenBao config, AppRole veya health secret okuma izni olmadan başlamıyor.
 - [x] Global API rate limit + daha sıkı login rate limit var.
 - [x] Tenant/public visibility RLS testleri gerçek PostgreSQL üzerinde CI'da çalışıyor.
 - [x] Connector retry/backoff, reauthorization ve stale catalog gözlemi var.
@@ -22,7 +22,9 @@ TASK-021'in görev seviyesi mühendislik/dış kabul özeti `docs/06-implementat
 - [x] Rollback explicit eski image SHA'sına application rollback yapıyor; migration otomatik geri alınmıyor.
 - [x] Production deploy exact release için başarılı `Staging hosted smoke` workflow kanıtı istiyor.
 
-Buradaki AES-256-GCM maddesi uygulamanın yerel managed-secret dosyalarını şifrelemesini kanıtlar. Vault/KMS/managed secret provider, key rotation, secret access audit'i ve pilot plaintext migration/safe deletion kapsamını kanıtlamaz; bunlar [issue #9](https://github.com/theOguz16/ShopAI/issues/9) açıkken production secret lifecycle kabulü sayılmaz.
+Yerel AES-256-GCM backend production kabulü değildir. OpenBao adapter ve Raft compose kodu vardır; gerçek staging policy, unseal, pilot plaintext backup temizliği ve recovery tatbikatı henüz kanıtlanmadı. [Issue #9](https://github.com/theOguz16/ShopAI/issues/9) açık kalır.
+
+ÜRÜN-004 [operasyon ve migration kararındaki](follow-ups/urun-004-managed-secrets.md) staging kanıtı tamamlanmadan production kabulü verilmez. `0035_connector_secret_lifecycle.sql` ve `0036_connector_secret_backend.sql` migration'larını inceleyin; production DB migration'ı bu görevde yapılmaz.
 
 ## 2. GitHub `production` environment kurulumu — OPERATÖR GATE
 
@@ -64,7 +66,12 @@ PRODUCTION_ALLOWED_ORIGINS=https://chatgpt.com,...
 PRODUCTION_RESOURCE_DOMAINS=https://...
 PRODUCTION_REDIRECT_SIGNING_SECRET=...
 PRODUCTION_AUTH_PILOT_CREDENTIALS='{"owner@example.com":"..."}'
-PRODUCTION_CONNECTOR_SECRET_ENCRYPTION_KEY=...
+PRODUCTION_OPENBAO_TLS_DIR=/secure/openbao/tls
+PRODUCTION_OPENBAO_CA_CERT=/secure/openbao/tls/ca.crt
+PRODUCTION_OPENBAO_API_ROLE_ID=...
+PRODUCTION_OPENBAO_API_SECRET_ID_FILE=/secure/openbao/api-secret-id
+PRODUCTION_OPENBAO_WORKER_ROLE_ID=...
+PRODUCTION_OPENBAO_WORKER_SECRET_ID_FILE=/secure/openbao/worker-secret-id
 PRODUCTION_OPS_ALERT_WEBHOOK_URL=https://...
 PRODUCTION_OPS_ALERT_WEBHOOK_SECRET=...
 PRODUCTION_CONVERSION_CALLBACK_SECRET=...

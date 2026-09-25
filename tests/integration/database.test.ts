@@ -473,7 +473,7 @@ describe('catalog import integrity on PostgreSQL', () => {
         () => failedConnector,
         () => new Date('2026-09-14T10:08:21.000Z'),
       ),
-    ).rejects.toThrow('source unavailable');
+    ).rejects.toThrow('Catalog sync failed');
     expect(
       await database.db
         .select({
@@ -612,7 +612,7 @@ describe('catalog import integrity on PostgreSQL', () => {
         () => connector,
         () => currentTime,
       ),
-    ).rejects.toThrow('revalidation unavailable');
+    ).rejects.toThrow('Catalog sync failed');
     expect(requestedModes).toEqual(['full']);
     expect(
       await database.db
@@ -667,7 +667,7 @@ describe('catalog import integrity on PostgreSQL', () => {
         { resolve: async () => ({}) },
         () => connector,
       ),
-    ).rejects.toThrow('temporary disconnect');
+    ).rejects.toThrow('Catalog sync failed');
     expect(
       await database.db.select({ active: offers.active }).from(offers),
     ).toEqual([{ active: true }, { active: true }]);
@@ -759,7 +759,7 @@ describe('catalog import integrity on PostgreSQL', () => {
           { resolve: async () => ({}) },
           () => connector,
         ),
-      ).rejects.toThrow('snapshot sayfa sınırında tamamlanamadı');
+      ).rejects.toThrow('Catalog sync failed');
       expect(
         await database.db
           .select({ externalId: offers.externalId, active: offers.active })

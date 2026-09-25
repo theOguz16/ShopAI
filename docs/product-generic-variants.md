@@ -19,7 +19,7 @@
 
 ## Migration ve uyumluluk
 
-`0034_generic_product_variants.sql` yalnız yeni nullable/varsayılan JSONB alanlar ekler ve eski varyantlara kontrollü beden/renk backfill uygular. Fiyat/stok/kimlik tabloları değişmez. Üretim DB'sine bu görev sırasında migration uygulanmadı. PR #63'ün güncel `main` bazı `7217123f9ff2438560465bcfd3e41dbce3818e48` üzerinde son migration `0033` olduğu için `0034` korunur. Ayrı PR #61'in kendi branch'inde `0034_connector_secret_lifecycle.sql` ve `0035_connector_secret_backend.sql` bulunur. PR #63 `13d71ec6116d77e741f87b1252a693e7e8c7ffb5` ile önce merge edildi; PR #61 kendi branch'inde daha sonra güncel main'e rebase edilip iki migration'ı `0035/0036` olarak yeniden numaralandırılacak. Bu PR, PR #61 branch'ini veya migration içeriklerini değiştirmez.
+`0034_generic_product_variants.sql` yalnız yeni nullable/varsayılan JSONB alanlar ekler ve eski varyantlara kontrollü beden/renk backfill uygular. Fiyat/stok/kimlik tabloları değişmez. Üretim DB'sine bu görev sırasında migration uygulanmadı. PR #63 `13d71ec6116d77e741f87b1252a693e7e8c7ffb5` ile önce merge edildi. PR #61 güncel main üzerine rebase edildi; secret lifecycle migration'ları `0035_connector_secret_lifecycle.sql` ve `0036_connector_secret_backend.sql` olarak devam eder.
 
 Eski public contract alanları hâlâ vardır. Yeni detay görünümü seçenek adlarını genel biçimde gösterir; eski kayıtlarda beden/renk etiketi kullanılır. Arama facetleri şimdilik eski beden/renk projeksiyonunu kullanır. Woo varyant permalink'i kaynağa özgü şekilde mevcut değilse ürün permalink'i checkout target olarak kalır; gerçek varyant seçimi URL'si ayrıca ÜRÜN-009 kabulünde doğrulanmalıdır.
 

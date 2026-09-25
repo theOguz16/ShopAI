@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import {
+  ManagedConnectorSecretStore,
+  type ConnectorSecretBackend,
+} from '@shopai/connectors';
+import {
   bootstrapMerchant,
   connections,
+  connectorSecretAudit,
+  connectorSecrets,
   memberships,
   merchantCredentialOwnerships,
   merchants,
@@ -25,6 +31,7 @@ const errorChainIncludes = (error: unknown, marker: string) => {
 export async function registerMerchantRoutes(
   app: FastifyInstance,
   env: ApiEnv,
+  secretStore: ConnectorSecretBackend,
 ) {
   app.get('/v1/stores/:slug', async (request, reply) => {
     const parsedSlug = storeSlugSchema.safeParse(
@@ -127,6 +134,13 @@ export async function registerMerchantRoutes(
       )
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       const provider: 'csv' | 'woocommerce' = csv ? 'csv' : 'woocommerce';
+      if (
+        body.credentialsRef &&
+        ManagedConnectorSecretStore.supports(body.credentialsRef)
+      )
+        return reply
+          .code(400)
+          .send({ code: 'MANAGED_SECRET_ONBOARDING_REQUIRED' });
       const db = app.authApi.db;
       if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
       let connection:
@@ -211,7 +225,7 @@ export async function registerMerchantRoutes(
       const { merchantId } = request.params as { merchantId: string };
       const db = app.authApi.db;
       if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
-      const credentialRefs = await withTenant(db, merchantId, (tx) =>
+      const credentialRefs = (await withTenant(db, merchantId, (tx) =>
         tx
           .select({
             provider: merchantCredentialOwnerships.provider,
@@ -219,8 +233,12 @@ export async function registerMerchantRoutes(
           })
           .from(merchantCredentialOwnerships)
           .where(eq(merchantCredentialOwnerships.merchantId, merchantId)),
-      );
-      return { credentialRefs };
+      )) as Array<{ provider: string; credentialsRef: string }>;
+      return {
+        credentialRefs: credentialRefs.filter(
+          (item) => !ManagedConnectorSecretStore.supports(item.credentialsRef),
+        ),
+      };
     },
   );
   app.get(
@@ -267,6 +285,20 @@ export async function registerMerchantRoutes(
       const db = app.authApi.db;
       if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
       const connection = await withTenant(db, merchantId, async (tx) => {
+        const [current] = await tx
+          .select({
+            credentialsRef: connections.credentialsRef,
+            provider: connections.provider,
+          })
+          .from(connections)
+          .where(
+            and(
+              eq(connections.id, connectionId),
+              eq(connections.merchantId, merchantId),
+            ),
+          )
+          .limit(1)
+          .for('update');
         const [row] = await tx
           .update(connections)
           .set({
@@ -281,8 +313,80 @@ export async function registerMerchantRoutes(
             ),
           )
           .returning({ id: connections.id });
-        return row;
+        if (
+          row &&
+          current?.credentialsRef &&
+          ManagedConnectorSecretStore.supports(current.credentialsRef)
+        ) {
+          const [managed] = await tx
+            .select({ backend: connectorSecrets.backend })
+            .from(connectorSecrets)
+            .where(
+              and(
+                eq(connectorSecrets.merchantId, merchantId),
+                eq(connectorSecrets.connectionId, connectionId),
+                eq(connectorSecrets.reference, current.credentialsRef),
+                eq(connectorSecrets.status, 'active'),
+              ),
+            )
+            .limit(1);
+          await tx
+            .update(connectorSecrets)
+            .set({ status: 'revoked', revokedAt: new Date() })
+            .where(
+              and(
+                eq(connectorSecrets.merchantId, merchantId),
+                eq(connectorSecrets.connectionId, connectionId),
+                eq(connectorSecrets.status, 'active'),
+              ),
+            );
+          await tx.insert(connectorSecretAudit).values({
+            merchantId,
+            connectionId,
+            reference: current.credentialsRef,
+            event: 'revoked',
+            actor: request.auth?.userId ?? 'api',
+            correlationId: request.id,
+          });
+          return {
+            ...row,
+            reference: current.credentialsRef,
+            provider: current.provider,
+            backend: managed?.backend,
+          };
+        }
+        return row
+          ? {
+              ...row,
+              reference: current?.credentialsRef,
+              provider: current?.provider,
+              backend: undefined,
+            }
+          : undefined;
       });
+      if (
+        connection?.reference &&
+        connection.provider &&
+        connection.backend === env.CONNECTOR_SECRET_BACKEND &&
+        ManagedConnectorSecretStore.supports(connection.reference)
+      ) {
+        await secretStore
+          .revoke(connection.reference, {
+            merchantId,
+            connectionId,
+            provider: connection.provider,
+          })
+          .catch(() => {
+            request.log.warn(
+              {
+                event: 'connector_secret_provider_revoke_failed',
+                merchantId,
+                connectionId,
+              },
+              'Provider cleanup requires retry',
+            );
+          });
+      }
       return connection
         ? { ok: true }
         : reply.code(404).send({ code: 'NOT_FOUND' });
@@ -300,6 +404,10 @@ export async function registerMerchantRoutes(
       if (!body.credentialsRef?.match(/^secret:\/\/[A-Z][A-Z0-9_]{2,80}$/u))
         return reply.code(400).send({ code: 'INVALID_INPUT' });
       const credentialsRef = body.credentialsRef;
+      if (ManagedConnectorSecretStore.supports(credentialsRef))
+        return reply
+          .code(400)
+          .send({ code: 'MANAGED_SECRET_ROTATION_REQUIRED' });
       const db = app.authApi.db;
       if (!db) return reply.code(503).send({ code: 'AUTH_UNAVAILABLE' });
       const connection = await withTenant(db, merchantId, async (tx) => {

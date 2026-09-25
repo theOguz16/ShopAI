@@ -5,6 +5,7 @@ import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
 import { createDatabase } from '../../packages/db/src/client.js';
 import { testTotp } from '../helpers/totp.js';
+import { fakeConnectorSecretBackend } from '../helpers/fake-connector-secret-backend.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl)
@@ -30,7 +31,11 @@ const env = parseApiEnv({
   MCP_ALLOWED_ORIGINS: `${origin},https://chatgpt.com`,
   WIDGET_ORIGIN: 'https://widget.better-auth-test.example',
   REDIRECT_SIGNING_SECRET: 'test-only-better-auth-redirect-secret-1234567890',
-  CONNECTOR_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+  CONNECTOR_SECRET_BACKEND: 'openbao',
+  CONNECTOR_SECRET_OPENBAO_ADDRESS: 'https://openbao.shopai.internal:8200',
+  CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+  CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'test-role-id',
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: '/run/secrets/test-id',
   AUTH_PILOT_CREDENTIALS: JSON.stringify({ [email]: pilotToken }),
   BETTER_AUTH_ENABLED: 'true',
   BETTER_AUTH_SECRET: 'test-only-better-auth-secret-1234567890',
@@ -75,7 +80,9 @@ describe('Better Auth API ve pilot bağlama', () => {
       sql`INSERT INTO users (email) VALUES (${email}) RETURNING id`,
     );
     pilotId = created.rows[0]?.id as string;
-    app = await buildApp(undefined, env);
+    app = await buildApp(undefined, env, {
+      connectorSecretBackend: fakeConnectorSecretBackend,
+    });
   });
 
   afterAll(async () => {
@@ -125,10 +132,14 @@ describe('Better Auth API ve pilot bağlama', () => {
       betterAuthEnabled: true,
       pilotEnabled: true,
     });
-    const disabledApp = await buildApp(undefined, {
-      ...env,
-      BETTER_AUTH_ENABLED: 'false',
-    });
+    const disabledApp = await buildApp(
+      undefined,
+      {
+        ...env,
+        BETTER_AUTH_ENABLED: 'false',
+      },
+      { connectorSecretBackend: fakeConnectorSecretBackend },
+    );
     try {
       const capabilities = await disabledApp.inject({
         method: 'GET',

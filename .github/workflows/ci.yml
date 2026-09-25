@@ -30,7 +30,12 @@ jobs:
           PRODUCTION_RESOURCE_DOMAINS=https://widget.shopai.example,https://images.shopai.example
           PRODUCTION_REDIRECT_SIGNING_SECRET=ci-production-redirect-signing-secret-000000000000
           PRODUCTION_AUTH_PILOT_CREDENTIALS={"pilot@shopai.example":"ci-production-pilot-secret-000000"}
-          PRODUCTION_CONNECTOR_SECRET_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          PRODUCTION_OPENBAO_TLS_DIR=/tmp/shopai-ci-openbao-tls
+          PRODUCTION_OPENBAO_CA_CERT=/tmp/shopai-ci-openbao-ca.crt
+          PRODUCTION_OPENBAO_API_ROLE_ID=CI_API_ROLE_ID
+          PRODUCTION_OPENBAO_API_SECRET_ID_FILE=/tmp/shopai-ci-api-secret-id
+          PRODUCTION_OPENBAO_WORKER_ROLE_ID=CI_WORKER_ROLE_ID
+          PRODUCTION_OPENBAO_WORKER_SECRET_ID_FILE=/tmp/shopai-ci-worker-secret-id
           PRODUCTION_OPS_ALERT_WEBHOOK_URL=https://alerts.shopai.example/events
           PRODUCTION_OPS_ALERT_WEBHOOK_SECRET=ci-production-ops-alert-secret-000000000000
           PRODUCTION_LOGIN_RATE_LIMIT_MAX=5
@@ -53,6 +58,19 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U shopai -d shopai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      postgres-fresh:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: shopai_fresh
+          POSTGRES_PASSWORD: shopai_fresh_test
+          POSTGRES_DB: shopai_restore_fresh
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U shopai_fresh -d shopai_restore_fresh"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -120,6 +138,9 @@ jobs:
           BACKUP_DIR=/tmp/shopai-backups infra/backup.sh > /tmp/shopai-backup-path
           PGPASSWORD=shopai_test createdb --host=127.0.0.1 --username=shopai shopai_restore_test
           DATABASE_URL=postgresql://shopai:shopai_test@127.0.0.1:5432/shopai_restore_test BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
+      - name: Exercise restore role bootstrap on a fresh PostgreSQL instance
+        run: |
+          DATABASE_URL=postgresql://shopai_fresh:shopai_fresh_test@127.0.0.1:5433/shopai_restore_fresh BACKUP_FILE="$(cat /tmp/shopai-backup-path)" RESTORE_TARGET=test ALLOW_RESTORE=true infra/restore.sh
   design-evidence:
     runs-on: ubuntu-latest
     steps:

@@ -1,3 +1,4 @@
+import { fakeConnectorSecretBackend } from '../helpers/fake-connector-secret-backend.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { parseApiEnv } from '../../apps/api/src/env.js';
@@ -213,11 +214,17 @@ describe('API and MCP', () => {
       REDIRECT_SIGNING_SECRET: 'staging-redirect-secret-000000000000',
       AUTH_PILOT_CREDENTIALS:
         '{"owner@staging.example":"staging-user-secret-000000000000"}',
-      CONNECTOR_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+      CONNECTOR_SECRET_BACKEND: 'openbao',
+      CONNECTOR_SECRET_OPENBAO_ADDRESS: 'https://openbao.shopai.internal:8200',
+      CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+      CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'test-role-id',
+      CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: '/run/secrets/test-id',
       CONVERSION_CALLBACK_SECRET: '',
     });
     const localServices = createServices(parseApiEnv({}));
-    const app = await buildApp(localServices, env);
+    const app = await buildApp(localServices, env, {
+      connectorSecretBackend: fakeConnectorSecretBackend,
+    });
     apps.push(app);
 
     expect(env.CONVERSION_CALLBACK_SECRET).toBeUndefined();

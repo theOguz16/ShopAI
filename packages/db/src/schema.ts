@@ -155,6 +155,58 @@ export const merchantCredentialOwnerships = pgTable(
     unique().on(t.provider, t.credentialsRef),
   ],
 );
+export const connectorSecrets = pgTable(
+  'connector_secrets',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id').notNull(),
+    connectionId: uuid('connection_id').notNull(),
+    provider: text('provider').notNull(),
+    kind: text('kind').notNull().default('catalog_credentials'),
+    reference: text('reference').notNull().unique(),
+    backend: text('backend').notNull().default('file'),
+    version: bigint('version', { mode: 'number' }).notNull(),
+    status: text('status').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    rotatedAt: at('rotated_at'),
+    revokedAt: at('revoked_at'),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.merchantId, t.connectionId],
+      foreignColumns: [connections.merchantId, connections.id],
+    }),
+    unique().on(t.connectionId, t.version),
+    check(
+      'connector_secret_status',
+      sql`${t.status} in ('active','rotated','revoked')`,
+    ),
+    check('connector_secret_backend', sql`${t.backend} in ('file','openbao')`),
+  ],
+);
+export const connectorSecretAudit = pgTable(
+  'connector_secret_audit',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id').notNull(),
+    connectionId: uuid('connection_id').notNull(),
+    reference: text('reference').notNull(),
+    event: text('event').notNull(),
+    actor: text('actor').notNull(),
+    correlationId: text('correlation_id'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.merchantId, t.connectionId],
+      foreignColumns: [connections.merchantId, connections.id],
+    }),
+    check(
+      'connector_secret_audit_event',
+      sql`${t.event} in ('created','accessed','rotated','revoked','resolution_failed')`,
+    ),
+  ],
+);
 export const products = pgTable(
   'products',
   {

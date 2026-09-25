@@ -18,7 +18,12 @@ const hostedStagingEnv = {
   REDIRECT_SIGNING_SECRET: 'staging-redirect-signing-secret-000000000000',
   AUTH_PILOT_CREDENTIALS:
     '{"pilot@shopai.example":"staging-pilot-credential-0001"}',
-  CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+  CONNECTOR_SECRET_BACKEND: 'openbao',
+  CONNECTOR_SECRET_OPENBAO_ADDRESS: 'https://openbao.shopai.internal:8200',
+  CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+  CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'staging-role-id',
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE:
+    '/run/secrets/openbao-role-secret-id',
 } as const;
 const hostedProductionEnv = {
   ...hostedStagingEnv,
@@ -28,6 +33,7 @@ const hostedProductionEnv = {
   WIDGET_ORIGIN: 'https://widget.shopai.example',
   OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
   OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+  CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-production',
 } as const;
 
 describe('startup environment validation', () => {
@@ -117,16 +123,20 @@ describe('startup environment validation', () => {
       DEPLOY_ENV: 'staging',
       MCP_PUBLIC_ORIGIN: 'https://api.staging.shopai.example',
       WIDGET_ORIGIN: 'https://widget.staging.shopai.example',
-      CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+      CONNECTOR_SECRET_BACKEND: 'openbao',
     });
   });
 
-  it('requires connector secret encryption in hosted API and worker runtimes', () => {
-    const { CONNECTOR_SECRET_ENCRYPTION_KEY: _ignored, ...withoutKey } =
-      hostedStagingEnv;
-    expect(() => parseApiEnv(withoutKey)).toThrow(
-      /CONNECTOR_SECRET_ENCRYPTION_KEY|encryption key/,
-    );
+  it('requires OpenBao in hosted API and worker runtimes', () => {
+    expect(() =>
+      parseApiEnv({ ...hostedStagingEnv, CONNECTOR_SECRET_BACKEND: 'file' }),
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
+    expect(() =>
+      parseApiEnv({
+        ...hostedStagingEnv,
+        CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: '',
+      }),
+    ).toThrow(/CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE/);
     expect(() =>
       parseWorkerEnv({
         DEPLOY_ENV: 'staging',
@@ -134,16 +144,16 @@ describe('startup environment validation', () => {
         DATABASE_URL: hostedStagingEnv.DATABASE_URL,
         REDIS_URL: 'rediss://redis.example',
       }),
-    ).toThrow(/CONNECTOR_SECRET_ENCRYPTION_KEY|encryption key/);
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
     expect(
       parseWorkerEnv({
         DEPLOY_ENV: 'staging',
         RELEASE_VERSION: 'abcdef123',
         DATABASE_URL: hostedStagingEnv.DATABASE_URL,
         REDIS_URL: 'rediss://redis.example',
-        CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
-      }).CONNECTOR_SECRET_ENCRYPTION_KEY,
-    ).toBe(connectorEncryptionKey);
+        ...hostedStagingEnv,
+      }).CONNECTOR_SECRET_BACKEND,
+    ).toBe('openbao');
   });
 
   it('requires an external signed operations alert sink in production', () => {
@@ -178,6 +188,13 @@ describe('startup environment validation', () => {
         DATABASE_URL: hostedProductionEnv.DATABASE_URL,
         REDIS_URL: 'rediss://redis.example',
         CONNECTOR_SECRET_ENCRYPTION_KEY: connectorEncryptionKey,
+        CONNECTOR_SECRET_BACKEND: 'openbao',
+        CONNECTOR_SECRET_OPENBAO_ADDRESS:
+          'https://openbao.shopai.internal:8200',
+        CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-production',
+        CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'worker-role-id',
+        CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE:
+          '/run/secrets/openbao-role-secret-id',
         OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
         OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
       }),
@@ -185,6 +202,47 @@ describe('startup environment validation', () => {
       OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
       OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
     });
+  });
+
+  it('fails closed for file or misconfigured OpenBao production backends', () => {
+    const worker = {
+      DEPLOY_ENV: 'production',
+      RELEASE_VERSION: hostedProductionEnv.RELEASE_VERSION,
+      DATABASE_URL: hostedProductionEnv.DATABASE_URL,
+      REDIS_URL: 'rediss://redis.example',
+      OPS_ALERT_WEBHOOK_URL: opsAlertWebhookUrl,
+      OPS_ALERT_WEBHOOK_SECRET: opsAlertWebhookSecret,
+    };
+    expect(() =>
+      parseApiEnv({ ...hostedProductionEnv, CONNECTOR_SECRET_BACKEND: 'file' }),
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
+    expect(() =>
+      parseWorkerEnv({ ...worker, CONNECTOR_SECRET_BACKEND: 'file' }),
+    ).toThrow(/CONNECTOR_SECRET_BACKEND/);
+    expect(() =>
+      parseApiEnv({
+        ...hostedProductionEnv,
+        CONNECTOR_SECRET_OPENBAO_ADDRESS: '',
+      }),
+    ).toThrow(/CONNECTOR_SECRET_OPENBAO_ADDRESS/);
+    expect(() =>
+      parseApiEnv({
+        ...hostedProductionEnv,
+        CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+      }),
+    ).toThrow(/production mount/);
+    expect(() =>
+      parseWorkerEnv({
+        ...worker,
+        CONNECTOR_SECRET_BACKEND: 'openbao',
+        CONNECTOR_SECRET_OPENBAO_ADDRESS:
+          'https://openbao.shopai.internal:8200',
+        CONNECTOR_SECRET_OPENBAO_MOUNT: 'shopai-staging',
+        CONNECTOR_SECRET_OPENBAO_ROLE_ID: 'worker-role-id',
+        CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE:
+          '/run/secrets/openbao-role-secret-id',
+      }),
+    ).toThrow(/production mount/);
   });
 
   it('rejects partial or unsafe operations alert configuration', () => {

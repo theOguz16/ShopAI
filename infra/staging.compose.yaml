@@ -18,15 +18,59 @@ x-runtime: &runtime
   WIDGET_RESOURCE_DOMAINS: "${STAGING_RESOURCE_DOMAINS:?Asset origin listesi gerekli}"
   REDIRECT_SIGNING_SECRET: "${STAGING_REDIRECT_SIGNING_SECRET:?Secret gerekli}"
   AUTH_PILOT_CREDENTIALS: "${STAGING_AUTH_PILOT_CREDENTIALS:?E-postaya bağlı kimlik secretı gerekli}"
-  CONNECTOR_SECRET_ENCRYPTION_KEY: "${STAGING_CONNECTOR_SECRET_ENCRYPTION_KEY:?Connector secret encryption key gerekli}"
+  CONNECTOR_SECRET_BACKEND: openbao
+  CONNECTOR_SECRET_OPENBAO_ADDRESS: https://openbao.shopai.internal:8200
+  CONNECTOR_SECRET_OPENBAO_MOUNT: shopai-staging
+  NODE_EXTRA_CA_CERTS: /etc/shopai/openbao-ca.crt
   LOGIN_RATE_LIMIT_MAX: "${STAGING_LOGIN_RATE_LIMIT_MAX:-5}"
   CONVERSION_CALLBACK_SECRET: "${STAGING_CONVERSION_CALLBACK_SECRET:-}"
   UPLOAD_DIR: /var/lib/shopai/uploads
   LOG_LEVEL: info
 
 services:
+  openbao-raft-permissions:
+    image: busybox:1.37
+    user: "0"
+    restart: "no"
+    command: ["chown", "100:1000", "/openbao/data"]
+    volumes:
+      - "staging-openbao-raft:/openbao/data"
+
+  openbao:
+    depends_on:
+      openbao-raft-permissions:
+        condition: service_completed_successfully
+    image: openbao/openbao:2.7.0@sha256:71156a1c6623a5fa3f5e61b0c6a8ead0faf0df29a778339188443551995d1315
+    restart: unless-stopped
+    command: ["server", "-config=/openbao/config/openbao.hcl"]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      shopai-staging-secrets-net:
+        aliases: [openbao.shopai.internal]
+    volumes:
+      - "./openbao/openbao.hcl:/openbao/config/openbao.hcl:ro"
+      - "${STAGING_OPENBAO_TLS_DIR:?OpenBao TLS dizini gerekli}:/openbao/tls:ro"
+      - "staging-openbao-raft:/openbao/data"
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=https://openbao.shopai.internal:8200", "-ca-cert=/openbao/tls/ca.crt"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   api:
     <<: *app
+    depends_on:
+      openbao:
+        condition: service_healthy
+    networks:
+      - shopai-staging-net
+      - shopai-staging-secrets-net
     environment:
       <<: *runtime
       AUTH_PILOT_LOGIN_ENABLED: "${STAGING_AUTH_PILOT_LOGIN_ENABLED:-true}"
@@ -35,10 +79,15 @@ services:
       AUTH_EMAIL_FROM: "${STAGING_AUTH_EMAIL_FROM:-}"
       RESEND_API_KEY: "${STAGING_RESEND_API_KEY:-}"
       SHOPAI_ROLE: api
+      CONNECTOR_SECRET_OPENBAO_ROLE_ID: "${STAGING_OPENBAO_API_ROLE_ID:?API AppRole role ID gerekli}"
+      CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: /run/secrets/openbao-role-secret-id
       HOST: 0.0.0.0
       PORT: 4000
     ports: ["127.0.0.1:4400:4000"]
-    volumes: ["staging-private-uploads:/var/lib/shopai/uploads"]
+    volumes:
+      - "staging-private-uploads:/var/lib/shopai/uploads"
+      - "${STAGING_OPENBAO_CA_CERT:?OpenBao CA certificate gerekli}:/etc/shopai/openbao-ca.crt:ro"
+      - "${STAGING_OPENBAO_API_SECRET_ID_FILE:?API AppRole SecretID dosyası gerekli}:/run/secrets/openbao-role-secret-id:ro"
     healthcheck:
       test:
         [
@@ -53,10 +102,21 @@ services:
 
   worker:
     <<: *app
+    depends_on:
+      openbao:
+        condition: service_healthy
+    networks:
+      - shopai-staging-net
+      - shopai-staging-secrets-net
     environment:
       <<: *runtime
       SHOPAI_ROLE: worker
-    volumes: ["staging-private-uploads:/var/lib/shopai/uploads"]
+      CONNECTOR_SECRET_OPENBAO_ROLE_ID: "${STAGING_OPENBAO_WORKER_ROLE_ID:?Worker AppRole role ID gerekli}"
+      CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: /run/secrets/openbao-role-secret-id
+    volumes:
+      - "staging-private-uploads:/var/lib/shopai/uploads"
+      - "${STAGING_OPENBAO_CA_CERT:?OpenBao CA certificate gerekli}:/etc/shopai/openbao-ca.crt:ro"
+      - "${STAGING_OPENBAO_WORKER_SECRET_ID_FILE:?Worker AppRole SecretID dosyası gerekli}:/run/secrets/openbao-role-secret-id:ro"
 
   web:
     <<: *app
@@ -105,6 +165,8 @@ services:
       SHOPAI_ROLE: migrate
 
 volumes:
+  staging-openbao-raft:
+    name: shopai-staging-openbao-raft
   staging-private-uploads:
     name: shopai-staging-private-uploads
 
@@ -112,3 +174,6 @@ networks:
   shopai-staging-net:
     external: true
     name: shopai-staging-net
+  shopai-staging-secrets-net:
+    internal: true
+    name: shopai-staging-secrets-net

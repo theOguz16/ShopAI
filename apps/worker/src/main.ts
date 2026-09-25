@@ -1,4 +1,8 @@
-import { ConnectorHttpError, LIVE_CATALOG_PROVIDERS } from '@shopai/connectors';
+import {
+  ConnectorHttpError,
+  LIVE_CATALOG_PROVIDERS,
+  createConnectorSecretBackend,
+} from '@shopai/connectors';
 import { IMPORT_QUEUE, SYNC_QUEUE } from '@shopai/contracts';
 import {
   connections,
@@ -18,6 +22,18 @@ import { connectionToSyncJob } from './scheduler.js';
 import { EnvironmentSecretResolver, syncCatalogConnection } from './sync.js';
 
 const env = parseWorkerEnv(process.env);
+const connectorSecretBackend = createConnectorSecretBackend({
+  backend: env.CONNECTOR_SECRET_BACKEND,
+  privateRoot: process.env.UPLOAD_DIR ?? 'private/uploads',
+  encryptionKey: env.CONNECTOR_SECRET_ENCRYPTION_KEY,
+  address: env.CONNECTOR_SECRET_OPENBAO_ADDRESS,
+  mount: env.CONNECTOR_SECRET_OPENBAO_MOUNT,
+  roleId: env.CONNECTOR_SECRET_OPENBAO_ROLE_ID,
+  secretId: env.CONNECTOR_SECRET_OPENBAO_SECRET_ID,
+  secretIdFile: env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE,
+});
+if (env.CONNECTOR_SECRET_BACKEND === 'openbao')
+  await connectorSecretBackend.health();
 const database = createDatabase(env.DATABASE_URL);
 const alertEmailSender = createAlertEmailSender(env);
 const opsAlerts = createOpsAlertSender(env);
@@ -44,7 +60,6 @@ const connectorFailureFields = (error: Error) =>
     ? {
         httpStatus: error.status,
         retryAfterMs: error.retryAfterMs,
-        ...error.diagnostics,
       }
     : {};
 const worker = new Worker(
@@ -65,10 +80,12 @@ const syncWorker = new Worker(
     syncCatalogConnection(
       database.db,
       job.data,
-      new EnvironmentSecretResolver(process.env),
+      new EnvironmentSecretResolver(process.env, connectorSecretBackend),
       undefined,
       undefined,
       alertEmailSender,
+      job.id,
+      env.CONNECTOR_SECRET_BACKEND,
     ),
   {
     connection: {

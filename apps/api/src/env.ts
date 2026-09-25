@@ -18,6 +18,11 @@ const optionalConnectorEncryptionKeySchema = z.preprocess(
     )
     .optional(),
 );
+const optionalNonemptyString = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().min(1).optional(),
+);
 
 const optionalOpsWebhookUrlSchema = z.preprocess(
   (value) =>
@@ -91,6 +96,12 @@ const baseSchema = z.object({
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(30).default(5),
   UPLOAD_DIR: z.string().min(1).default('private/uploads'),
   CONNECTOR_SECRET_ENCRYPTION_KEY: optionalConnectorEncryptionKeySchema,
+  CONNECTOR_SECRET_BACKEND: z.enum(['file', 'openbao']).default('file'),
+  CONNECTOR_SECRET_OPENBAO_ADDRESS: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_MOUNT: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_ROLE_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID: optionalNonemptyString,
+  CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE: optionalNonemptyString,
   OPS_ALERT_WEBHOOK_URL: optionalOpsWebhookUrlSchema,
   OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
   REDIS_URL: redisUrlSchema.default('redis://127.0.0.1:6379'),
@@ -242,8 +253,85 @@ const apiEnvSchema = z
         path: ['OPS_ALERT_WEBHOOK_URL'],
         message: 'production ortamında harici operasyon alert sink zorunludur',
       });
+    if (
+      (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+      env.CONNECTOR_SECRET_BACKEND !== 'openbao'
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CONNECTOR_SECRET_BACKEND'],
+        message: 'hosted ortam OpenBao secret backend gerektirir',
+      });
+    if (env.CONNECTOR_SECRET_BACKEND === 'openbao') {
+      for (const key of [
+        'CONNECTOR_SECRET_OPENBAO_ADDRESS',
+        'CONNECTOR_SECRET_OPENBAO_MOUNT',
+        'CONNECTOR_SECRET_OPENBAO_ROLE_ID',
+      ] as const)
+        if (!env[key])
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: 'OpenBao ayarı gerekli',
+          });
+      if (
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID &&
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE'],
+          message: 'OpenBao bootstrap credential gerekli',
+        });
+      if (
+        (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+        !env.CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID_FILE'],
+          message: 'hosted OpenBao credential dosyası gerekli',
+        });
+      if (
+        (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') &&
+        env.CONNECTOR_SECRET_OPENBAO_SECRET_ID
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_OPENBAO_SECRET_ID'],
+          message: 'hosted AppRole SecretID env yerine dosyada tutulmalıdır',
+        });
+      if (env.CONNECTOR_SECRET_OPENBAO_ADDRESS) {
+        try {
+          const url = new URL(env.CONNECTOR_SECRET_OPENBAO_ADDRESS);
+          if (
+            url.protocol !== 'https:' ||
+            url.pathname !== '/' ||
+            url.search ||
+            url.hash
+          )
+            throw new Error('invalid OpenBao URL');
+        } catch {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['CONNECTOR_SECRET_OPENBAO_ADDRESS'],
+            message: 'OpenBao HTTPS origin gerekli',
+          });
+        }
+      }
+      const expectedMount = `shopai-${env.DEPLOY_ENV}`;
+      if (env.CONNECTOR_SECRET_OPENBAO_MOUNT !== expectedMount)
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['CONNECTOR_SECRET_OPENBAO_MOUNT'],
+          message: `${env.DEPLOY_ENV} mount ayrı olmalıdır`,
+        });
+    }
     if (env.DEPLOY_ENV === 'staging' || env.DEPLOY_ENV === 'production') {
-      if (!env.CONNECTOR_SECRET_ENCRYPTION_KEY)
+      if (
+        env.CONNECTOR_SECRET_BACKEND === 'file' &&
+        !env.CONNECTOR_SECRET_ENCRYPTION_KEY
+      )
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['CONNECTOR_SECRET_ENCRYPTION_KEY'],
