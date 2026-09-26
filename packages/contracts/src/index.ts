@@ -274,6 +274,8 @@ export const syncJobSchema = z
   .object({
     merchantId: z.string().uuid(),
     connectionId: z.string().uuid(),
+    /** Reference to the durable sync run; retries of one job reuse it for checkpoint resume. */
+    syncRunId: z.string().uuid().optional(),
   })
   .strict();
 export type SyncJob = z.infer<typeof syncJobSchema>;

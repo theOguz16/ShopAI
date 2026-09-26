@@ -42,6 +42,19 @@ const optionalOpsWebhookSecretSchema = z.preprocess(
   z.string().min(32).optional(),
 );
 
+/** Rows per bounded import chunk; 1..1000 mirrors the ImportJob contract. */
+const syncBatchSizeSchema = z.preprocess(
+  (value) => (value === undefined || value === '' ? undefined : value),
+  z
+    .string()
+    .regex(/^[0-9]+$/u)
+    .transform((value) => Number(value))
+    .refine(
+      (value) => Number.isSafeInteger(value) && value >= 1 && value <= 1000,
+    )
+    .optional(),
+);
+
 const workerEnvSchema = z
   .object({
     DEPLOY_ENV: z
@@ -67,6 +80,7 @@ const workerEnvSchema = z
     OPS_ALERT_WEBHOOK_SECRET: optionalOpsWebhookSecretSchema,
     RESEND_API_KEY: z.string().min(8).optional(),
     ALERT_FROM_EMAIL: z.string().email().optional(),
+    CATALOG_SYNC_BATCH_SIZE: syncBatchSizeSchema,
   })
   .superRefine((env, context) => {
     if (env.DEPLOY_ENV !== 'local' && env.RELEASE_VERSION === 'development')

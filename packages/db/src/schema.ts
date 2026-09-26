@@ -372,6 +372,8 @@ export const offers = pgTable(
     currency: text('currency').notNull(),
     checkoutUrl: text('checkout_url').notNull(),
     active: boolean('active').notNull().default(true),
+    /** Last sync run that observed this offer; full syncs deactivate offers no run member saw. */
+    lastSyncRunId: uuid('last_sync_run_id'),
     observedAt: at('observed_at').notNull(),
     fetchedAt: at('fetched_at').notNull().defaultNow(),
   },
@@ -391,6 +393,10 @@ export const offers = pgTable(
       sql`${t.priceMinor} >= 0 and ${t.priceMinor} <= 9007199254740991`,
     ),
     check('offer_currency', sql`${t.currency} = 'TRY'`),
+    index('offers_connection_last_sync_run').on(
+      t.connectionId,
+      t.lastSyncRunId,
+    ),
   ],
 );
 export const inventory = pgTable(

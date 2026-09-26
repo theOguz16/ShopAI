@@ -86,6 +86,7 @@ const syncWorker = new Worker(
       alertEmailSender,
       job.id,
       env.CONNECTOR_SECRET_BACKEND,
+      { batchSize: env.CATALOG_SYNC_BATCH_SIZE },
     ),
   {
     connection: {
@@ -276,13 +277,24 @@ worker.on('failed', (job, error) =>
 worker.on('error', (error) =>
   operationalLog('error', 'import_worker_error', { error: error.message }),
 );
-syncWorker.on('completed', (job) =>
+syncWorker.on('completed', (job, result) => {
+  const summary = (result ?? {}) as {
+    imported?: number;
+    syncRunId?: string;
+    counters?: Record<string, unknown>;
+    durationMs?: number;
+    reason?: string;
+  };
   operationalLog('info', 'sync_completed', {
     jobId: job.id,
     connectionId: job.data?.connectionId,
     merchantId: job.data?.merchantId,
-  }),
-);
+    syncRunId: summary.syncRunId,
+    imported: summary.imported,
+    durationMs: summary.durationMs,
+    ...summary.counters,
+  });
+});
 syncWorker.on('failed', (job, error) =>
   operationalLog('error', 'sync_failed', {
     jobId: job?.id,
