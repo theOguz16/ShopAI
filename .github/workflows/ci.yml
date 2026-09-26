@@ -16,6 +16,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Exercise WordPress plugin key lifecycle in PHP
+        run: |
+          docker run --rm -v "$PWD:/app:ro" php:8.2-cli sh -lc '
+            php -l /app/integrations/wordpress/shopai-connector/shopai-connector.php &&
+            php -l /app/integrations/wordpress/shopai-connector/uninstall.php &&
+            php /app/tests/php/woocommerce-key-lifecycle.php
+          '
       - name: Validate production deployment artifacts
         shell: bash
         run: |

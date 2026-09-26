@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import {
-  ManagedConnectorSecretStore,
   type ConnectorSecretBackend,
+  ManagedConnectorSecretStore,
 } from '@shopai/connectors';
+import { publicStoreSchema, storeSlugSchema } from '@shopai/contracts';
 import {
   bootstrapMerchant,
+  connectionAudit,
   connections,
   connectorSecretAudit,
   connectorSecrets,
@@ -13,7 +15,6 @@ import {
   merchants,
   withTenant,
 } from '@shopai/db';
-import { publicStoreSchema, storeSlugSchema } from '@shopai/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
@@ -262,6 +263,9 @@ export async function registerMerchantRoutes(
             lastFetchedAt: connections.lastFetchedAt,
             lastSyncError: connections.lastSyncError,
             conversionTrackingEnabled: connections.conversionTrackingEnabled,
+            storeUrl: connections.storeUrl,
+            storeName: connections.storeName,
+            connectedVia: connections.connectedVia,
           })
           .from(connections)
           .where(
@@ -276,7 +280,7 @@ export async function registerMerchantRoutes(
   );
   app.delete(
     '/v1/merchants/:merchantId/connections/:connectionId',
-    { preHandler: [requireSameOrigin, requireRole('owner')] },
+    { preHandler: [requireSameOrigin, requireRole('owner', 'editor')] },
     async (request, reply) => {
       const { merchantId, connectionId } = request.params as {
         merchantId: string;
@@ -348,12 +352,32 @@ export async function registerMerchantRoutes(
             actor: request.auth?.userId ?? 'api',
             correlationId: request.id,
           });
+          await tx.insert(connectionAudit).values({
+            merchantId,
+            connectionId,
+            provider: current.provider,
+            event: 'connection_revoked',
+            actor: request.auth?.userId ?? 'api',
+            result: 'success',
+            correlationId: request.id,
+          });
           return {
             ...row,
             reference: current.credentialsRef,
             provider: current.provider,
             backend: managed?.backend,
           };
+        }
+        if (row && current) {
+          await tx.insert(connectionAudit).values({
+            merchantId,
+            connectionId,
+            provider: current.provider,
+            event: 'connection_revoked',
+            actor: request.auth?.userId ?? 'api',
+            result: 'success',
+            correlationId: request.id,
+          });
         }
         return row
           ? {

@@ -274,6 +274,13 @@
       "when": 1790700000000,
       "tag": "0039_sync_checkpoint",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790800000000,
+      "tag": "0040_woocommerce_pairing",
+      "breakpoints": true
     }
   ]
 }

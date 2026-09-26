@@ -13,9 +13,10 @@ export interface CatalogConnector {
 export * from './factory.js';
 export * from './live.js';
 export * from './managed-secrets.js';
-export * from './secret-backend.js';
 export * from './providers/trendyol.js';
 export * from './providers/woocommerce.js';
+export * from './secret-backend.js';
+export * from './store-url.js';
 export * from './target-safety.js';
 
 export function parseCatalogCsv(content: string) {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const httpsStoreUrlSchema = z
+export const httpsStoreUrlSchema = z
   .string()
   .trim()
   .min(1)

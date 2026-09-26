@@ -32,6 +32,18 @@ Tamamen sıfırlamak ayrıca `down --volumes` gerektirir; bu yalnız prova veris
 
 Eksik snapshot'ın mevcut teklifleri pasifleştirmediği worker + PostgreSQL seviyesinde `tests/integration/database.test.ts` tarafından ayrıca doğrulanır. Prova testi kaynağın değişimi ile connector okumasını aynı test adımı içinde ardışık yapar; uzak saat farkına dayanmaz.
 
+## Secure connection provası notu (ÜRÜN-008)
+
+Connector target-safety katmanı localhost hedeflerini reddettiği için, bu
+provanın connector tarafı `SHOPAI_WOO_REHEARSAL=1` çalışırken yalnız bu test
+dosyasına özel bir allowlist fetcher'ı kullanır
+(`createPublicConnectorFetch(..., { allowHosts: [storeHostname])`). Bu
+mekanizma production/staging API veya worker koduna hiçbir koşulda geçmez;
+ortam değişkeniyle "private host'a izin" fallback'i yoktur. ÜRÜN-008 pairing
+yaşam döngüsünün provası için bkz.
+[urun-008-woo-secure-connection.md](follow-ups/urun-008-woo-secure-connection.md);
+gerçek mağaza üzerinde eklenti kurulum provası ÜRÜN-009 kabulü ile yapılacaktır.
+
 ## Kanıt kaydı
 
 Her koşunun son üç satırı WordPress sürümü, WooCommerce sürümü ve ShopAI commit SHA'sını basar. Son başarılı koşu buraya eklenir; sonuç görülmeden önce beklenti tablosu değiştirilmez.

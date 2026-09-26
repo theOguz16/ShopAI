@@ -1,5 +1,5 @@
-import { sql } from 'drizzle-orm';
 import type { CatalogAttribute } from '@shopai/contracts';
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
@@ -11,6 +11,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -129,6 +130,13 @@ export const connections = pgTable(
     conversionTrackingEnabled: boolean('conversion_tracking_enabled')
       .notNull()
       .default(false),
+    // ÜRÜN-008 store identity: normalized canonical store URL (nullable for
+    // legacy csv/env connections), display name and onboarding provenance.
+    storeUrl: text('store_url'),
+    storeName: text('store_name'),
+    connectedVia: text('connected_via')
+      .notNull()
+      .default('dashboard_credentials'),
   },
   (t) => [
     unique().on(t.merchantId, t.id),
@@ -137,6 +145,77 @@ export const connections = pgTable(
       sql`${t.authorizationStatus} in ('pending','active','reauthorization_required','revoked')`,
     ),
     check('connection_sync_mode', sql`${t.syncMode} in ('full','incremental')`),
+    check(
+      'connection_connected_via',
+      sql`${t.connectedVia} in ('dashboard_credentials','plugin_pairing')`,
+    ),
+    uniqueIndex('source_connections_active_store_unique')
+      .on(t.provider, t.storeUrl)
+      .where(
+        sql`"active" = true AND "authorization_status" in ('pending','active','reauthorization_required') AND "store_url" IS NOT NULL`,
+      ),
+  ],
+);
+export const connectionPairings = pgTable(
+  'connection_pairings',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id),
+    provider: text('provider').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    // SHA-256 of the raw pairing token; the plaintext token is returned to
+    // the merchant once and never stored.
+    tokenHash: text('token_hash').notNull().unique(),
+    storeUrl: text('store_url').notNull(),
+    status: text('status').notNull().default('pending'),
+    expiresAt: at('expires_at').notNull(),
+    consumedAt: at('consumed_at'),
+    consumedConnectionId: uuid('consumed_connection_id'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.merchantId, t.consumedConnectionId],
+      foreignColumns: [connections.merchantId, connections.id],
+    }),
+    check('connection_pairing_provider', sql`${t.provider} in ('woocommerce')`),
+    check(
+      'connection_pairing_status',
+      sql`${t.status} in ('pending','consumed','expired','rejected')`,
+    ),
+    index('connection_pairings_merchant_created').on(t.merchantId, t.createdAt),
+  ],
+);
+export const connectionAudit = pgTable(
+  'connection_audit',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id').notNull(),
+    // Nullable: pairing events precede the connection they create.
+    connectionId: uuid('connection_id'),
+    provider: text('provider'),
+    event: text('event').notNull(),
+    actor: text('actor').notNull(),
+    result: text('result').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>(),
+    correlationId: text('correlation_id'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.merchantId, t.connectionId],
+      foreignColumns: [connections.merchantId, connections.id],
+    }),
+    check(
+      'connection_audit_event',
+      sql`${t.event} in ('pairing_created','pairing_consumed','pairing_rejected','connection_created','validation_failed','connection_reconnected','connection_secret_rotated','connection_revoked')`,
+    ),
+    check('connection_audit_result', sql`${t.result} in ('success','failure')`),
+    index('connection_audit_merchant_created').on(t.merchantId, t.createdAt),
   ],
 );
 export const merchantCredentialOwnerships = pgTable(
