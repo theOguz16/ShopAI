@@ -186,7 +186,7 @@ server-side istekle doğrulanır; doğrulama başarısızsa bağlantı aktif olm
 | URL normalizasyonu duplicate üretmez | PASS | 22 + `tests/store-url.test.ts` |
 | CSRF zorunlu | PASS | 23 |
 | Audit actor/merchant/connection var, secret yok | PASS | 24 |
-| `pnpm check` + tüm integration suite | Yerel PASS; exact-head CI bekleniyor | `pnpm check`; PostgreSQL/Redis üzerinde 31 dosya/173 test; PHP runtime key lifecycle 10 senaryo |
+| `pnpm check` + tüm integration suite | Yerel PASS; exact-head CI bekleniyor | `0039→0040` fresh migration; PostgreSQL/Redis üzerinde 33 dosya/187 test; PHP runtime key lifecycle 10 senaryo |
 
 **Ürün durumu: KISMİ.** Scope ve Woo key lifecycle düzeltmelerinin exact-head
 CI kanıtı ile gerçek WordPress/Woo ortamında eklenti kurulum, pairing,
