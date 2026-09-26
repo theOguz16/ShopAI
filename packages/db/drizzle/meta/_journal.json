@@ -267,6 +267,13 @@
       "when": 1790600000000,
       "tag": "0038_category_mapping",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0040_woocommerce_pairing",
+      "breakpoints": true
     }
   ]
 }

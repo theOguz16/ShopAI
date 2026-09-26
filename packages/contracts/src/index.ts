@@ -1,17 +1,18 @@
-export * from './attribution.js';
-export * from './discovery.js';
-export * from './onboarding.js';
-export * from './storefront.js';
 export * from './anonymous-shopping-profile.js';
-export * from './saved-products.js';
-export * from './product-alerts.js';
-export * from './search-analytics.js';
-export * from './interaction-events.js';
+export * from './attribution.js';
 export * from './catalog-attributes.js';
+export * from './discovery.js';
+export * from './interaction-events.js';
+export * from './onboarding.js';
+export * from './pairing.js';
+export * from './product-alerts.js';
+export * from './saved-products.js';
+export * from './search-analytics.js';
+export * from './storefront.js';
 
 import { z } from 'zod';
-import { searchAnalyticsIntentSchema } from './search-analytics.js';
 import { catalogAttributesSchema } from './catalog-attributes.js';
+import { searchAnalyticsIntentSchema } from './search-analytics.js';
 
 export const moneySchema = z
   .number()

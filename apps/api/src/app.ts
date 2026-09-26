@@ -4,14 +4,14 @@ import rateLimit from '@fastify/rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import {
+  type ConnectorSecretBackend,
+  createConnectorSecretBackend,
+} from '@shopai/connectors';
+import {
   discoverySessionCreateRequestSchema,
   searchRequestSchema,
 } from '@shopai/contracts';
 import { searchProductsRequestSchema } from '@shopai/contracts/search-products';
-import {
-  createConnectorSecretBackend,
-  type ConnectorSecretBackend,
-} from '@shopai/connectors';
 import { createDatabase } from '@shopai/db';
 import { sql } from 'drizzle-orm';
 import Fastify from 'fastify';
@@ -35,6 +35,10 @@ import {
   type OnboardingConnectorFactory,
   registerOnboardingRoutes,
 } from './routes/onboarding.js';
+import {
+  type PairingConnectorFactory,
+  registerPairingRoutes,
+} from './routes/pairing.js';
 import { registerProductAlertRoutes } from './routes/product-alerts.js';
 import { registerProductDetailRoutes } from './routes/product-detail.js';
 import { registerProductRoutes } from './routes/products.js';
@@ -65,6 +69,8 @@ function isSearchRoute(route: string) {
 
 export type BuildAppOptions = {
   onboardingConnectorFactory?: OnboardingConnectorFactory;
+  /** Shared connector factory for pairing credential verification (ÜRÜN-008). */
+  pairingConnectorFactory?: PairingConnectorFactory;
   connectorSecretBackend?: ConnectorSecretBackend;
 };
 
@@ -103,6 +109,8 @@ export async function buildApp(
         'req.headers.authorization',
         'req.headers.cookie',
         'req.headers.x-shopai-signature',
+        'req.headers.x-shopai-pairing-token',
+        'req.body.credentials',
         'req.body.consumerKey',
         'req.body.consumerSecret',
         'req.body.apiKey',
@@ -236,6 +244,12 @@ export async function buildApp(
     env,
     connectorSecretBackend,
     options.onboardingConnectorFactory,
+  );
+  await registerPairingRoutes(
+    app,
+    env,
+    connectorSecretBackend,
+    options.pairingConnectorFactory ?? options.onboardingConnectorFactory,
   );
   await registerSyncStatusRoutes(app);
   await registerStorefrontRoutes(app);

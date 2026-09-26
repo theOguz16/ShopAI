@@ -305,13 +305,14 @@ describe.sequential('merchant management authorization', () => {
       url: `/v1/merchants/${merchantA}/connections/${connectionA}`,
       headers: auth('editor-a@management.test'),
     });
-    expect(editorDelete.statusCode).toBe(403);
+    // ÜRÜN-008: editors may disconnect/revoke connections.
+    expect(editorDelete.statusCode).toBe(200);
     expect(
       await adminDatabase.db
         .select({ active: connections.active })
         .from(connections)
         .where(eq(connections.id, connectionA)),
-    ).toEqual([{ active: true }]);
+    ).toEqual([{ active: false }]);
 
     const crossDelete = await app.inject({
       method: 'DELETE',

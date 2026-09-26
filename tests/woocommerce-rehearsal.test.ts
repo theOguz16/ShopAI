@@ -1,8 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { WooCommerceConnector } from '../packages/connectors/src/index.js';
+import {
+  createPublicConnectorFetch,
+  WooCommerceConnector,
+} from '../packages/connectors/src/index.js';
 
 const enabled = process.env.SHOPAI_WOO_REHEARSAL === '1';
 const storeUrl = process.env.WOO_STORE_URL ?? 'https://localhost:18443';
+// Explicit test-only allow mechanism (ÜRÜN-008): the rehearsal store listens
+// on loopback, so this fetcher allowlists its hostname while keeping IP
+// pinning. Production/staging code paths never pass an allow policy.
+const rehearsalFetcher = createPublicConnectorFetch(undefined, undefined, {
+  allowHosts: [new URL(storeUrl).hostname],
+});
 const readCredentials = {
   storeUrl,
   consumerKey: process.env.WOO_READ_KEY ?? '',
@@ -29,7 +38,7 @@ async function woo(path: string, init: RequestInit = {}) {
 }
 
 async function readSnapshot(
-  connector = new WooCommerceConnector(readCredentials),
+  connector = new WooCommerceConnector(readCredentials, rehearsalFetcher),
 ) {
   const rows = [];
   let cursor: string | null = null;
@@ -130,7 +139,10 @@ describe.skipIf(!enabled)('real WooCommerce rehearsal', () => {
   });
 
   it('reconciles IDs, attributes, prices and stock through lifecycle changes', async () => {
-    const connector = new WooCommerceConnector(readCredentials);
+    const connector = new WooCommerceConnector(
+      readCredentials,
+      rehearsalFetcher,
+    );
     await connector.validate();
     const initial = await readSnapshot(connector);
     expect(initial.complete).toBe(true);
@@ -202,15 +214,18 @@ describe.skipIf(!enabled)('real WooCommerce rehearsal', () => {
   }, 120_000);
 
   it('rejects revoked credentials and recovers with the valid read key', async () => {
-    const revoked = new WooCommerceConnector({
-      ...readCredentials,
-      consumerSecret: 'cs_revoked_rehearsal_key',
-    });
+    const revoked = new WooCommerceConnector(
+      {
+        ...readCredentials,
+        consumerSecret: 'cs_revoked_rehearsal_key',
+      },
+      rehearsalFetcher,
+    );
     await expect(revoked.validate()).rejects.toMatchObject({
       reauthorizationRequired: true,
     });
     await expect(
-      new WooCommerceConnector(readCredentials).validate(),
+      new WooCommerceConnector(readCredentials, rehearsalFetcher).validate(),
     ).resolves.toBeUndefined();
   });
 

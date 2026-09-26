@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('database migrations', () => {
-  it('runs generic variants before scoped secret lifecycle, provider backend, legacy backfill and category mapping', async () => {
+  it('runs generic variants before scoped secret lifecycle, provider backend, legacy backfill, category mapping and woocommerce pairing', async () => {
     const journal = JSON.parse(
       await readFile(
         new URL('../packages/db/drizzle/meta/_journal.json', import.meta.url),
@@ -12,12 +12,48 @@ describe('database migrations', () => {
     expect(
       journal.entries.slice(-5).map(({ idx, tag }) => ({ idx, tag })),
     ).toEqual([
-      { idx: 33, tag: '0034_generic_product_variants' },
       { idx: 34, tag: '0035_connector_secret_lifecycle' },
       { idx: 35, tag: '0036_connector_secret_backend' },
       { idx: 36, tag: '0037_connector_secret_legacy_backfill' },
       { idx: 37, tag: '0038_category_mapping' },
+      // 0039 is the ÜRÜN-007 provisional slot; 0040 is the ÜRÜN-008 pairing
+      // reservation. Merge order decides the final contiguous renumber.
+      { idx: 38, tag: '0040_woocommerce_pairing' },
     ]);
+  });
+  it('creates tenant-scoped pairing state and connection audit without secret material', async () => {
+    const migration = await readFile(
+      new URL(
+        '../packages/db/drizzle/0040_woocommerce_pairing.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(migration).toContain('CREATE TABLE "connection_pairings"');
+    expect(migration).toContain('"token_hash" text NOT NULL UNIQUE');
+    expect(migration).toContain(
+      "CHECK (\"status\" in ('pending','consumed','expired','rejected'))",
+    );
+    expect(migration).toContain('CREATE TABLE "connection_audit"');
+    expect(migration).toContain(
+      "CHECK (\"event\" in ('pairing_created','pairing_consumed','pairing_rejected','connection_created','validation_failed','connection_reconnected','connection_secret_rotated','connection_revoked'))",
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "source_connections_active_store_unique"',
+    );
+    expect(migration).toContain(
+      'REFERENCES "public"."source_connections"("merchant_id", "id")',
+    );
+    expect(migration).toContain(
+      'REVOKE ALL ON "connection_pairings" FROM "shopai_public", "shopai_worker"',
+    );
+    expect(migration).toContain(
+      'REVOKE ALL ON "connection_audit" FROM "shopai_public", "shopai_worker"',
+    );
+    expect(migration).toContain('FORCE ROW LEVEL SECURITY');
+    expect(migration).toContain('CREATE POLICY "tenant_connection_pairings"');
+    expect(migration).toContain('CREATE POLICY "tenant_connection_audit"');
+    expect(migration).not.toMatch(/consumerKey|consumerSecret|cs_[0-9a-f]/iu);
   });
   it('backfills legacy scoped-file lifecycle rows idempotently without touching connection state', async () => {
     const migration = await readFile(

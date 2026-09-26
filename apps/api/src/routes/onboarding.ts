@@ -1,28 +1,30 @@
+import { randomUUID } from 'node:crypto';
 import {
+  type ConnectorSecretBackend,
   createLiveCatalogConnector,
   type LiveCatalogConnector,
-  type ConnectorSecretBackend,
+  normalizeConnectorStoreUrl,
 } from '@shopai/connectors';
 import {
+  type ConnectorOnboardingProvider,
   connectorOnboardingProviderSchema,
   connectorOnboardingResponseSchema,
   connectorTestResponseSchema,
-  type ConnectorOnboardingProvider,
   SYNC_QUEUE,
   trendyolOnboardingCredentialsSchema,
   woocommerceOnboardingCredentialsSchema,
 } from '@shopai/contracts';
-import { randomUUID } from 'node:crypto';
 import {
+  connectionAudit,
+  connectionSyncProgress,
   connections,
   connectorSecretAudit,
   connectorSecrets,
-  connectionSyncProgress,
   merchantCredentialOwnerships,
   withTenant,
 } from '@shopai/db';
 import { Queue } from 'bullmq';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../env.js';
 import { requireRole, requireSameOrigin } from '../plugins/auth.js';
@@ -163,6 +165,13 @@ export async function registerOnboardingRoutes(
               credentialsRef: reference,
               authorizationStatus: 'active',
               lastSyncError: null,
+              ...(provider === 'woocommerce'
+                ? {
+                    storeUrl: normalizeConnectorStoreUrl(
+                      (parsed.data as { storeUrl?: string }).storeUrl ?? '',
+                    ),
+                  }
+                : {}),
             })
             .where(
               and(
@@ -184,6 +193,15 @@ export async function registerOnboardingRoutes(
             reference,
             event: 'rotated',
             actor: request.auth?.userId ?? 'api',
+            correlationId: request.id,
+          });
+          await tx.insert(connectionAudit).values({
+            merchantId,
+            connectionId,
+            provider,
+            event: 'connection_secret_rotated',
+            actor: request.auth?.userId ?? 'api',
+            result: 'success',
             correlationId: request.id,
           });
           return true;
@@ -243,9 +261,19 @@ export async function registerOnboardingRoutes(
       const { merchantId } = request.params as { merchantId: string };
       const db = app.authApi.db;
       if (!db) return reply.code(503).send({ code: 'ONBOARDING_UNAVAILABLE' });
+      let credentials: unknown = parsed.data;
+      if (provider === 'woocommerce') {
+        // ÜRÜN-008: canonicalize the store URL so ownership conflicts and
+        // reconnects compare equivalent URLs equally.
+        const storeUrl = normalizeConnectorStoreUrl(
+          (parsed.data as { storeUrl?: string }).storeUrl ?? '',
+        );
+        if (!storeUrl) return reply.code(400).send({ code: 'INVALID_INPUT' });
+        credentials = { ...(parsed.data as Record<string, unknown>), storeUrl };
+      }
 
       try {
-        await validateConnector(provider, parsed.data, connectorFactory);
+        await validateConnector(provider, credentials, connectorFactory);
       } catch {
         return reply.code(422).send({
           status: 'failed',
@@ -255,9 +283,10 @@ export async function registerOnboardingRoutes(
 
       const connectionId = randomUUID();
       const scope = { merchantId, connectionId, provider };
-      const credentialsRef = await secretStore.createScoped(parsed.data, scope);
+      const credentialsRef = await secretStore.createScoped(credentials, scope);
       let created:
         | 'exists'
+        | 'store_conflict'
         | {
             id: string;
             provider: ConnectorOnboardingProvider;
@@ -281,6 +310,31 @@ export async function registerOnboardingRoutes(
             )
             .limit(1);
           if (existing) return 'exists' as const;
+          const wooStoreUrl =
+            provider === 'woocommerce'
+              ? normalizeConnectorStoreUrl(
+                  (credentials as { storeUrl: string }).storeUrl,
+                )
+              : null;
+          if (wooStoreUrl) {
+            const [conflict] = await tx
+              .select({
+                id: connections.id,
+                merchantId: connections.merchantId,
+              })
+              .from(connections)
+              .where(
+                and(
+                  eq(connections.provider, 'woocommerce'),
+                  eq(connections.storeUrl, wooStoreUrl),
+                  eq(connections.active, true),
+                  ne(connections.authorizationStatus, 'revoked'),
+                ),
+              )
+              .limit(1);
+            if (conflict && conflict.merchantId !== merchantId)
+              return 'store_conflict' as const;
+          }
 
           await tx.insert(merchantCredentialOwnerships).values({
             merchantId,
@@ -296,6 +350,11 @@ export async function registerOnboardingRoutes(
               credentialsRef,
               syncMode: 'incremental',
               authorizationStatus: 'pending',
+              ...(provider === 'woocommerce'
+                ? {
+                    storeUrl: (credentials as { storeUrl: string }).storeUrl,
+                  }
+                : {}),
               conversionTrackingEnabled: Boolean(
                 env.CONVERSION_CALLBACK_SECRET,
               ),
@@ -321,6 +380,15 @@ export async function registerOnboardingRoutes(
             reference: credentialsRef,
             event: 'created',
             actor: request.auth?.userId ?? 'api',
+            correlationId: request.id,
+          });
+          await tx.insert(connectionAudit).values({
+            merchantId,
+            connectionId: connection.id,
+            provider,
+            event: 'connection_created',
+            actor: request.auth?.userId ?? 'api',
+            result: 'success',
             correlationId: request.id,
           });
           await tx.insert(connectionSyncProgress).values({
@@ -350,6 +418,10 @@ export async function registerOnboardingRoutes(
       if (created === 'exists') {
         await secretStore.remove(credentialsRef, scope).catch(() => undefined);
         return reply.code(409).send({ code: 'CONNECTION_ALREADY_EXISTS' });
+      }
+      if (created === 'store_conflict') {
+        await secretStore.remove(credentialsRef, scope).catch(() => undefined);
+        return reply.code(409).send({ code: 'STORE_OWNERSHIP_CONFLICT' });
       }
 
       let syncStatus: 'queued' | 'pending_retry' = 'queued';

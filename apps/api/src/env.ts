@@ -150,6 +150,13 @@ const baseSchema = z.object({
       typeof value === 'string' && value.trim() === '' ? undefined : value,
     z.string().min(32).optional(),
   ),
+  PAIRING_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(15),
+  PAIRING_COMPLETE_RATE_LIMIT_MAX: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(600)
+    .default(10),
 });
 
 const apiEnvSchema = z

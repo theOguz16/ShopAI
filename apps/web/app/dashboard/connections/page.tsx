@@ -18,10 +18,20 @@ type Connection = {
   lastFetchedAt: string | null;
   lastSyncError: string | null;
   conversionTrackingEnabled: boolean;
+  storeUrl?: string | null;
+  storeName?: string | null;
+  connectedVia?: string;
+};
+type Pairing = {
+  id: string;
+  storeUrl: string;
+  pairingToken: string;
+  expiresAt: string;
 };
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 type TestState = 'idle' | 'testing' | 'success' | 'failed';
+type WooMode = 'plugin' | 'manual';
 
 const wizardSteps = [
   'Mağaza bilgileri',
@@ -43,13 +53,21 @@ const freshnessLabel = (value: string | null) => {
   return ageMinutes <= 15 ? 'Güncel' : 'Gecikmiş';
 };
 
+const connectedViaLabel = (value?: string) =>
+  value === 'plugin_pairing'
+    ? 'Eklenti ile'
+    : value === 'dashboard_credentials'
+      ? 'Manuel'
+      : null;
+
 export default function ConnectionsPage() {
   const { merchantId, activeMerchant } = useActiveMerchant();
   const canConnect = activeMerchant.role !== 'viewer';
-  const canRevoke = activeMerchant.role === 'owner';
   const [connections, setConnections] = useState<Connection[]>([]);
   const [step, setStep] = useState<WizardStep>(1);
   const [provider, setProvider] = useState<Provider>('woocommerce');
+  const [wooMode, setWooMode] = useState<WooMode>('plugin');
+  const [pairing, setPairing] = useState<Pairing | null>(null);
   const [storeUrl, setStoreUrl] = useState('');
   const [consumerKey, setConsumerKey] = useState('');
   const [consumerSecret, setConsumerSecret] = useState('');
@@ -81,6 +99,8 @@ export default function ConnectionsPage() {
     setConnections([]);
     setStep(1);
     setProvider('woocommerce');
+    setWooMode('plugin');
+    setPairing(null);
     setStoreUrl('');
     setConsumerKey('');
     setConsumerSecret('');
@@ -122,11 +142,56 @@ export default function ConnectionsPage() {
   const allProvidersConnected =
     activeProviders.has('woocommerce') && activeProviders.has('trendyol');
 
+  // Eklenti pairing'i bekleme: pairing aktifken bağlantı listesi yoklanır;
+  // aynı normalize edilmiş mağaza adresiyle plugin_pairing bağlantısı
+  // göründüğünde sihirbaz sonuca atlar.
+  const pendingPairingStoreUrl = pairing?.storeUrl;
+  useEffect(() => {
+    if (!pendingPairingStoreUrl || step !== 3) return;
+    const timer = window.setInterval(
+      () => void refresh().catch(() => undefined),
+      3000,
+    );
+    return () => window.clearInterval(timer);
+  }, [pendingPairingStoreUrl, step, refresh]);
+
+  useEffect(() => {
+    if (!pairing || step !== 3) return;
+    const matched = connections.find(
+      (connection) =>
+        connection.provider === 'woocommerce' &&
+        connection.authorizationStatus !== 'revoked' &&
+        (connection.storeUrl ?? '').replace(/\/+$/u, '') ===
+          pairing.storeUrl.replace(/\/+$/u, ''),
+    );
+    if (matched) {
+      setOnboardedConnectionId(matched.id);
+      setPairing(null);
+      setStep(6);
+      setMessage('Mağaza eklenti üzerinden bağlandı.');
+      void refresh().catch(() => undefined);
+    }
+  }, [connections, pairing, step, refresh]);
+
   function chooseProvider(nextProvider: Provider) {
     if (activeProviders.has(nextProvider)) return;
     setProvider(nextProvider);
+    setWooMode('plugin');
+    setPairing(null);
     setTestState('idle');
     setMessage('');
+    setStep(3);
+  }
+
+  function startReconnect(connection: Connection) {
+    if (!canConnect || busy) return;
+    setProvider('woocommerce');
+    setWooMode('plugin');
+    setPairing(null);
+    setStoreUrl(connection.storeUrl ?? '');
+    setTestState('idle');
+    setMessage('');
+    setOnboardedConnectionId('');
     setStep(3);
   }
 
@@ -152,6 +217,48 @@ export default function ConnectionsPage() {
     setSellerId('');
     setApiKey('');
     setApiSecret('');
+  }
+
+  async function createPairing() {
+    if (!canConnect || busy) return;
+    const normalized = storeUrl.trim().replace(/\/+$/u, '');
+    if (!normalized.startsWith('https://')) {
+      setMessage('Store URL https:// ile başlamalı.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await authenticatedFetch(
+        `${api}/v1/merchants/${merchantId}/connections/woocommerce/pairing`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ storeUrl: normalized }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as
+        | { pairing?: Pairing }
+        | { code?: string }
+        | null;
+      if (response.ok && body && 'pairing' in body && body.pairing) {
+        setPairing(body.pairing);
+        setMessage('');
+      } else if (response.status === 409) {
+        setMessage(
+          'Bu mağaza başka bir merchant tarafından zaten bağlanmış. Mağaza sahipliği çakışması: ShopAI destek süreci dışında devralınamaz.',
+        );
+      } else if (response.status === 403) {
+        setMessage('Pairing başlatma yetkin yok.');
+      } else {
+        setMessage('Pairing kodu üretilemedi.');
+      }
+    } catch {
+      setMessage('Pairing kodu üretilemedi.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function testConnection() {
@@ -233,7 +340,7 @@ export default function ConnectionsPage() {
   }
 
   async function revoke(connectionId: string) {
-    if (!canRevoke || busy) return;
+    if (!canConnect || busy) return;
     setBusy(true);
     try {
       const response = await authenticatedFetch(
@@ -249,6 +356,7 @@ export default function ConnectionsPage() {
         setOnboardedConnectionId('');
         setStep(1);
         setTestState('idle');
+        setPairing(null);
       }
       await refresh();
     } finally {
@@ -348,19 +456,146 @@ export default function ConnectionsPage() {
             </>
           ) : null}
 
-          {step === 3 ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                setTestState('idle');
-                setMessage('');
-                setStep(4);
-              }}
-            >
-              <p className="eyebrow">3 · Connector bilgileri</p>
-              <h2>{providerLabels[provider]} bilgilerini gir</h2>
-              {provider === 'woocommerce' ? (
+          {step === 3 && provider === 'woocommerce' ? (
+            <>
+              <p className="eyebrow">3 · WooCommerce bağlantısı</p>
+              <h2>WooCommerce mağazanı bağla</h2>
+              <div className="connection-actions">
+                <button
+                  type="button"
+                  className={wooMode === 'plugin' ? 'current' : undefined}
+                  onClick={() => {
+                    setWooMode('plugin');
+                    setPairing(null);
+                    setMessage('');
+                  }}
+                >
+                  Önerilen: ShopAI eklentisi ile
+                </button>
+                <button
+                  type="button"
+                  className={wooMode === 'manual' ? 'current' : undefined}
+                  onClick={() => {
+                    setWooMode('manual');
+                    setPairing(null);
+                    setMessage('');
+                  }}
+                >
+                  Alternatif: manuel API anahtarı
+                </button>
+              </div>
+
+              {wooMode === 'plugin' ? (
                 <>
+                  <label>
+                    Store URL
+                    <input
+                      required
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://magazam.com"
+                      value={storeUrl}
+                      onChange={(event) => setStoreUrl(event.target.value)}
+                    />
+                  </label>
+                  {pairing ? (
+                    <>
+                      <p role="status">
+                        Pairing kodu üretildi.{' '}
+                        <strong>
+                          Geçerlilik:{' '}
+                          {new Date(pairing.expiresAt).toLocaleString('tr-TR')}
+                        </strong>
+                      </p>
+                      <ol>
+                        <li>
+                          Mağazanın WordPress yönetim paneline
+                          <strong> manage_woocommerce</strong> yetkili bir
+                          yönetici olarak gir.
+                        </li>
+                        <li>
+                          ShopAI Connector eklentisini kur ve etkinleştir
+                          (WooCommerce → ShopAI Connector).
+                        </li>
+                        <li>
+                          ShopAI API adresini ve aşağıdaki pairing kodunu
+                          eklenti formuna gir, eşleştirmeyi başlat.
+                        </li>
+                      </ol>
+                      <p>
+                        Pairing kodu (tek kullanımlık; bu sayfada bir kez
+                        gösterilir):
+                      </p>
+                      <code
+                        style={{
+                          display: 'block',
+                          wordBreak: 'break-all',
+                          padding: '8px',
+                        }}
+                      >
+                        {pairing.pairingToken}
+                      </code>
+                      <div className="connection-actions">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void refresh().catch(() => undefined)}
+                        >
+                          Bağlantı durumunu yenile
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setPairing(null);
+                            void createPairing();
+                          }}
+                        >
+                          Yeni kod üret
+                        </button>
+                      </div>
+                      <p className="role-note" role="status">
+                        Mağaza eşleştiğinde bu sihirbaz otomatik olarak sonuca
+                        geçer. Bağlantı sırasında raw API anahtarı tarayıcına
+                        hiç ulaşmaz.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="role-note">
+                        Eklenti akışında WooCommerce API anahtarını mağazanın
+                        WordPress paneli üretir ve doğrudan ShopAI sunucusuna
+                        gönderir; anahtar bu tarayıcıya girilmez.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void createPairing()}
+                      >
+                        Pairing kodu üret
+                      </button>
+                    </>
+                  )}
+                  {message ? (
+                    <p className="error-note" role="alert">
+                      {message}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setTestState('idle');
+                    setMessage('');
+                    setStep(4);
+                  }}
+                >
+                  <p className="role-note">
+                    Manuel akışta API anahtarını bu tarayıcıya girersin; HTTPS
+                    üzerinden sunucuya taşınır ve güvenli alana yazılır. Mümkün
+                    olduğunca eklenti akışını kullan.
+                  </p>
                   <label>
                     Store URL
                     <input
@@ -393,61 +628,73 @@ export default function ConnectionsPage() {
                       }
                     />
                   </label>
-                </>
-              ) : (
-                <>
-                  <label>
-                    Seller ID
-                    <input
-                      required
-                      inputMode="numeric"
-                      pattern="[0-9]+"
-                      placeholder="123456"
-                      value={sellerId}
-                      onChange={(event) => setSellerId(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    API Key
-                    <input
-                      required
-                      autoComplete="off"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    API Secret
-                    <input
-                      required
-                      type="password"
-                      autoComplete="new-password"
-                      value={apiSecret}
-                      onChange={(event) => setApiSecret(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Ortam
-                    <select
-                      value={trendyolEnvironment}
-                      onChange={(event) =>
-                        setTrendyolEnvironment(
-                          event.target.value as TrendyolEnvironment,
-                        )
-                      }
-                    >
-                      <option value="production">Production</option>
-                      <option value="stage">Stage / test</option>
-                    </select>
-                  </label>
-                  {trendyolEnvironment === 'stage' ? (
-                    <p className="role-note">
-                      Stage kullanımı için Trendyol test erişimi ve gerekli IP
-                      yetkilendirmesi hesabında hazır olmalı.
-                    </p>
-                  ) : null}
-                </>
+                  <button type="submit">Bağlantıyı test etmeye geç</button>
+                </form>
               )}
+            </>
+          ) : null}
+
+          {step === 3 && provider === 'trendyol' ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setTestState('idle');
+                setMessage('');
+                setStep(4);
+              }}
+            >
+              <p className="eyebrow">3 · Connector bilgileri</p>
+              <h2>{providerLabels[provider]} bilgilerini gir</h2>
+              <label>
+                Seller ID
+                <input
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]+"
+                  placeholder="123456"
+                  value={sellerId}
+                  onChange={(event) => setSellerId(event.target.value)}
+                />
+              </label>
+              <label>
+                API Key
+                <input
+                  required
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+              </label>
+              <label>
+                API Secret
+                <input
+                  required
+                  type="password"
+                  autoComplete="new-password"
+                  value={apiSecret}
+                  onChange={(event) => setApiSecret(event.target.value)}
+                />
+              </label>
+              <label>
+                Ortam
+                <select
+                  value={trendyolEnvironment}
+                  onChange={(event) =>
+                    setTrendyolEnvironment(
+                      event.target.value as TrendyolEnvironment,
+                    )
+                  }
+                >
+                  <option value="production">Production</option>
+                  <option value="stage">Stage / test</option>
+                </select>
+              </label>
+              {trendyolEnvironment === 'stage' ? (
+                <p className="role-note">
+                  Stage kullanımı için Trendyol test erişimi ve gerekli IP
+                  yetkilendirmesi hesabında hazır olmalı.
+                </p>
+              ) : null}
               <button type="submit">Bağlantıyı test etmeye geç</button>
             </form>
           ) : null}
@@ -519,7 +766,9 @@ export default function ConnectionsPage() {
                   ? 'İlk senkron tamamlandı ✓'
                   : onboardingConnection?.lastSyncError
                     ? 'İlk senkron tamamlanamadı'
-                    : 'İlk senkron çalışıyor…'}
+                    : onboardingConnection?.authorizationStatus === 'pending'
+                      ? 'İlk senkron çalışıyor…'
+                      : 'Bağlantı kuruldu'}
               </h2>
               {onboardingConnection?.lastSyncError ? (
                 <p className="error-note" role="alert">
@@ -553,7 +802,7 @@ export default function ConnectionsPage() {
         </section>
       ) : null}
 
-      {message && step !== 4 && step !== 6 ? (
+      {message && step !== 3 && step !== 4 && step !== 6 ? (
         <p role="status">{message}</p>
       ) : null}
 
@@ -575,6 +824,17 @@ export default function ConnectionsPage() {
               Yetki: {connection.authorizationStatus} · mod:{' '}
               {connection.syncMode}
             </p>
+            {connection.storeUrl ? (
+              <p>
+                Mağaza: {connection.storeName ?? connection.storeUrl} (
+                {connection.storeUrl})
+              </p>
+            ) : null}
+            {connectedViaLabel(connection.connectedVia) ? (
+              <p>
+                Bağlantı yöntemi: {connectedViaLabel(connection.connectedVia)}
+              </p>
+            ) : null}
             <p>
               Satış doğrulaması:{' '}
               {connection.conversionTrackingEnabled ? 'Etkin' : 'Ölçülmüyor'}
@@ -599,20 +859,34 @@ export default function ConnectionsPage() {
                 Son hata: {connection.lastSyncError}
               </p>
             ) : null}
-            {connection.authorizationStatus === 'reauthorization_required' ? (
+            {connection.authorizationStatus === 'reauthorization_required' &&
+            connection.provider === 'woocommerce' ? (
               <p className="role-note">
-                Connector yetkisi yenilenmeli. Teknik secret referansı yerine
-                bağlantıyı iptal edip onboarding ile yeni credential gir.
+                Connector yetkisi yenilenmeli. Yeniden bağlan ile eklenti
+                pairing akışını kullan; aktif secret referansı yeni anahtar
+                doğrulanana kadar korunur.
               </p>
             ) : null}
-            {canRevoke && connection.authorizationStatus !== 'revoked' ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void revoke(connection.id)}
-              >
-                Bağlantıyı iptal et
-              </button>
+            {canConnect && connection.authorizationStatus !== 'revoked' ? (
+              <div className="connection-actions">
+                {connection.provider === 'woocommerce' &&
+                connection.storeUrl ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startReconnect(connection)}
+                  >
+                    Yeniden bağla
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void revoke(connection.id)}
+                >
+                  Bağlantıyı iptal et
+                </button>
+              </div>
             ) : null}
           </article>
         ))}

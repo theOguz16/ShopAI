@@ -17,12 +17,23 @@ export type ConnectorPinnedRequester = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+/**
+ * Explicit opt-in escape hatch for local/integration targets (rehearsal
+ * stores on 127.0.0.1). Hostnames listed here skip the public-address checks
+ * but keep single-lookup IP pinning. Production and staging callers must
+ * never pass a policy; there is no environment-based fallback.
+ */
+export type ConnectorTargetPolicy = {
+  allowHosts?: readonly string[];
+};
+
 const defaultLookup: ConnectorDnsLookup = (hostname) =>
   dnsLookup(hostname, { all: true, verbatim: true });
 
 export async function resolvePublicConnectorTarget(
   value: string | URL,
   lookup: ConnectorDnsLookup = defaultLookup,
+  policy: ConnectorTargetPolicy = {},
 ): Promise<ConnectorResolvedTarget> {
   const url = typeof value === 'string' ? new URL(value) : value;
   if (url.protocol !== 'https:')
@@ -31,11 +42,13 @@ export async function resolvePublicConnectorTarget(
     throw new Error('Connector hedefi URL kimlik bilgisi içeremez.');
 
   const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
+  const explicitlyAllowed = policy.allowHosts?.includes(hostname) ?? false;
   if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal')
+    !explicitlyAllowed &&
+    (hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal'))
   )
     throw new Error('Connector hedefi public bir adres olmalıdır.');
 
@@ -45,7 +58,8 @@ export async function resolvePublicConnectorTarget(
     : await lookup(hostname);
   if (
     !addresses.length ||
-    addresses.some(({ address }) => !isPublicIp(address))
+    (!explicitlyAllowed &&
+      addresses.some(({ address }) => !isPublicIp(address)))
   )
     throw new Error('Connector hedefi public bir adres olmalıdır.');
 
@@ -68,6 +82,7 @@ export async function assertPublicConnectorTarget(
 export function createPublicConnectorFetch(
   lookup: ConnectorDnsLookup = defaultLookup,
   requester: ConnectorPinnedRequester = requestPinnedHttps,
+  policy: ConnectorTargetPolicy = {},
 ): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const url =
@@ -76,7 +91,7 @@ export function createPublicConnectorFetch(
         : input instanceof Request
           ? new URL(input.url)
           : new URL(String(input));
-    const target = await resolvePublicConnectorTarget(url, lookup);
+    const target = await resolvePublicConnectorTarget(url, lookup, policy);
     return requester(url, target, init);
   }) as typeof fetch;
 }
