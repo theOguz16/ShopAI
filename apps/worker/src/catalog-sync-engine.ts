@@ -2,7 +2,10 @@ import {
   catalogSyncFailureStatus,
   type CatalogSyncProgress,
 } from '@shopai/commerce';
-import type { LiveCatalogConnector } from '@shopai/connectors';
+import {
+  ConnectorHttpError,
+  type LiveCatalogConnector,
+} from '@shopai/connectors';
 import type { SourceRow, SyncJob } from '@shopai/contracts';
 import {
   beginSyncRun,
@@ -10,10 +13,13 @@ import {
   importCatalog,
   markSyncRunCompleted,
   markSyncRunFailed,
+  renewSyncLease,
   setTenantContext,
+  SyncLeaseLostError,
   type SyncRunCheckpointState,
   upsertSyncCheckpoint,
   writeConnectionSyncProgress,
+  writeConnectionSyncProgressTx,
 } from '@shopai/db';
 import { and, eq, ne, or, sql } from 'drizzle-orm';
 import { connections, offers } from '@shopai/db';
@@ -102,6 +108,7 @@ export async function runCatalogSyncEngine(
     syncRunId,
     desiredObservedAt: startedAt,
     startedAt,
+    now: startedAt,
   });
   if (begin.kind === 'skipped-concurrent')
     return { kind: 'skipped', reason: 'concurrent-sync' };
@@ -109,6 +116,8 @@ export async function runCatalogSyncEngine(
     return { kind: 'skipped', reason: 'duplicate-run' };
   if (begin.kind === 'skipped-stale')
     return { kind: 'skipped', reason: 'stale-run' };
+
+  const fencingToken = begin.lease.fencingToken;
 
   const counters: CatalogSyncCounters = {
     cursor: begin.state.cursor,
@@ -129,13 +138,37 @@ export async function runCatalogSyncEngine(
   let progress = currentProgress(counters, begin.state.sourceComplete);
   let latestFetchedAt = now();
   try {
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      { ...progress, startedAt: runStartedAt, completedAt: null, error: null },
-      now(),
-    );
+    await db.transaction(async (tx) => {
+      await setTenantContext(tx, job.merchantId);
+      await renewSyncLease(tx, {
+        merchantId: job.merchantId,
+        connectionId: job.connectionId,
+        syncRunId,
+        fencingToken,
+        now: startedAt,
+      });
+      await tx
+        .update(connections)
+        .set({ lastSyncStartedAt: runStartedAt, lastSyncError: null })
+        .where(
+          and(
+            eq(connections.merchantId, job.merchantId),
+            eq(connections.id, job.connectionId),
+          ),
+        );
+      await writeConnectionSyncProgressTx(
+        tx,
+        job.merchantId,
+        job.connectionId,
+        {
+          ...progress,
+          startedAt: runStartedAt,
+          completedAt: null,
+          error: null,
+        },
+        startedAt,
+      );
+    });
 
     // Resume of an already fully-committed run: skip the fetch loop and go
     // straight to finalization (crash between last commit and completion).
@@ -176,8 +209,12 @@ export async function runCatalogSyncEngine(
               rows,
             },
             // The sync run finalizer owns the import_runs record; each chunk
-            // must not complete it.
-            { finalizeRun: false },
+            // must not complete it. The lease is re-proven inside the chunk
+            // transaction (fencing + heartbeat).
+            {
+              finalizeRun: false,
+              syncLease: { fencingToken, now: now() },
+            },
           );
           counters.chunks += 1;
           counters.rowsProcessed += chunkRows;
@@ -201,14 +238,18 @@ export async function runCatalogSyncEngine(
               error: null,
             },
             now(),
+            { syncRunId, fencingToken },
           );
         }
         // The durable cursor advances only after every chunk of the page has
-        // committed: a crash replays at most one page, idempotently.
+        // committed: a crash replays at most one page, idempotently. The
+        // checkpoint write re-proves lease ownership in its transaction.
         counters.sourceComplete = pageIsFinal;
         await persistCheckpoint(db, job, syncRunId, counters, {
           observedAt,
           startedAt: runStartedAt,
+          fencingToken,
+          now: now(),
         });
       }
       if (!counters.sourceComplete)
@@ -219,6 +260,16 @@ export async function runCatalogSyncEngine(
     const totalRows = counters.rowsProcessed;
     await db.transaction(async (tx) => {
       await setTenantContext(tx, job.merchantId);
+      // Finalization fencing first: a runner that lost the lease must fail
+      // here, before it can lock the connection row, deactivate offers or
+      // touch the watermark.
+      await renewSyncLease(tx, {
+        merchantId: job.merchantId,
+        connectionId: job.connectionId,
+        syncRunId,
+        fencingToken,
+        now: completedAt,
+      });
       const [live] = await tx
         .select({
           active: connections.active,
@@ -276,6 +327,23 @@ export async function runCatalogSyncEngine(
             eq(connections.active, true),
           ),
         );
+      await writeConnectionSyncProgressTx(
+        tx,
+        job.merchantId,
+        job.connectionId,
+        {
+          status: 'completed',
+          foundProducts: counters.productsSeen,
+          processedProducts: counters.productsSeen,
+          failedProducts: 0,
+          variants: counters.rowsSeen,
+          startedAt: runStartedAt,
+          completedAt,
+          error: null,
+        },
+        completedAt,
+        { syncRunId, fencingToken },
+      );
       await markSyncRunCompleted(tx, {
         merchantId: job.merchantId,
         connectionId: job.connectionId,
@@ -285,6 +353,7 @@ export async function runCatalogSyncEngine(
         startedAt: runStartedAt,
         totalRows,
         completedAt,
+        fencingToken,
       });
     });
 
@@ -295,14 +364,6 @@ export async function runCatalogSyncEngine(
       failedProducts: 0,
       variants: counters.rowsSeen,
     };
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      { ...progress, startedAt: runStartedAt, completedAt, error: null },
-      completedAt,
-    );
-
     return {
       kind: 'completed',
       imported: totalRows,
@@ -315,30 +376,44 @@ export async function runCatalogSyncEngine(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Catalog sync failed';
+    let failure = error;
+    if (!(failure instanceof SyncLeaseLostError)) {
+      const failedAt = now();
+      try {
+        await writeConnectionSyncProgress(
+          db,
+          job.merchantId,
+          job.connectionId,
+          {
+            status: catalogSyncFailureStatus(progress),
+            foundProducts: progress.foundProducts,
+            processedProducts: progress.processedProducts,
+            failedProducts: progress.failedProducts,
+            variants: progress.variants,
+            startedAt: runStartedAt,
+            completedAt: failedAt,
+            error: message,
+          },
+          failedAt,
+          { syncRunId, fencingToken },
+        );
+      } catch (progressError) {
+        if (progressError instanceof SyncLeaseLostError)
+          failure = progressError;
+        else throw progressError;
+      }
+    }
     await markSyncRunFailed(db, {
       merchantId: job.merchantId,
       connectionId: job.connectionId,
       syncRunId,
       error: message,
+      fencingToken,
+      now: now(),
+      reauthorizationRequired:
+        error instanceof ConnectorHttpError && error.reauthorizationRequired,
     });
-    const failedAt = now();
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      {
-        status: catalogSyncFailureStatus(progress),
-        foundProducts: progress.foundProducts,
-        processedProducts: progress.processedProducts,
-        failedProducts: progress.failedProducts,
-        variants: progress.variants,
-        startedAt: runStartedAt,
-        completedAt: failedAt,
-        error: message,
-      },
-      failedAt,
-    );
-    throw error;
+    throw failure;
   }
 }
 
@@ -369,7 +444,12 @@ async function persistCheckpoint(
   job: SyncJob,
   syncRunId: string,
   counters: CatalogSyncCounters,
-  timing: { observedAt: Date; startedAt: Date },
+  timing: {
+    observedAt: Date;
+    startedAt: Date;
+    fencingToken: number;
+    now: Date;
+  },
 ) {
   return db.transaction(async (tx) => {
     await setTenantContext(tx, job.merchantId);
@@ -380,6 +460,8 @@ async function persistCheckpoint(
       state: counters,
       observedAt: timing.observedAt,
       startedAt: timing.startedAt,
+      fencingToken: timing.fencingToken,
+      now: timing.now,
     });
   });
 }

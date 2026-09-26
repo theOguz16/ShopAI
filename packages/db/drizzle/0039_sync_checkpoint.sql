@@ -53,3 +53,32 @@ ALTER TABLE "offers" ADD COLUMN "last_sync_run_id" uuid;
 --> statement-breakpoint
 CREATE INDEX "offers_connection_last_sync_run"
   ON "offers" USING btree ("connection_id", "last_sync_run_id");
+--> statement-breakpoint
+-- Connection-scoped sync lease with a monotonically increasing fencing token.
+-- One row per connection: acquisition is a single atomic statement chain
+-- (INSERT ON CONFLICT DO NOTHING → SELECT ... FOR UPDATE inside one
+-- transaction), so two concurrent fresh runs cannot both become owners. The
+-- token is incremented on every takeover and must be proven on every catalog
+-- mutating transaction, including finalization.
+CREATE TABLE "sync_connection_leases" (
+  "merchant_id" uuid NOT NULL,
+  "connection_id" uuid NOT NULL,
+  "owner_sync_run_id" uuid NOT NULL,
+  "fencing_token" bigint NOT NULL,
+  "lease_expires_at" timestamp with time zone NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "sync_connection_leases_pk" PRIMARY KEY ("connection_id"),
+  CONSTRAINT "sync_connection_leases_connection_fk" FOREIGN KEY ("merchant_id","connection_id")
+    REFERENCES "public"."source_connections"("merchant_id","id") ON DELETE CASCADE ON UPDATE NO ACTION,
+  CONSTRAINT "sync_connection_leases_token" CHECK ("fencing_token" >= 0)
+);
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "sync_connection_leases" TO shopai_app, shopai_worker;
+REVOKE ALL ON "sync_connection_leases" FROM shopai_public;
+--> statement-breakpoint
+ALTER TABLE "sync_connection_leases" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "sync_connection_leases" FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_sync_connection_leases ON "sync_connection_leases"
+  FOR ALL TO shopai_app, shopai_worker
+  USING (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);

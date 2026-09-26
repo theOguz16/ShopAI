@@ -21,7 +21,9 @@ import {
   merchantCredentialOwnerships,
   offers,
   setTenantContext,
-  writeConnectionSyncProgress,
+  syncConnectionLeases,
+  SyncLeaseLostError,
+  writeConnectionSyncProgressTx,
 } from '@shopai/db';
 import { and, eq, isNull, lte, or } from 'drizzle-orm';
 import {
@@ -196,10 +198,6 @@ export async function syncCatalogConnection(
       if (!row.lastSourceWatermarkAt || unverifiedOffer)
         effectiveSyncMode = 'full';
     }
-    await tx
-      .update(connections)
-      .set({ lastSyncStartedAt: startedAt, lastSyncError: null })
-      .where(eq(connections.id, row.id));
     return { ...row, effectiveSyncMode };
   });
   if (!connection) return { skipped: true } as const;
@@ -214,13 +212,6 @@ export async function syncCatalogConnection(
   let engineStarted = false;
 
   try {
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      { ...progress, startedAt, completedAt: null, error: null },
-      startedAt,
-    );
     if (!connection.credentialsRef)
       throw new Error('Bağlantının secret referansı eksik.');
     const reference = connection.credentialsRef;
@@ -314,42 +305,75 @@ export async function syncCatalogConnection(
         ? `Connector HTTP ${error.status}`
         : 'Catalog sync failed';
     const failedAt = now();
+    // A fenced runner lost ownership: it must not touch the connection row
+    // or clobber the new owner's progress; its own checkpoint is already
+    // failed by the takeover/engine.
+    if (error instanceof SyncLeaseLostError) {
+      throw error;
+    }
     if (!engineStarted) {
       progress = {
         ...progress,
         status: catalogSyncFailureStatus(progress),
       };
-      await writeConnectionSyncProgress(
-        db,
-        job.merchantId,
-        job.connectionId,
-        {
-          ...progress,
-          startedAt,
-          completedAt: failedAt,
-          error: message,
-        },
-        failedAt,
-      );
-    }
-    await db.transaction(async (tx) => {
-      await setTenantContext(tx, job.merchantId);
-      await tx
-        .update(connections)
-        .set({
-          lastSyncError: message,
-          ...(error instanceof ConnectorHttpError &&
-          error.reauthorizationRequired
-            ? { authorizationStatus: 'reauthorization_required' }
-            : {}),
-        })
-        .where(
-          and(
-            eq(connections.id, job.connectionId),
-            eq(connections.active, true),
-          ),
+      await db.transaction(async (tx) => {
+        await setTenantContext(tx, job.merchantId);
+        const [lease] = await tx
+          .select({ expiresAt: syncConnectionLeases.leaseExpiresAt })
+          .from(syncConnectionLeases)
+          .where(
+            and(
+              eq(syncConnectionLeases.merchantId, job.merchantId),
+              eq(syncConnectionLeases.connectionId, job.connectionId),
+            ),
+          )
+          .for('update');
+        if (lease && lease.expiresAt > failedAt) return;
+        const [live] = await tx
+          .select({ lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt })
+          .from(connections)
+          .where(
+            and(
+              eq(connections.merchantId, job.merchantId),
+              eq(connections.id, job.connectionId),
+            ),
+          )
+          .for('update');
+        if (
+          live?.lastSuccessfulSyncAt &&
+          live.lastSuccessfulSyncAt >= startedAt
+        )
+          return;
+        await writeConnectionSyncProgressTx(
+          tx,
+          job.merchantId,
+          job.connectionId,
+          {
+            ...progress,
+            startedAt,
+            completedAt: failedAt,
+            error: message,
+          },
+          failedAt,
         );
-    });
+        await tx
+          .update(connections)
+          .set({
+            lastSyncError: message,
+            ...(error instanceof ConnectorHttpError &&
+            error.reauthorizationRequired
+              ? { authorizationStatus: 'reauthorization_required' }
+              : {}),
+          })
+          .where(
+            and(
+              eq(connections.merchantId, job.merchantId),
+              eq(connections.id, job.connectionId),
+              eq(connections.active, true),
+            ),
+          );
+      });
+    }
     throw error instanceof ConnectorHttpError
       ? new ConnectorHttpError(error.status, message, error.retryAfterMs)
       : new Error(message);

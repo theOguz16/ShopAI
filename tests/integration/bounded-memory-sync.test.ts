@@ -19,13 +19,18 @@ import {
   importCatalog,
   importRuns,
   inventory,
+  markSyncRunFailed,
   merchantCredentialOwnerships,
   merchants,
   offers,
   products,
   sourceCategoryMappings,
+  syncConnectionLeases,
   syncRunCheckpoints,
+  SyncLeaseLostError,
+  upsertSyncCheckpoint,
   variants,
+  writeConnectionSyncProgress,
 } from '../../packages/db/src/index.js';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -129,7 +134,7 @@ async function dropProductTrigger() {
 beforeEach(async () => {
   await dropProductTrigger();
   await database.db.execute(
-    sql`truncate table ${syncRunCheckpoints}, ${connectionSyncProgress}, ${importRuns}, ${inventory}, ${offers}, ${variants}, ${products}, ${sourceCategoryMappings}, ${connections}, ${merchants} cascade`,
+    sql`truncate table ${syncConnectionLeases}, ${syncRunCheckpoints}, ${connectionSyncProgress}, ${importRuns}, ${inventory}, ${offers}, ${variants}, ${products}, ${sourceCategoryMappings}, ${connections}, ${merchants} cascade`,
   );
   await database.db.insert(merchants).values({
     id: merchantId,
@@ -553,6 +558,7 @@ describe.sequential('ÜRÜN-007 bounded-memory catalog sync', () => {
       syncRunId: liveRunId,
       desiredObservedAt: new Date(),
       startedAt: new Date(),
+      now: new Date(),
     });
     expect(begin.kind).toBe('started');
 
@@ -567,6 +573,131 @@ describe.sequential('ÜRÜN-007 bounded-memory catalog sync', () => {
       reason: 'concurrent-sync',
     });
     expect(await tableCount(products)).toBe(0);
+  });
+
+  it('atomically admits one fresh run and one attempt per run ID', async () => {
+    const now = new Date();
+    const firstId = randomUUID();
+    const secondId = randomUUID();
+    const input = (syncRunId: string) => ({
+      merchantId,
+      connectionId,
+      syncRunId,
+      desiredObservedAt: now,
+      startedAt: now,
+      now,
+    });
+    const results = await Promise.all([
+      beginSyncRun(database.db, input(firstId)),
+      beginSyncRun(database.db, input(secondId)),
+    ]);
+    expect(results.filter((result) => result.kind === 'started')).toHaveLength(
+      1,
+    );
+    expect(
+      results.filter((result) => result.kind === 'skipped-concurrent'),
+    ).toHaveLength(1);
+    const winnerId = results[0]?.kind === 'started' ? firstId : secondId;
+    expect(await beginSyncRun(database.db, input(winnerId))).toEqual({
+      kind: 'skipped-concurrent',
+    });
+  });
+
+  it('fences a stale attempt after takeover, including the same run ID', async () => {
+    const firstId = randomUUID();
+    const secondId = randomUUID();
+    const now = new Date();
+    const input = (syncRunId: string) => ({
+      merchantId,
+      connectionId,
+      syncRunId,
+      desiredObservedAt: now,
+      startedAt: now,
+      now,
+    });
+    const first = await beginSyncRun(database.db, input(firstId));
+    expect(first.kind).toBe('started');
+    if (first.kind !== 'started') throw new Error('unreachable');
+    await database.db
+      .update(syncConnectionLeases)
+      .set({ leaseExpiresAt: new Date(now.getTime() - 1) })
+      .where(eq(syncConnectionLeases.connectionId, connectionId));
+    const resumed = await beginSyncRun(database.db, input(firstId));
+    expect(resumed.kind).toBe('resumed');
+    if (resumed.kind !== 'resumed') throw new Error('unreachable');
+    expect(resumed.lease.fencingToken).toBe(first.lease.fencingToken + 1);
+    await expect(
+      writeConnectionSyncProgress(
+        database.db,
+        merchantId,
+        connectionId,
+        {
+          status: 'running',
+          foundProducts: 0,
+          processedProducts: 0,
+          failedProducts: 0,
+          variants: 0,
+        },
+        now,
+        { syncRunId: firstId, fencingToken: first.lease.fencingToken },
+      ),
+    ).rejects.toBeInstanceOf(SyncLeaseLostError);
+    await markSyncRunFailed(database.db, {
+      merchantId,
+      connectionId,
+      syncRunId: firstId,
+      error: 'Old attempt failed after takeover',
+      fencingToken: first.lease.fencingToken,
+      now,
+    });
+    const [stillRunning] = await database.db
+      .select()
+      .from(syncRunCheckpoints)
+      .where(eq(syncRunCheckpoints.syncRunId, firstId));
+    expect(stillRunning?.status).toBe('running');
+    await database.db
+      .update(syncConnectionLeases)
+      .set({ leaseExpiresAt: new Date(now.getTime() - 1) })
+      .where(eq(syncConnectionLeases.connectionId, connectionId));
+    const takeover = await beginSyncRun(database.db, input(secondId));
+    expect(takeover.kind).toBe('started');
+    await expect(
+      importCatalog(
+        database.db,
+        {
+          schemaVersion: 1,
+          runId: firstId,
+          merchantId,
+          connectionId,
+          observedAt: now.toISOString(),
+          rows: [variantRow(1)],
+        },
+        {
+          finalizeRun: false,
+          syncLease: { fencingToken: resumed.lease.fencingToken, now },
+        },
+      ),
+    ).rejects.toBeInstanceOf(SyncLeaseLostError);
+    expect(await tableCount(products)).toBe(0);
+    await expect(
+      database.db.transaction(async (tx) => {
+        await upsertSyncCheckpoint(tx, {
+          merchantId,
+          connectionId,
+          syncRunId: firstId,
+          state: first.state,
+          observedAt: first.observedAt,
+          startedAt: first.startedAt,
+          fencingToken: resumed.lease.fencingToken,
+          now,
+        });
+      }),
+    ).rejects.toBeInstanceOf(SyncLeaseLostError);
+    const [checkpoint] = await database.db
+      .select()
+      .from(syncRunCheckpoints)
+      .where(eq(syncRunCheckpoints.syncRunId, firstId));
+    expect(checkpoint?.status).toBe('failed');
   });
 
   it('returns reference-only results and never surfaces catalog payloads (acceptance 11, 12)', async () => {

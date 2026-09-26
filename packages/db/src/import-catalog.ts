@@ -21,6 +21,7 @@ import {
   variants,
 } from './schema.js';
 import { setTenantContext } from './tenant-context.js';
+import { renewSyncLease } from './sync-checkpoint.js';
 
 export type ImportCatalogProgress = {
   processedRows: number;
@@ -35,6 +36,13 @@ type ImportCatalogOptions = {
    * cumulative run record.
    */
   finalizeRun?: boolean;
+  /**
+   * Lease fencing for engine-driven sync chunks. Proven inside the chunk
+   * transaction before any catalog write: a runner that lost the connection
+   * lease cannot commit catalog rows (also serves as the per-chunk lease
+   * heartbeat). job.runId is the lease's owner sync run id.
+   */
+  syncLease?: { fencingToken: number; now: Date };
 };
 
 /** Trusted local CLI/worker only. New products always remain unpublished. */
@@ -49,6 +57,15 @@ export async function importCatalog(
   assertConsistentProductRows(job);
   return db.transaction(async (tx) => {
     await setTenantContext(tx, job.merchantId);
+    // Fencing proof before any catalog mutation: a stale runner aborts here.
+    if (options.syncLease)
+      await renewSyncLease(tx, {
+        merchantId: job.merchantId,
+        connectionId: job.connectionId,
+        syncRunId: job.runId,
+        fencingToken: options.syncLease.fencingToken,
+        now: options.syncLease.now,
+      });
     // Serialize imports for one connection across worker processes.
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${job.connectionId}))`,
