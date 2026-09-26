@@ -1094,6 +1094,28 @@ if (!databaseUrl || !redisUrl) {
       expect(secrets[0].reference).toBe(before.credentialsRef);
       expect(secrets[1].status).toBe('active');
       expect(secrets[1].reference).toBe(after.credentialsRef);
+      const workerScope = {
+        merchantId: merchantAId,
+        connectionId: before.id,
+        provider: 'woocommerce',
+      };
+      expect(secretBackend.entries.get(after.credentialsRef!)?.scope).toEqual(
+        workerScope,
+      );
+      const workerResolver = new EnvironmentSecretResolver({}, secretBackend);
+      await expect(
+        workerResolver.resolve(after.credentialsRef!, workerScope),
+      ).resolves.toEqual({
+        storeUrl: storeUrlA,
+        consumerKey: rawRotatedKey,
+        consumerSecret: rawRotatedSecret,
+      });
+      await expect(
+        workerResolver.resolve(after.credentialsRef!, {
+          ...workerScope,
+          connectionId: randomUUID(),
+        }),
+      ).rejects.toThrow('secret scope mismatch');
       const events = await auditEvents(merchantAId);
       expect(events.some((row) => row.event === 'connection_reconnected')).toBe(
         true,
@@ -1164,6 +1186,20 @@ if (!databaseUrl || !redisUrl) {
       );
       expect(secrets).toHaveLength(secretsBefore); // no new version was created
       expect(secrets.every((row) => row.status !== 'revoked')).toBe(true);
+      await expect(
+        new EnvironmentSecretResolver({}, secretBackend).resolve(
+          before.credentialsRef!,
+          {
+            merchantId: merchantAId,
+            connectionId: before.id,
+            provider: 'woocommerce',
+          },
+        ),
+      ).resolves.toEqual({
+        storeUrl: storeUrlA,
+        consumerKey: rawRotatedKey,
+        consumerSecret: rawRotatedSecret,
+      });
     });
 
     it('14. isolates connections per merchant', async () => {

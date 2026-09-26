@@ -75,12 +75,29 @@ transaction'da eski secret `rotated`, yeni `connector_secrets` satırı (v+1)
 `active` olur, `credentialsRef` değişir. Doğrulama başarısızsa hiçbir switch
 olmaz; eski aktif referans çalışmaya devam eder.
 
+Reconnect'te yeni managed secret, önceden bulunan **mevcut connection ID**
+scope'unda yazılır ve aynı scope ile read-back yapılır. Activation sırasında
+bağlantı başka bir ID'ye değişmişse yeni referans temizlenir ve işlem conflict
+olarak sonlanır. Worker yeni referansı aynı `{merchantId, connectionId,
+provider}` scope'uyla çözmelidir. PHP eklentisi current ve candidate Woo key
+ID'lerini ayrı tutar: başarısız pairing yalnız candidate key'i siler; başarılı
+reconnect yeni key'i current yapıp eskiyi siler. Kesinti durumunda silinemeyen
+key ID'leri tekrar temizlenmek üzere hassas olmayan metadata olarak tutulur;
+raw key ve token WordPress option'larına yazılmaz.
+
 Disconnect `DELETE /v1/merchants/:merchantId/connections/:connectionId`
 (owner **ve editor** — ÜRÜN-008 ile editor'a açıldı): connection `revoked`,
 aktif secret satırı `revoked`, OpenBao metadata silinir (post-commit),
 audit yazılır. Worker scheduler revoked/inactive connection için sync
 başlatmaz; in-flight sync de pre-flight kontrolüyle kesilir. Yeniden bağlama
 sonradan pairing ile mümkündür.
+
+**WordPress cleanup sınırı:** Dashboard disconnect WordPress'e callback
+göndermez; mevcut protokol uzaktan Woo key silme yetkisi taşımaz. Merchant
+eklenti ekranındaki “Yerel API anahtarını kaldır” işlemini ayrıca çalıştırır.
+Bu işlem current/candidate/stale key ID'lerini temizlemeyi dener, tekrar
+çalıştırılabilir ve cleanup başarısızsa eklentide hata gösterir. Uzaktan
+otomatik Woo key temizliği kanıtlanmış kabul maddesi değildir.
 
 ## Store URL güvenliği (SSRF) ve normalizasyon
 
@@ -130,9 +147,9 @@ tenant policy'si; `shopai_worker` ve `shopai_public` erişimi yok.
 
 ## Migration
 
-`0040_woocommerce_pairing.sql` provisional slotudur; `0039` ÜRÜN-007'nin
-paralel rezervasyonudur. Merge sırasına göre final review'da numaralar
-contiguous olacak şekilde yeniden düzenlenir. Migration additive'dir;
+`0039_sync_checkpoint` ÜRÜN-007 PR #66 ile main'e merge edildi;
+`0040_woocommerce_pairing.sql` numarası korunur. Final review'da güncel
+main/journal sırası yeniden doğrulanır. Migration additive'dir;
 `source_connections`'a `store_url`, `store_name`, `connected_via`
 (default `dashboard_credentials`) kolonları ekler — mevcut pilot bağlantıları
 etkilenmez. Production/staging DB'ye uygulama bu task kapsamında yapılmaz.
@@ -156,21 +173,23 @@ server-side istekle doğrulanır; doğrulama başarısızsa bağlantı aktif olm
 | --- | --- | --- |
 | Owner/editor pairing oluşturur, viewer/shopper oluşturamaz | PASS | `tests/integration/woocommerce-pairing.test.ts` 1–4 |
 | Pairing TTL, expiry, replay, merchant binding | PASS | aynı dosya 5–7 |
-| Plugin token/capability/nonce koruması | PASS | aynı dosya 8 + `tests/woocommerce-pairing-plugin.test.ts` |
+| Plugin token/capability/nonce koruması | PASS (kod testi) | aynı dosya 8 + `tests/woocommerce-pairing-plugin.test.ts`; capability ve key lifecycle için çalıştırılabilir `tests/php/woocommerce-key-lifecycle.php`, nonce için statik kontrol |
 | Geçerli pairing → connection + secret + kuyruk | PASS | 9, 12, 13 |
 | Geçersiz credential → aktif connection yok | PASS | 10 |
 | Raw credential response/DB/log/queue'da yok | PASS | 9, 11, 12, 24 |
 | OpenBao referansı ile çalışır | PASS | 13 (recording backend; gerçek backend ÜRÜN-004 entegrasyon testleriyle aynı sözleşme) |
 | Tenant izolasyonu | PASS | 14 + `tests/integration/tenant-isolation.test.ts` |
 | Store ownership conflict | PASS | 15 |
-| Reconnect rotate / failed reconnect koruması | PASS | 16, 17 |
+| Reconnect rotate / failed reconnect koruması | PASS (kod testi) | 16, 17: yeni secret mevcut connection scope'unda worker resolver ile çözülür; farklı connection ID reddedilir; PHP testinde eski Woo key yalnız başarıdan sonra silinir, başarısız candidate temizlenir |
 | Disconnect revoke + worker engeli | PASS | 18, 19 |
 | SSRF private/loopback + redirect kaçışı | PASS | 20, 21 + `tests/connector-target-policy.test.ts` + `tests/connector-target-safety.test.ts` |
 | URL normalizasyonu duplicate üretmez | PASS | 22 + `tests/store-url.test.ts` |
 | CSRF zorunlu | PASS | 23 |
 | Audit actor/merchant/connection var, secret yok | PASS | 24 |
-| `pnpm check` + tüm integration suite | PASS | branch head'de çalıştırıldı (bkz. PR) |
+| `pnpm check` + tüm integration suite | Yerel PASS; exact-head CI bekleniyor | `pnpm check`; PostgreSQL/Redis üzerinde 31 dosya/173 test; PHP runtime key lifecycle 10 senaryo |
 
-Kalan engeller: gerçek WooCommerce mağazasıyla staging üzerinde manuel
-pairing provası (eklenti zip kurulumu dahil) ÜRÜN-009 gerçek katalog kabulüyle
-birlikte yapılacaktır; bu, ÜRÜN-008 teknik kabulünün blocker'ı değildir.
+**Ürün durumu: KISMİ.** Scope ve Woo key lifecycle düzeltmelerinin exact-head
+CI kanıtı ile gerçek WordPress/Woo ortamında eklenti kurulum, pairing,
+reconnect, failure cleanup ve disconnect provası açık kabul kapılarıdır.
+Mevcut sentetik Woo katalog provası bu pairing yaşam döngüsünü çalıştırmaz.
+Currency-settings ve varyanta özgü satın alma URL'si ÜRÜN-009'da kalır.

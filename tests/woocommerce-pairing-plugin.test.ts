@@ -55,7 +55,9 @@ describe('ShopAI WordPress plugin (static acceptance)', () => {
     expect(source).not.toMatch(/update_option\(.*consumer_secret/iu);
     // On rejected pairing the generated key is deleted and only a generic
     // result code is surfaced.
-    expect(source).toContain('shopai_connector_delete_api_key()');
+    expect(source).toContain('shopai_connector_cleanup_candidate()');
+    expect(source).toContain('SHOPAI_CONNECTOR_CANDIDATE_KEY_ID_OPTION');
+    expect(source).toContain('SHOPAI_CONNECTOR_STALE_KEY_IDS_OPTION');
     expect(source).toContain("? 'connection_failed' :");
   });
 

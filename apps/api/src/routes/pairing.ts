@@ -303,6 +303,41 @@ export async function registerPairingRoutes(
         return reply.code(404).send({ code: 'PAIRING_INVALID' });
       }
 
+      // Choose the final connection ID before writing a scoped secret. A
+      // reconnect must use the existing ID that the worker will resolve with.
+      const [existingConnection] = await db.transaction(async (tx) =>
+        tx
+          .select({ id: connections.id, merchantId: connections.merchantId })
+          .from(connections)
+          .where(
+            and(
+              eq(connections.provider, 'woocommerce'),
+              eq(connections.storeUrl, pairing.storeUrl),
+              eq(connections.active, true),
+              ne(connections.authorizationStatus, 'revoked'),
+            ),
+          )
+          .limit(1),
+      );
+      if (
+        existingConnection &&
+        existingConnection.merchantId !== pairing.merchantId
+      ) {
+        await withTenant(db, pairing.merchantId, async (tx) => {
+          await tx.insert(connectionAudit).values({
+            merchantId: pairing.merchantId,
+            provider: 'woocommerce',
+            event: 'pairing_rejected',
+            actor: PLUGIN_ACTOR,
+            result: 'failure',
+            detail: { reason: 'store_conflict', pairingId: pairing.id },
+            correlationId: request.id,
+          });
+        });
+        return reply.code(409).send({ code: 'STORE_OWNERSHIP_CONFLICT' });
+      }
+      const connectionId = existingConnection?.id ?? randomUUID();
+
       try {
         await connectorFactory(
           'woocommerce',
@@ -323,7 +358,6 @@ export async function registerPairingRoutes(
         return reply.code(422).send({ code: 'CONNECTION_FAILED' });
       }
 
-      const connectionId = randomUUID();
       const scope = {
         merchantId: pairing.merchantId,
         connectionId,
@@ -386,7 +420,15 @@ export async function registerPairingRoutes(
               ),
             )
             .limit(1);
-          if (conflict && conflict.merchantId !== pairing.merchantId) {
+          // A connection may have been revoked or replaced while the Woo
+          // validation request was in flight. Never attach a secret scoped to
+          // another ID to that replacement.
+          if (
+            (conflict &&
+              (conflict.merchantId !== pairing.merchantId ||
+                conflict.id !== connectionId)) ||
+            (existingConnection && !conflict)
+          ) {
             // No connectionId: the conflicting connection belongs to another
             // merchant and the composite FK is tenant-scoped.
             await tx.insert(connectionAudit).values({
