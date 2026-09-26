@@ -186,10 +186,10 @@ server-side istekle doğrulanır; doğrulama başarısızsa bağlantı aktif olm
 | URL normalizasyonu duplicate üretmez | PASS | 22 + `tests/store-url.test.ts` |
 | CSRF zorunlu | PASS | 23 |
 | Audit actor/merchant/connection var, secret yok | PASS | 24 |
-| `pnpm check` + tüm integration suite | Yerel PASS; exact-head CI bekleniyor | `0039→0040` fresh migration; PostgreSQL/Redis üzerinde 33 dosya/187 test; PHP runtime key lifecycle 10 senaryo |
+| `pnpm check` + tüm integration suite | PASS | `0039→0040` fresh migration; PostgreSQL/Redis üzerinde 33 dosya/187 test; PHP runtime key lifecycle 10 senaryo; PR #67'de iki CI koşusu ve GitGuardian başarılı |
 
-**Ürün durumu: KISMİ.** Scope ve Woo key lifecycle düzeltmelerinin exact-head
-CI kanıtı ile gerçek WordPress/Woo ortamında eklenti kurulum, pairing,
-reconnect, failure cleanup ve disconnect provası açık kabul kapılarıdır.
+**Ürün durumu: KISMİ.** Scope ve Woo key lifecycle düzeltmelerinin CI kanıtı
+vardır. Gerçek WordPress/Woo ortamında eklenti kurulum, pairing, reconnect,
+failure cleanup ve disconnect provası açık kabul kapısıdır.
 Mevcut sentetik Woo katalog provası bu pairing yaşam döngüsünü çalıştırmaz.
 Currency-settings ve varyanta özgü satın alma URL'si ÜRÜN-009'da kalır.
