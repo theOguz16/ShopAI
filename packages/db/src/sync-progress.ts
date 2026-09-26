@@ -17,6 +17,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { Database } from './client.js';
 import { connections, products, variants } from './schema.js';
+import { renewSyncLease } from './sync-checkpoint.js';
 import { setTenantContext } from './tenant-context.js';
 
 const at = (name: string) =>
@@ -74,51 +75,86 @@ type ProgressWrite = CatalogSyncProgress & {
   error?: string | null;
 };
 
+type SyncProgressLease = {
+  syncRunId: string;
+  fencingToken: number;
+};
+
+type SyncProgressTx = Parameters<Parameters<Database['transaction']>[0]>[0];
+
 export async function writeConnectionSyncProgress(
   db: Database,
   merchantId: string,
   connectionId: string,
   input: ProgressWrite,
   now = new Date(),
+  lease?: SyncProgressLease,
 ) {
   return db.transaction(async (tx) => {
     await setTenantContext(tx, merchantId);
-    const [row] = await tx
-      .insert(connectionSyncProgress)
-      .values({
-        connectionId,
-        merchantId,
+    return writeConnectionSyncProgressTx(
+      tx,
+      merchantId,
+      connectionId,
+      input,
+      now,
+      lease,
+    );
+  });
+}
+
+/** Use inside finalization before the lease is released. */
+export async function writeConnectionSyncProgressTx(
+  tx: SyncProgressTx,
+  merchantId: string,
+  connectionId: string,
+  input: ProgressWrite,
+  now: Date,
+  lease?: SyncProgressLease,
+) {
+  if (lease)
+    await renewSyncLease(tx, {
+      merchantId,
+      connectionId,
+      syncRunId: lease.syncRunId,
+      fencingToken: lease.fencingToken,
+      now,
+    });
+  const [row] = await tx
+    .insert(connectionSyncProgress)
+    .values({
+      connectionId,
+      merchantId,
+      status: input.status,
+      foundProducts: input.foundProducts,
+      processedProducts: input.processedProducts,
+      failedProducts: input.failedProducts,
+      variants: input.variants,
+      startedAt: input.startedAt ?? null,
+      completedAt: input.completedAt ?? null,
+      updatedAt: now,
+      error: input.error ?? null,
+    })
+    .onConflictDoUpdate({
+      target: connectionSyncProgress.connectionId,
+      set: {
         status: input.status,
         foundProducts: input.foundProducts,
         processedProducts: input.processedProducts,
         failedProducts: input.failedProducts,
         variants: input.variants,
-        startedAt: input.startedAt ?? null,
-        completedAt: input.completedAt ?? null,
+        ...(input.startedAt !== undefined
+          ? { startedAt: input.startedAt }
+          : {}),
+        ...(input.completedAt !== undefined
+          ? { completedAt: input.completedAt }
+          : {}),
         updatedAt: now,
-        error: input.error ?? null,
-      })
-      .onConflictDoUpdate({
-        target: connectionSyncProgress.connectionId,
-        set: {
-          status: input.status,
-          foundProducts: input.foundProducts,
-          processedProducts: input.processedProducts,
-          failedProducts: input.failedProducts,
-          variants: input.variants,
-          ...(input.startedAt !== undefined
-            ? { startedAt: input.startedAt }
-            : {}),
-          ...(input.completedAt !== undefined
-            ? { completedAt: input.completedAt }
-            : {}),
-          updatedAt: now,
-          ...(input.error !== undefined ? { error: input.error } : {}),
-        },
-      })
-      .returning();
-    return row;
-  });
+        ...(input.error !== undefined ? { error: input.error } : {}),
+      },
+    })
+    .returning();
+  return row;
 }
 
 export async function readConnectionSyncProgress(

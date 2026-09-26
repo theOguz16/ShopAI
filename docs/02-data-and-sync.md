@@ -71,15 +71,17 @@ Bu TypeScript parçası kavramsal sözleşmedir; tipler uygulamada `contracts` i
 
 ## Hata ve güncellik politikası
 
-- Bağlantı başına kilit/fencing token ile eşzamanlı tam senkron engellenir.
-- Canlı katalog önce kaynak snapshot'ını toplar, ardından 1.000 satırlık transaction batch'leriyle yazar. `processedProducts`, yalnız başarıyla commit edilmiş batch'lerdeki benzersiz ürün anahtarlarının sayısıdır; transaction içindeki geçici ilerleme kalıcı sayaca yazılmaz.
-- Bir hata hiçbir batch commit edilmeden oluşursa durum `failed`, en az bir batch commit edildikten sonra oluşursa `partial` olur. `completed` yalnız bütün batch'ler ve tam snapshot sonlandırması başarıyla tamamlandığında yazılır. `failedProducts`, bulunan ürünlerden commit edilmiş benzersiz ürünlerin çıkarılmasıyla hesaplanır.
-- Mevcut retry modeli checkpoint'ten devam etmez: connector yeni denemede `cursor = null` ile snapshot'ı baştan okur. `(connection_id, external_key/external_id)` benzersizliği ve upsert'ler daha önce commit edilmiş batch'lerin tekrarını idempotent yapar; ürün veya offer çoğalmaz.
+- Bağlantı başına kilit/fencing token ile eşzamanlı tam senkron engellenir. ÜRÜN-007 ile bu koruma checkpoint guard'ı (aynı connection için 30 dk içinde ikinci `running` koşturucu skip edilir), chunk yazımındaki `pg_advisory_xact_lock` ve BullMQ jobId dedupe ile birlikte çalışır.
+- Canlı katalog akış olarak işlenir (ÜRÜN-007): connector sayfası fetch edilir, ≤1.000'lik chunk'lara bölünür, her chunk kendi transaction'ında upsert edilir, sayfa commit'inden sonra checkpoint yazılır ve sayfa state'i bellekten bırakılır. Tüm katalog hiçbir aşamada bellekte materialize edilmez; `processedProducts` yalnız commit edilmiş chunk'lardaki benzersiz ürün anahtarlarını sayar.
+- Bir hata hiçbir chunk commit edilmeden oluşursa durum `failed`, en az bir chunk commit edildikten sonra oluşursa `partial` olur. `completed` yalnız bütün sayfalar ve finalization başarıyla tamamlandığında yazılır. `failedProducts`, görülen ürünlerden commit edilmiş benzersiz ürünlerin çıkarılmasıyla hesaplanır.
+- Retry modeli ÜRÜN-007 ile checkpoint desteklidir: aynı job retry'ı `syncRunId` ile aynı checkpoint'e devam eder (cursor, sayfa commit'inden sonra kalıcıdır; en fazla bir sayfa idempotent tekrar oynatılır). `(connection_id, external_key/external_id)` benzersizliği ve upsert'ler tekrarları güvenli kılar; ürün veya offer çoğalmaz.
+- Full-sync sonunda görülmeyen offer'lar `last_sync_run_id` damgasıyla bulunur ve tam, başarılı finalization'da deaktive edilir; snapshot-wide `NOT IN` sorgusu yoktur. Satır hataları varsa bu adım uygulanmaz.
 - 429 yanıtında kaynağın Retry-After bilgisi izlenir; geçici hatalarda sınırlı exponential backoff + jitter uygulanır.
 - Kalıcı yetki hatasında bağlantı durdurulur; mağaza panelinde yeniden bağlantı istenir.
-- Eksik veya hatalı snapshot ürünleri topluca silmez. Görülmeyen kayıtlar yalnız doğrulanmış tam ve başarılı authoritative snapshot sonunda pasifleştirilir; satır hataları varsa bu adım uygulanmaz.
 - Kaynak değişiklik sırası timestamp/version ile korunur; geç gelen eski kayıt güncel veriyi ezmez.
 - Polling sıklığı connector limitine göre ayarlanır. Pilot başlangıç hedefi 15 dakika olabilir; garanti değildir.
 - Başlangıç stale eşiği canlı kaynakta 30 dakika, CSV'de 24 saat olarak yapılandırılır. Bunlar pilotta değiştirilecek ürün kararlarıdır.
 - Stale offer satın almaya geçişte destekleniyorsa yeniden sorgulanır. Doğrulanamıyorsa kullanıcıya güncellik belirsizliği gösterilir; kesin stok iddiası kaldırılır.
 - Başarısız işlerin hata kuyruğu/paneli ve elle yeniden çalıştırma yolu bulunur.
+
+Tasarım detayları, checkpoint/retry semantiği ve bellek kanıtı için [bounded-memory-sync.md](bounded-memory-sync.md).

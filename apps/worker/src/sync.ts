@@ -11,21 +11,25 @@ import {
   ManagedConnectorSecretStore,
   type ConnectorSecretBackend,
 } from '@shopai/connectors';
-import { type SourceRow, type SyncJob, syncJobSchema } from '@shopai/contracts';
+import { type SyncJob, syncJobSchema } from '@shopai/contracts';
 import {
   connections,
   connectorSecretAudit,
   connectorSecrets,
   type Database,
-  importCatalog,
   inventory,
   merchantCredentialOwnerships,
   offers,
   setTenantContext,
-  writeConnectionSyncProgress,
+  syncConnectionLeases,
+  SyncLeaseLostError,
+  writeConnectionSyncProgressTx,
 } from '@shopai/db';
-import { and, eq, isNull, lte, notInArray, or } from 'drizzle-orm';
-import { collectCatalogSnapshot } from './catalog-sync-progress.js';
+import { and, eq, isNull, lte, or } from 'drizzle-orm';
+import {
+  runCatalogSyncEngine,
+  type CatalogSyncEngineResult,
+} from './catalog-sync-engine.js';
 import {
   type AlertEmailSender,
   evaluateAndDeliverProductAlerts,
@@ -81,19 +85,6 @@ type ConnectorFactory = (
 ) => LiveCatalogConnector;
 
 export const createConnector: ConnectorFactory = createLiveCatalogConnector;
-export const CATALOG_IMPORT_BATCH_SIZE = 1000;
-
-export function chunkCatalogRows(
-  rows: readonly SourceRow[],
-  size = CATALOG_IMPORT_BATCH_SIZE,
-) {
-  if (!Number.isSafeInteger(size) || size < 1 || size > 1000)
-    throw new Error('Catalog import batch size 1-1000 arasında olmalıdır.');
-  const batches: SourceRow[][] = [];
-  for (let offset = 0; offset < rows.length; offset += size)
-    batches.push(rows.slice(offset, offset + size));
-  return batches;
-}
 
 export async function syncCatalogConnection(
   db: Database,
@@ -104,8 +95,10 @@ export async function syncCatalogConnection(
   alertEmailSender?: AlertEmailSender,
   correlationId?: string,
   expectedBackend?: 'file' | 'openbao',
+  options: { batchSize?: number } = {},
 ) {
   const job = syncJobSchema.parse(input);
+  const syncRunId = job.syncRunId ?? randomUUID();
   const startedAt = now();
   const connection = await db.transaction(async (tx) => {
     await setTenantContext(tx, job.merchantId);
@@ -205,10 +198,6 @@ export async function syncCatalogConnection(
       if (!row.lastSourceWatermarkAt || unverifiedOffer)
         effectiveSyncMode = 'full';
     }
-    await tx
-      .update(connections)
-      .set({ lastSyncStartedAt: startedAt, lastSyncError: null })
-      .where(eq(connections.id, row.id));
     return { ...row, effectiveSyncMode };
   });
   if (!connection) return { skipped: true } as const;
@@ -220,15 +209,9 @@ export async function syncCatalogConnection(
     failedProducts: 0,
     variants: 0,
   };
+  let engineStarted = false;
 
   try {
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      { ...progress, startedAt, completedAt: null, error: null },
-      startedAt,
-    );
     if (!connection.credentialsRef)
       throw new Error('Bağlantının secret referansı eksik.');
     const reference = connection.credentialsRef;
@@ -268,168 +251,52 @@ export async function syncCatalogConnection(
     }
     const connector = factory(connection.provider, credentials);
     await connector.validate();
-    const snapshot = await collectCatalogSnapshot({
+
+    engineStarted = true;
+    const result = await runCatalogSyncEngine({
+      db,
+      job,
+      syncRunId,
       connector,
       mode: connection.effectiveSyncMode,
       modifiedAfter:
         connection.effectiveSyncMode === 'incremental'
           ? (connection.lastSourceWatermarkAt?.toISOString() ?? null)
           : null,
-      onProgress: async (nextProgress) => {
-        progress = nextProgress;
-        await writeConnectionSyncProgress(
-          db,
-          job.merchantId,
-          job.connectionId,
-          { ...nextProgress, startedAt, completedAt: null, error: null },
-          now(),
-        );
-      },
+      credentialsRef: reference,
+      batchSize: options.batchSize,
+      now,
     });
 
-    if (snapshot.rows.length) {
-      const processedProductKeys = new Set<string>();
-      try {
-        for (const rows of chunkCatalogRows(snapshot.rows)) {
-          await importCatalog(db, {
-            schemaVersion: 1,
-            runId: randomUUID(),
-            merchantId: job.merchantId,
-            connectionId: job.connectionId,
-            observedAt: snapshot.latestSourceTime ?? snapshot.latestFetchedAt,
-            rows,
-          });
-          for (const row of rows) processedProductKeys.add(row.productKey);
-          progress = {
-            status: 'running',
-            foundProducts: snapshot.progress.foundProducts,
-            processedProducts: processedProductKeys.size,
-            failedProducts: 0,
-            variants: snapshot.progress.variants,
-          };
-          await writeConnectionSyncProgress(
-            db,
-            job.merchantId,
-            job.connectionId,
-            {
-              ...progress,
-              startedAt,
-              completedAt: null,
-              error: null,
-            },
-            now(),
-          );
-        }
-      } catch (error) {
-        progress = {
-          ...snapshot.progress,
-          processedProducts: processedProductKeys.size,
-          failedProducts: Math.max(
-            0,
-            snapshot.progress.foundProducts - processedProductKeys.size,
-          ),
-        };
-        throw error;
-      }
+    if (result.kind === 'skipped') {
+      return {
+        skipped: true,
+        reason: result.reason,
+        syncRunId,
+      } as const;
     }
 
-    const completedAt = now();
-    progress = {
-      ...progress,
-      status: 'completed',
-      processedProducts: snapshot.progress.foundProducts,
-    };
-    await db.transaction(async (tx) => {
-      await setTenantContext(tx, job.merchantId);
-      const [live] = await tx
-        .select({
-          active: connections.active,
-          authorizationStatus: connections.authorizationStatus,
-          credentialsRef: connections.credentialsRef,
-        })
-        .from(connections)
-        .where(
-          and(
-            eq(connections.id, job.connectionId),
-            eq(connections.merchantId, job.merchantId),
-          ),
-        )
-        .limit(1)
-        .for('update');
-      if (
-        !live?.active ||
-        live.authorizationStatus === 'revoked' ||
-        live.credentialsRef !== connection.credentialsRef
-      )
-        throw new Error('Connection changed during sync.');
-      if (connection.effectiveSyncMode === 'full') {
-        const scope = and(
-          eq(offers.connectionId, job.connectionId),
-          eq(offers.merchantId, job.merchantId),
-        );
-        await tx
-          .update(offers)
-          .set({ active: false })
-          .where(
-            snapshot.externalIds.size
-              ? and(
-                  scope,
-                  notInArray(offers.externalId, [...snapshot.externalIds]),
-                )
-              : scope,
-          );
-      }
-      await tx
-        .update(connections)
-        .set({
-          authorizationStatus: 'active',
-          syncCursor: null,
-          lastSourceWatermarkAt: snapshot.latestSourceTime
-            ? new Date(snapshot.latestSourceTime)
-            : connection.lastSourceWatermarkAt,
-          lastSuccessfulSyncAt: completedAt,
-          lastFetchedAt: new Date(snapshot.latestFetchedAt),
-          lastSyncError: null,
-        })
-        .where(
-          and(
-            eq(connections.id, job.connectionId),
-            eq(connections.active, true),
-          ),
-        );
-    });
-    await writeConnectionSyncProgress(
+    const alertEvaluation = await evaluateAndDeliverProductAlertsSafe(
       db,
       job.merchantId,
-      job.connectionId,
-      {
-        ...progress,
-        startedAt,
-        completedAt,
-        error: null,
-      },
-      completedAt,
+      alertEmailSender,
     );
-
-    let alertEvaluation:
-      | Awaited<ReturnType<typeof evaluateAndDeliverProductAlerts>>
-      | { error: string };
-    try {
-      alertEvaluation = await evaluateAndDeliverProductAlerts(
-        db,
-        job.merchantId,
-        alertEmailSender,
-      );
-    } catch {
-      alertEvaluation = { error: 'Alert evaluation failed' };
-    }
 
     return {
       skipped: false,
-      imported: snapshot.rows.length,
-      complete: snapshot.complete,
-      mode: connection.effectiveSyncMode,
-      progress,
+      imported: result.imported,
+      complete: true,
+      mode: result.mode,
+      syncRunId,
+      progress: {
+        status: 'completed',
+        foundProducts: result.counters.productsSeen,
+        processedProducts: result.counters.productsSeen,
+        failedProducts: 0,
+        variants: result.counters.rowsSeen,
+      },
+      counters: result.counters,
+      durationMs: result.completedAt.getTime() - result.startedAt.getTime(),
       alertEvaluation,
     } as const;
   } catch (error) {
@@ -438,42 +305,102 @@ export async function syncCatalogConnection(
         ? `Connector HTTP ${error.status}`
         : 'Catalog sync failed';
     const failedAt = now();
-    progress = {
-      ...progress,
-      status: catalogSyncFailureStatus(progress),
-    };
-    await db.transaction(async (tx) => {
-      await setTenantContext(tx, job.merchantId);
-      await tx
-        .update(connections)
-        .set({
-          lastSyncError: message,
-          ...(error instanceof ConnectorHttpError &&
-          error.reauthorizationRequired
-            ? { authorizationStatus: 'reauthorization_required' }
-            : {}),
-        })
-        .where(
-          and(
-            eq(connections.id, job.connectionId),
-            eq(connections.active, true),
-          ),
-        );
-    });
-    await writeConnectionSyncProgress(
-      db,
-      job.merchantId,
-      job.connectionId,
-      {
+    // A fenced runner lost ownership: it must not touch the connection row
+    // or clobber the new owner's progress; its own checkpoint is already
+    // failed by the takeover/engine.
+    if (error instanceof SyncLeaseLostError) {
+      throw error;
+    }
+    if (!engineStarted) {
+      progress = {
         ...progress,
-        startedAt,
-        completedAt: failedAt,
-        error: message,
-      },
-      failedAt,
-    );
+        status: catalogSyncFailureStatus(progress),
+      };
+      await db.transaction(async (tx) => {
+        await setTenantContext(tx, job.merchantId);
+        const [lease] = await tx
+          .select({ expiresAt: syncConnectionLeases.leaseExpiresAt })
+          .from(syncConnectionLeases)
+          .where(
+            and(
+              eq(syncConnectionLeases.merchantId, job.merchantId),
+              eq(syncConnectionLeases.connectionId, job.connectionId),
+            ),
+          )
+          .for('update');
+        if (lease && lease.expiresAt > failedAt) return;
+        const [live] = await tx
+          .select({ lastSuccessfulSyncAt: connections.lastSuccessfulSyncAt })
+          .from(connections)
+          .where(
+            and(
+              eq(connections.merchantId, job.merchantId),
+              eq(connections.id, job.connectionId),
+            ),
+          )
+          .for('update');
+        if (
+          live?.lastSuccessfulSyncAt &&
+          live.lastSuccessfulSyncAt >= startedAt
+        )
+          return;
+        await writeConnectionSyncProgressTx(
+          tx,
+          job.merchantId,
+          job.connectionId,
+          {
+            ...progress,
+            startedAt,
+            completedAt: failedAt,
+            error: message,
+          },
+          failedAt,
+        );
+        await tx
+          .update(connections)
+          .set({
+            lastSyncError: message,
+            ...(error instanceof ConnectorHttpError &&
+            error.reauthorizationRequired
+              ? { authorizationStatus: 'reauthorization_required' }
+              : {}),
+          })
+          .where(
+            and(
+              eq(connections.merchantId, job.merchantId),
+              eq(connections.id, job.connectionId),
+              eq(connections.active, true),
+            ),
+          );
+      });
+    }
     throw error instanceof ConnectorHttpError
       ? new ConnectorHttpError(error.status, message, error.retryAfterMs)
       : new Error(message);
   }
 }
+
+async function evaluateAndDeliverProductAlertsSafe(
+  db: Database,
+  merchantId: string,
+  alertEmailSender?: AlertEmailSender,
+): Promise<
+  | Awaited<ReturnType<typeof evaluateAndDeliverProductAlerts>>
+  | { error: string }
+> {
+  try {
+    return await evaluateAndDeliverProductAlerts(
+      db,
+      merchantId,
+      alertEmailSender,
+    );
+  } catch {
+    return { error: 'Alert evaluation failed' } as const;
+  }
+}
+
+export type { CatalogSyncEngineResult };
+export {
+  CATALOG_IMPORT_BATCH_SIZE,
+  chunkCatalogRows,
+} from './catalog-sync-engine.js';
